@@ -1,6 +1,6 @@
 -- =================================================================
 -- 🛡️ ChitGuard Supabase Database Schema & Setup
--- Location: /supabase_setup.sql
+-- Location: /backend/supabase_setup.sql
 -- =================================================================
 
 -- =================================================================
@@ -122,48 +122,3 @@ CREATE TRIGGER update_onboarding_modtime
     BEFORE UPDATE ON public.user_onboardings
     FOR EACH ROW
     EXECUTE FUNCTION update_modified_column();
-
-
--- =================================================================
--- PART 2: RUN HISTORY (MIGRATION LOG)
--- The following query was successfully executed on August 20, 2026.
--- =================================================================
-
-/*
--- 1. Add the new 'username' column to your existing user_onboardings table
-ALTER TABLE public.user_onboardings 
-ADD COLUMN IF NOT EXISTS username VARCHAR(50) UNIQUE;
-
--- 2. Create a case-insensitive unique index on the username column
-CREATE UNIQUE INDEX IF NOT EXISTS user_onboardings_username_lower_idx 
-ON public.user_onboardings (LOWER(username));
-
--- 3. Create a helper function for fast, secure public username availability checks
-CREATE OR REPLACE FUNCTION public.check_username_available(input_username TEXT)
-RETURNS BOOLEAN
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-BEGIN
-    RETURN NOT EXISTS (
-        SELECT 1 FROM public.user_onboardings
-        WHERE LOWER(username) = LOWER(input_username)
-    );
-END;
-$$;
-
--- 4. Create an optional 'waitlist' table for landing page capture entries
-CREATE TABLE IF NOT EXISTS public.waitlist (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    contact VARCHAR(255) NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, NOW()) NOT NULL
-);
-
--- Enable RLS on waitlist table
-ALTER TABLE public.waitlist ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Allow public insert to waitlist"
-ON public.waitlist
-FOR INSERT
-WITH CHECK (true);
-*/
