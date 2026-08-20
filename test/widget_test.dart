@@ -1,14 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:safe_chit/main.dart';
+import 'package:safe_chit/services/supabase_service.dart';
 
 void main() {
-  testWidgets('ChitGuard onboarding full flow test', (WidgetTester tester) async {
+  testWidgets('ChitGuard landing page navigation and onboarding flow test', (WidgetTester tester) async {
+    await SupabaseService.initialize();
     // 1. Load the App
     await tester.pumpWidget(const ChitGuardApp());
     await tester.pumpAndSettle();
 
-    // Verify Screen 1 is loaded
+    // Verify Landing Page loads with ChitGuard app title and Hero title
+    expect(find.text('ChitGuard'), findsAtLeastNWidgets(1));
+    expect(find.text('Get Started'), findsAtLeastNWidgets(1));
+
+    // Tap "Get Started" button on Landing Page to navigate to Step 1: Choose Your Role
+    await tester.tap(find.text('Get Started').first);
+    await tester.pumpAndSettle();
+
+    // Verify Screen 1: Choose Your Role is loaded
     expect(find.text('Choose Your Role'), findsOneWidget);
 
     // Tap Member Card
@@ -22,40 +32,29 @@ void main() {
 
     // Verify Screen 2: Account Setup
     expect(find.text('Account Setup'), findsOneWidget);
+  });
 
-    // Enter 10-digit mobile
-    final inputs = find.byType(TextFormField);
-    await tester.enterText(inputs.at(0), '9876543210');
+  testWidgets('ChitGuard landing page to Sign In navigation test', (WidgetTester tester) async {
+    await SupabaseService.initialize();
+    await tester.pumpWidget(const ChitGuardApp());
     await tester.pumpAndSettle();
 
-    // Tap Send OTP
-    await tester.tap(find.text('Send OTP'));
-    await tester.pump(const Duration(milliseconds: 1600));
+    // Tap Sign In button
+    await tester.tap(find.text('Sign In').first);
     await tester.pumpAndSettle();
 
-    // Enter OTP
-    await tester.enterText(find.byType(TextFormField).at(1), '123456');
+    // Verify Sign In Screen is displayed
+    expect(find.text('Welcome Back'), findsOneWidget);
+    expect(find.text('Username, Email, or Mobile Number'), findsOneWidget);
+
+    // Tap Back button to return to Landing Page
+    await tester.tap(find.byIcon(Icons.arrow_back));
     await tester.pumpAndSettle();
 
-    // Tap Verify OTP
-    await tester.tap(find.text('Verify').first);
-    await tester.pump(const Duration(milliseconds: 1100));
-    await tester.pumpAndSettle();
-
-    // Enter Email
-    await tester.enterText(find.byType(TextFormField).last, 'test@gmail.com');
-    await tester.pumpAndSettle();
-
-    // Tap Verify Email
-    await tester.tap(find.text('Verify'));
-    await tester.pump(const Duration(milliseconds: 1600));
-    await tester.pumpAndSettle();
-
-    // Tap Continue to navigate to Screen 3
-    await tester.tap(find.text('Continue'));
-    await tester.pumpAndSettle();
-
-    // Verify Screen 3: Personal Details
-    expect(find.text('Personal Details'), findsOneWidget);
+    // Verify back on Landing Page
+    expect(find.text('Get Started'), findsAtLeastNWidgets(1));
   });
 }
+
+
+

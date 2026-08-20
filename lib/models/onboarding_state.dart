@@ -435,6 +435,29 @@ class OnboardingState extends ChangeNotifier {
     return _consentStatus == VerificationStatus.verified;
   }
 
+  // --- Step 10: Account Credentials (Username & Password) ---
+  String _username = '';
+  String get username => _username;
+
+  String _password = '';
+  String get password => _password;
+
+  VerificationStatus _credentialsStatus = VerificationStatus.notStarted;
+  VerificationStatus get credentialsStatus => _credentialsStatus;
+
+  void setCredentials(String username, String password) {
+    _username = username.trim();
+    _password = password;
+    _credentialsStatus = (_username.isNotEmpty && _password.length >= 6)
+        ? VerificationStatus.verified
+        : VerificationStatus.notStarted;
+    notifyListeners();
+  }
+
+  bool isCredentialsValid() {
+    return _username.isNotEmpty && _password.length >= 6 && _credentialsStatus == VerificationStatus.verified;
+  }
+
   // Navigation controls based on current step requirements
   bool isStepValid(int step) {
     switch (step) {
@@ -455,14 +478,16 @@ class OnboardingState extends ChangeNotifier {
       case 8:
         return isConsentValid();
       case 9:
-        return true;
+        return true; // Step 9: Verification Summary
+      case 10:
+        return isCredentialsValid(); // Step 10: Username & Password Credentials
       default:
         return false;
     }
   }
 
   void nextStep() {
-    if (_currentStep < 9) {
+    if (_currentStep < 10) {
       _currentStep++;
       notifyListeners();
     }
