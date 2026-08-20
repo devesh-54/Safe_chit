@@ -52,7 +52,7 @@ class _BankVerificationScreenState extends State<BankVerificationScreen> {
       widget.state.setBankDetails(_accountController.text, cleanIfsc);
       final success = await widget.state.lookupIfsc(cleanIfsc);
 
-      if (!mounted) return;
+      if (!context.mounted) return;
       setState(() {
         _isLookingUp = false;
         if (!success) {

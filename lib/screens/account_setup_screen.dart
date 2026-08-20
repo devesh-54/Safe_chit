@@ -56,7 +56,7 @@ class _AccountSetupScreenState extends State<AccountSetupScreen> {
       _canResend = false;
     });
     _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) {
+      if (!context.mounted) {
         timer.cancel();
         return;
       }
@@ -102,23 +102,19 @@ class _AccountSetupScreenState extends State<AccountSetupScreen> {
       setState(() {
         _showOtpField = false;
       });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Mobile number verified successfully!'),
-            backgroundColor: Color(0xFF059669),
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Mobile number verified successfully!'),
+          backgroundColor: Color(0xFF059669),
+        ),
+      );
     } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Verification failed. Try again with code 123456.'),
-            backgroundColor: Color(0xFFDC2626),
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Verification failed. Try again with code 123456.'),
+          backgroundColor: Color(0xFFDC2626),
+        ),
+      );
     }
   }
 
@@ -134,7 +130,7 @@ class _AccountSetupScreenState extends State<AccountSetupScreen> {
     setState(() {
       _isVerifyingEmail = false;
     });
-    if (success && mounted) {
+    if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Email verified successfully!'),
