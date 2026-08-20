@@ -155,7 +155,7 @@ class _OnboardingContainerState extends State<OnboardingContainer> {
         return Scaffold(
           appBar: hasHeader
               ? PreferredSize(
-                  preferredSize: const Size.fromHeight(80),
+                  preferredSize: const Size.fromHeight(110),
                   child: ProgressHeader(
                     currentStep: step,
                     onBackPressed: step > 1 ? () => _onboardingState.prevStep() : null,

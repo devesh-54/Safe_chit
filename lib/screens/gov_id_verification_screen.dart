@@ -50,6 +50,7 @@ class _GovIdVerificationScreenState extends State<GovIdVerificationScreen> {
   }
 
   void _handleAadhaarFocusChange() {
+    if (!mounted) return;
     setState(() {
       _isAadhaarFocused = _aadhaarFocusNode.hasFocus;
       if (_isAadhaarFocused) {
@@ -139,6 +140,7 @@ class _GovIdVerificationScreenState extends State<GovIdVerificationScreen> {
 
     final success = await widget.state.verifyGovernmentIds();
 
+    if (!mounted) return;
     setState(() {
       _isVerifying = false;
       if (!success) {
