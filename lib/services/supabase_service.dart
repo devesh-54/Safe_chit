@@ -60,16 +60,28 @@ class SupabaseService {
     try {
       final supaClient = client;
       if (supaClient != null) {
-        // Query Supabase table 'profiles' or 'users'
-        final response = await supaClient
-            .from('profiles')
-            .select('username')
-            .eq('username', cleanUsername)
-            .maybeSingle();
+        // Query Supabase table 'user_onboardings'
+        try {
+          final response = await supaClient
+              .from('user_onboardings')
+              .select('username')
+              .eq('username', cleanUsername)
+              .maybeSingle();
 
-        if (response != null) {
-          // Username already exists in Supabase table
-          return false;
+          if (response != null) {
+            return false;
+          }
+        } catch (_) {
+          // Fallback query to 'profiles'
+          final response = await supaClient
+              .from('profiles')
+              .select('username')
+              .eq('username', cleanUsername)
+              .maybeSingle();
+
+          if (response != null) {
+            return false;
+          }
         }
       }
     } catch (e) {
@@ -102,14 +114,23 @@ class SupabaseService {
     try {
       final supaClient = client;
       if (supaClient != null) {
-        // Upsert into Supabase 'profiles' table
-        await supaClient.from('profiles').upsert({
-          'username': cleanUsername,
-          'email': email,
-          'mobile': mobile,
-          'legal_name': legalName,
-          'created_at': DateTime.now().toIso8601String(),
-        });
+        try {
+          await supaClient.from('user_onboardings').upsert({
+            'username': cleanUsername,
+            'email': email ?? '',
+            'mobile_number': mobile ?? '',
+            'full_name': legalName ?? '',
+            'updated_at': DateTime.now().toIso8601String(),
+          });
+        } catch (_) {
+          await supaClient.from('profiles').upsert({
+            'username': cleanUsername,
+            'email': email,
+            'mobile': mobile,
+            'legal_name': legalName,
+            'created_at': DateTime.now().toIso8601String(),
+          });
+        }
       }
     } catch (e) {
       if (kDebugMode) {
