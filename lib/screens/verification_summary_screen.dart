@@ -192,6 +192,12 @@ class VerificationSummaryScreen extends StatelessWidget {
                       status: state.consentStatus,
                       icon: Icons.description_outlined,
                     ),
+                    _buildChecklistItem(
+                      title: 'Supabase Credentials',
+                      subtitle: state.username.isNotEmpty ? 'Username: ${state.username}' : 'Not configured',
+                      status: state.credentialsStatus,
+                      icon: Icons.key_outlined,
+                    ),
 
                     const SizedBox(height: 24),
 

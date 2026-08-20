@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'models/onboarding_state.dart';
+import 'services/supabase_service.dart';
 import 'widgets/progress_header.dart';
+import 'screens/landing_page_screen.dart';
+import 'screens/sign_in_screen.dart';
 import 'screens/role_selection_screen.dart';
 import 'screens/account_setup_screen.dart';
 import 'screens/personal_identity_screen.dart';
@@ -9,10 +12,19 @@ import 'screens/biometric_liveness_screen.dart';
 import 'screens/address_screen.dart';
 import 'screens/bank_verification_screen.dart';
 import 'screens/consent_screen.dart';
+import 'screens/credentials_setup_screen.dart';
 import 'screens/verification_summary_screen.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await SupabaseService.initialize();
   runApp(const ChitGuardApp());
+}
+
+enum AppView {
+  landing,
+  signIn,
+  onboarding,
 }
 
 class ChitGuardApp extends StatelessWidget {
@@ -21,7 +33,7 @@ class ChitGuardApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'ChitGuard Onboarding',
+      title: 'ChitGuard',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
@@ -59,13 +71,55 @@ class ChitGuardApp extends StatelessWidget {
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         ),
       ),
-      home: const OnboardingContainer(),
+      home: const AppContainer(),
     );
   }
 }
 
+class AppContainer extends StatefulWidget {
+  const AppContainer({super.key});
+
+  @override
+  State<AppContainer> createState() => _AppContainerState();
+}
+
+class _AppContainerState extends State<AppContainer> {
+  AppView _currentView = AppView.landing;
+
+  void _navigateTo(AppView view) {
+    setState(() {
+      _currentView = view;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    switch (_currentView) {
+      case AppView.landing:
+        return LandingPageScreen(
+          onStartSignUp: () => _navigateTo(AppView.onboarding),
+          onOpenSignIn: () => _navigateTo(AppView.signIn),
+        );
+      case AppView.signIn:
+        return SignInScreen(
+          onStartSignUp: () => _navigateTo(AppView.onboarding),
+          onBackToLanding: () => _navigateTo(AppView.landing),
+        );
+      case AppView.onboarding:
+        return OnboardingContainer(
+          onBackToLanding: () => _navigateTo(AppView.landing),
+        );
+    }
+  }
+}
+
 class OnboardingContainer extends StatefulWidget {
-  const OnboardingContainer({super.key});
+  final VoidCallback? onBackToLanding;
+
+  const OnboardingContainer({
+    super.key,
+    this.onBackToLanding,
+  });
 
   @override
   State<OnboardingContainer> createState() => _OnboardingContainerState();
@@ -135,9 +189,19 @@ class _OnboardingContainerState extends State<OnboardingContainer> {
           onContinue: () => _onboardingState.nextStep(),
         );
       case 9:
+        return CredentialsSetupScreen(
+          state: _onboardingState,
+          onContinue: () => _onboardingState.nextStep(),
+        );
+      case 10:
         return VerificationSummaryScreen(
           state: _onboardingState,
-          onRestart: _resetOnboarding,
+          onRestart: () {
+            _resetOnboarding();
+            if (widget.onBackToLanding != null) {
+              widget.onBackToLanding!();
+            }
+          },
         );
       default:
         return const Center(child: Text('Unknown Step'));
@@ -150,7 +214,7 @@ class _OnboardingContainerState extends State<OnboardingContainer> {
       listenable: _onboardingState,
       builder: (context, child) {
         final step = _onboardingState.currentStep;
-        final hasHeader = step > 0; // Show header across all screens for tracking
+        final hasHeader = step > 0;
 
         return Scaffold(
           body: SafeArea(
@@ -159,11 +223,13 @@ class _OnboardingContainerState extends State<OnboardingContainer> {
                 if (hasHeader)
                   ProgressHeader(
                     currentStep: step,
-                    onBackPressed: step > 1 ? () => _onboardingState.prevStep() : null,
-                    // Allow quick jump shortcut to Screen 9 (Summary) to check status/revisit if valid
-                    onSummaryPressed: step < 9
+                    totalSteps: 10,
+                    onBackPressed: step > 1
+                        ? () => _onboardingState.prevStep()
+                        : (widget.onBackToLanding != null ? widget.onBackToLanding : null),
+                    onSummaryPressed: step < 10
                         ? () {
-                            if (!_onboardingState.tryNavigateTo(9)) {
+                            if (!_onboardingState.tryNavigateTo(10)) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text('Cannot skip directly to summary. Please complete all preceding steps first.'),
@@ -173,7 +239,7 @@ class _OnboardingContainerState extends State<OnboardingContainer> {
                             }
                           }
                         : null,
-                    showSummaryIcon: step < 9,
+                    showSummaryIcon: step < 10,
                   ),
                 Expanded(
                   child: AnimatedSwitcher(
@@ -204,3 +270,4 @@ class _OnboardingContainerState extends State<OnboardingContainer> {
     );
   }
 }
+

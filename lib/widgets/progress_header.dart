@@ -10,7 +10,7 @@ class ProgressHeader extends StatelessWidget {
   const ProgressHeader({
     super.key,
     required this.currentStep,
-    this.totalSteps = 9,
+    this.totalSteps = 10,
     this.onBackPressed,
     this.onSummaryPressed,
     this.showSummaryIcon = true,
