@@ -23,7 +23,7 @@ class ProgressHeader extends StatelessWidget {
     return SafeArea(
       bottom: false,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
@@ -87,7 +87,7 @@ class ProgressHeader extends StatelessWidget {
                     : const SizedBox(width: 40),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             Stack(
               children: [
                 Container(

@@ -56,6 +56,10 @@ class _AccountSetupScreenState extends State<AccountSetupScreen> {
       _canResend = false;
     });
     _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
       if (_timerSeconds == 0) {
         setState(() {
           _canResend = true;
@@ -76,6 +80,7 @@ class _AccountSetupScreenState extends State<AccountSetupScreen> {
     });
     widget.state.setMobileNumber(_phoneController.text);
     await widget.state.sendMobileOtp();
+    if (!mounted) return;
     setState(() {
       _isSendingOtp = false;
       _showOtpField = true;
@@ -89,6 +94,7 @@ class _AccountSetupScreenState extends State<AccountSetupScreen> {
       _isVerifyingOtp = true;
     });
     final success = await widget.state.verifyMobileOtp(_otpController.text);
+    if (!mounted) return;
     setState(() {
       _isVerifyingOtp = false;
     });
@@ -124,6 +130,7 @@ class _AccountSetupScreenState extends State<AccountSetupScreen> {
     });
     widget.state.setEmailAddress(email);
     final success = await widget.state.verifyEmail();
+    if (!mounted) return;
     setState(() {
       _isVerifyingEmail = false;
     });
