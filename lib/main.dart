@@ -153,10 +153,11 @@ class _OnboardingContainerState extends State<OnboardingContainer> {
         final hasHeader = step > 0; // Show header across all screens for tracking
 
         return Scaffold(
-          appBar: hasHeader
-              ? PreferredSize(
-                  preferredSize: const Size.fromHeight(110),
-                  child: ProgressHeader(
+          body: SafeArea(
+            child: Column(
+              children: [
+                if (hasHeader)
+                  ProgressHeader(
                     currentStep: step,
                     onBackPressed: step > 1 ? () => _onboardingState.prevStep() : null,
                     // Allow quick jump shortcut to Screen 9 (Summary) to check status/revisit if valid
@@ -174,27 +175,28 @@ class _OnboardingContainerState extends State<OnboardingContainer> {
                         : null,
                     showSummaryIcon: step < 9,
                   ),
-                )
-              : null,
-          body: SafeArea(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              transitionBuilder: (Widget child, Animation<double> animation) {
-                return FadeTransition(
-                  opacity: animation,
-                  child: SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0.05, 0),
-                      end: Offset.zero,
-                    ).animate(animation),
-                    child: child,
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    transitionBuilder: (Widget child, Animation<double> animation) {
+                      return FadeTransition(
+                        opacity: animation,
+                        child: SlideTransition(
+                          position: Tween<Offset>(
+                            begin: const Offset(0.05, 0),
+                            end: Offset.zero,
+                          ).animate(animation),
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: KeyedSubtree(
+                      key: ValueKey(step),
+                      child: _buildScreen(step),
+                    ),
                   ),
-                );
-              },
-              child: KeyedSubtree(
-                key: ValueKey(step),
-                child: _buildScreen(step),
-              ),
+                ),
+              ],
             ),
           ),
         );

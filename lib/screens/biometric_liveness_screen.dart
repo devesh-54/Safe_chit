@@ -71,7 +71,7 @@ class _BiometricLivenessScreenState extends State<BiometricLivenessScreen> {
 
     await widget.state.confirmSelfieLiveness();
 
-    if (!mounted) return;
+    if (!context.mounted) return;
     setState(() {
       _isProcessing = false;
     });

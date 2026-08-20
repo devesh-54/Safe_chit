@@ -62,7 +62,7 @@ class _PersonalIdentityScreenState extends State<PersonalIdentityScreen> {
     );
 
     if (picked != null && picked != _selectedDob) {
-      if (!mounted) return;
+      if (!context.mounted) return;
       setState(() {
         _selectedDob = picked;
       });
