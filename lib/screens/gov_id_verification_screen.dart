@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../models/onboarding_state.dart';
 import '../widgets/status_badge.dart';
 
@@ -78,8 +80,86 @@ class _GovIdVerificationScreenState extends State<GovIdVerificationScreen> {
     }
   }
 
-  void _simulateUpload() {
-    // Show mock option bottom sheet
+  Future<void> _pickDocumentImage(ImageSource source) async {
+    if (source == ImageSource.camera) {
+      final status = await Permission.camera.request();
+      if (!status.isGranted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Camera permission is required to take photos of documents.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+    } else {
+      bool isGranted = false;
+      if (await Permission.photos.request().isGranted) {
+        isGranted = true;
+      } else if (await Permission.storage.request().isGranted) {
+        isGranted = true;
+      } else {
+        final statusPhotos = await Permission.photos.request();
+        if (statusPhotos.isGranted) {
+          isGranted = true;
+        } else {
+          final statusStorage = await Permission.storage.request();
+          if (statusStorage.isGranted) {
+            isGranted = true;
+          }
+        }
+      }
+
+      if (!isGranted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Photo gallery permission is required to select documents.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+    }
+
+    try {
+      final picker = ImagePicker();
+      final XFile? file = await picker.pickImage(
+        source: source,
+        maxWidth: 1200,
+        maxHeight: 1200,
+        imageQuality: 85,
+      );
+
+      if (file != null) {
+        setState(() {
+          widget.state.setIdDocumentPath(file.path);
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Document selected: ${file.name}'),
+              backgroundColor: const Color(0xFF0F4C81),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error picking document: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _pickDocumentOption() {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -106,22 +186,16 @@ class _GovIdVerificationScreenState extends State<GovIdVerificationScreen> {
                   leading: const Icon(Icons.camera_alt_outlined, color: Color(0xFF0F4C81)),
                   title: const Text('Take Photo with Camera', style: TextStyle(fontWeight: FontWeight.w600)),
                   onTap: () {
-                    widget.state.setIdDocumentPath('scan_front_camera.jpg');
                     Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Mock Camera image uploaded successfully.')),
-                    );
+                    _pickDocumentImage(ImageSource.camera);
                   },
                 ),
                 ListTile(
                   leading: const Icon(Icons.photo_library_outlined, color: Color(0xFF0F4C81)),
                   title: const Text('Choose from Gallery', style: TextStyle(fontWeight: FontWeight.w600)),
                   onTap: () {
-                    widget.state.setIdDocumentPath('pan_card_gallery_scan.png');
                     Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Mock Gallery image uploaded successfully.')),
-                    );
+                    _pickDocumentImage(ImageSource.gallery);
                   },
                 ),
               ],
@@ -297,7 +371,7 @@ class _GovIdVerificationScreenState extends State<GovIdVerificationScreen> {
                     ),
                     const SizedBox(height: 8),
                     InkWell(
-                      onTap: status != VerificationStatus.verified && !_isVerifying ? _simulateUpload : null,
+                    onTap: status != VerificationStatus.verified && !_isVerifying ? _pickDocumentOption : null,
                       borderRadius: BorderRadius.circular(12),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 250),
