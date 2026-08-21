@@ -88,11 +88,18 @@ class _SignInScreenState extends State<SignInScreen> {
           tooltip: 'Back to Landing Page',
         ),
         title: Row(
-          children: const [
-            Icon(Icons.shield, color: Color(0xFFF59E0B), size: 22),
-            SizedBox(width: 8),
-            Text(
-              'ChitGuard Sign In',
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: Image.asset(
+                'assets/images/logo.png',
+                height: 24,
+                fit: BoxFit.contain,
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Text(
+              'Sign In',
               style: TextStyle(
                 color: Color(0xFF0A2540),
                 fontWeight: FontWeight.bold,
@@ -129,16 +136,12 @@ class _SignInScreenState extends State<SignInScreen> {
                     children: [
                       // Header Icon & Title
                       Center(
-                        child: Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF0F4C81).withOpacity(0.08),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.lock_outline_rounded,
-                            color: Color(0xFF0F4C81),
-                            size: 36,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.asset(
+                            'assets/images/logo.png',
+                            height: 64,
+                            fit: BoxFit.contain,
                           ),
                         ),
                       ),

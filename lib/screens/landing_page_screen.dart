@@ -212,32 +212,13 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
           child: Row(
             children: [
               // App Branding Logo
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(7),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0F4C81),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(
-                      Icons.shield_outlined,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  const Text(
-                    ChitGuardLandingCopy.appName,
-                    style: TextStyle(
-                      fontFamily: 'Roboto',
-                      fontSize: 21,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1C2833),
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                ],
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: Image.asset(
+                  'assets/images/logo.png',
+                  height: 32,
+                  fit: BoxFit.contain,
+                ),
               ),
 
               const Spacer(),
@@ -461,15 +442,21 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
           ),
           // Host Core
           Container(
-            padding: const EdgeInsets.all(14),
-            decoration: const BoxDecoration(
-              color: Color(0xFF0F4C81),
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+              color: const Color(0xFF0F4C81),
               shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 2),
             ),
-            child: const Icon(
-              Icons.shield_outlined,
-              color: Colors.white,
-              size: 32,
+            child: ClipOval(
+              child: Padding(
+                padding: const EdgeInsets.all(6.0),
+                child: Image.asset(
+                  'assets/images/logo.png',
+                  fit: BoxFit.contain,
+                ),
+              ),
             ),
           ),
           // Member Nodes around circle
@@ -1001,10 +988,13 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
             ),
             child: Column(
               children: [
-                const Icon(
-                  Icons.shield_outlined,
-                  color: Color(0xFF0F4C81),
-                  size: 36,
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.asset(
+                    'assets/images/logo.png',
+                    height: 48,
+                    fit: BoxFit.contain,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 const Text(
@@ -1128,15 +1118,13 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Icon(Icons.shield_outlined, color: Color(0xFF0F4C81), size: 18),
-                  SizedBox(width: 8),
-                  Text(
-                    ChitGuardLandingCopy.appName,
-                    style: TextStyle(
-                      color: Color(0xFF1C2833),
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: Image.asset(
+                      'assets/images/logo.png',
+                      height: 24,
+                      fit: BoxFit.contain,
                     ),
                   ),
                 ],
