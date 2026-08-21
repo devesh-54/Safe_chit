@@ -198,8 +198,14 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
   Widget _buildNavBar(BuildContext context) {
     final isDesktop = MediaQuery.of(context).size.width > 800;
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 600;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+      padding: EdgeInsets.symmetric(
+        horizontal: isMobile ? 12 : 24,
+        vertical: 14,
+      ),
       decoration: const BoxDecoration(
         color: Color(0xFFFAF7F2),
         border: Border(
@@ -216,15 +222,15 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                 borderRadius: BorderRadius.circular(6),
                 child: Image.asset(
                   'assets/images/logo.png',
-                  height: 32,
+                  height: isMobile ? 26 : 32,
                   fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) => const Text(
+                  errorBuilder: (context, error, stackTrace) => Text(
                     'SafeChit',
                     style: TextStyle(
                       fontFamily: 'Roboto',
-                      fontSize: 20,
+                      fontSize: isMobile ? 18 : 20,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF0F4C81),
+                      color: const Color(0xFF0F4C81),
                       letterSpacing: -0.5,
                     ),
                   ),
@@ -263,15 +269,22 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                 style: OutlinedButton.styleFrom(
                   side: const BorderSide(color: Color(0xFF1C2833), width: 1.2),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isMobile ? 12 : 16,
+                    vertical: isMobile ? 8 : 10,
+                  ),
                 ),
-                child: const Text(
+                child: Text(
                   ChitGuardLandingCopy.heroCtaSecondary,
-                  style: TextStyle(color: Color(0xFF1C2833), fontWeight: FontWeight.w600, fontSize: 14),
+                  style: TextStyle(
+                    color: const Color(0xFF1C2833),
+                    fontWeight: FontWeight.w600,
+                    fontSize: isMobile ? 12 : 14,
+                  ),
                 ),
               ),
 
-              const SizedBox(width: 10),
+              SizedBox(width: isMobile ? 8 : 10),
 
               ElevatedButton(
                 onPressed: widget.onStartSignUp,
@@ -279,12 +292,18 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                   backgroundColor: const Color(0xFF0F4C81),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isMobile ? 12 : 18,
+                    vertical: isMobile ? 8 : 10,
+                  ),
                   elevation: 0,
                 ),
-                child: const Text(
+                child: Text(
                   ChitGuardLandingCopy.heroCtaPrimary,
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: isMobile ? 12 : 14,
+                  ),
                 ),
               ),
             ],

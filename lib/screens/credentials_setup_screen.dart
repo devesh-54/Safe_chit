@@ -124,9 +124,7 @@ class _CredentialsSetupScreenState extends State<CredentialsSetupScreen> {
       await SupabaseService.registerUser(
         username: username,
         password: password,
-        email: widget.state.emailAddress,
-        mobile: widget.state.mobileNumber,
-        legalName: widget.state.legalName,
+        state: widget.state,
       );
 
       if (!mounted) return;
