@@ -210,7 +210,7 @@ class _AddressScreenState extends State<AddressScreen> {
                           const SizedBox(width: 8),
                           Switch(
                             value: _isSame,
-                            activeThumbColor: WidgetStateProperty.all(const Color(0xFF0F4C81)),
+                            activeThumbColor: const Color(0xFF0F4C81),
                             activeTrackColor: const Color(0xFF0F4C81).withValues(alpha: 0.5),
                             onChanged: (val) {
                               setState(() {
