@@ -218,6 +218,16 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                   'assets/images/logo.png',
                   height: 32,
                   fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => const Text(
+                    'SafeChit',
+                    style: TextStyle(
+                      fontFamily: 'Roboto',
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF0F4C81),
+                      letterSpacing: -0.5,
+                    ),
+                  ),
                 ),
               ),
 
@@ -905,6 +915,11 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                     'assets/images/logo.png',
                     height: 48,
                     fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) => const Icon(
+                      Icons.shield_outlined,
+                      color: Color(0xFF0F4C81),
+                      size: 36,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -1036,6 +1051,14 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                       'assets/images/logo.png',
                       height: 24,
                       fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) => const Text(
+                        'SafeChit',
+                        style: TextStyle(
+                          color: Color(0xFF1C2833),
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ),
                 ],

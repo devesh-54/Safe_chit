@@ -95,6 +95,11 @@ class _SignInScreenState extends State<SignInScreen> {
                 'assets/images/logo.png',
                 height: 24,
                 fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) => const Icon(
+                  Icons.shield,
+                  color: Color(0xFF0F4C81),
+                  size: 20,
+                ),
               ),
             ),
             const SizedBox(width: 8),
@@ -142,6 +147,18 @@ class _SignInScreenState extends State<SignInScreen> {
                             'assets/images/logo.png',
                             height: 64,
                             fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) => Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0F4C81).withOpacity(0.08),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.lock_outline_rounded,
+                                color: Color(0xFF0F4C81),
+                                size: 36,
+                              ),
+                            ),
                           ),
                         ),
                       ),
