@@ -1,3 +1,4 @@
+import '../models/onboarding_state.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -97,9 +98,7 @@ class SupabaseService {
   static Future<bool> registerUser({
     required String username,
     required String password,
-    String? email,
-    String? mobile,
-    String? legalName,
+    required OnboardingState state,
   }) async {
     final cleanUsername = username.trim().toLowerCase();
 
@@ -117,17 +116,55 @@ class SupabaseService {
         try {
           await supaClient.from('user_onboardings').upsert({
             'username': cleanUsername,
-            'email': email ?? '',
-            'mobile_number': mobile ?? '',
-            'full_name': legalName ?? '',
+            'role': state.role?.name,
+            
+            // Account Setup
+            'mobile_number': state.mobileNumber,
+            'is_mobile_verified': state.mobileStatus == VerificationStatus.verified,
+            'email': state.emailAddress,
+            'is_email_verified': state.emailStatus == VerificationStatus.verified,
+            
+            // Personal Details
+            'full_name': state.legalName,
+            'date_of_birth': state.dob?.toIso8601String().split('T')[0],
+            'gender': state.gender,
+            
+            // Government ID
+            'pan_number': state.panNumber,
+            'aadhaar_number': state.aadhaarNumber,
+            'id_document_url': state.idDocumentPath,
+            'is_gov_id_verified': state.govIdStatus == VerificationStatus.verified,
+            
+            // Address Details
+            'perm_address': state.permAddress,
+            'perm_city': state.permCity,
+            'perm_state': state.permState,
+            'perm_pin_code': state.permPinCode,
+            'is_current_same_as_permanent': state.isCurrentSameAsPermanent,
+            'curr_address': state.currAddress,
+            'curr_city': state.currCity,
+            'curr_state': state.currState,
+            'curr_pin_code': state.currPinCode,
+            
+            // Bank Account
+            'bank_account_number': state.bankAccountNumber,
+            'bank_ifsc': state.bankIfsc,
+            'bank_name': state.bankName,
+            'bank_branch': state.bankBranch,
+            'is_bank_verified': state.bankStatus == VerificationStatus.verified,
+            
+            // KYC Consent
+            'has_consented': state.hasConsented,
+            'consent_timestamp': DateTime.now().toIso8601String(),
+            
             'updated_at': DateTime.now().toIso8601String(),
           });
         } catch (_) {
           await supaClient.from('profiles').upsert({
             'username': cleanUsername,
-            'email': email,
-            'mobile': mobile,
-            'legal_name': legalName,
+            'email': state.emailAddress,
+            'mobile': state.mobileNumber,
+            'legal_name': state.legalName,
             'created_at': DateTime.now().toIso8601String(),
           });
         }
