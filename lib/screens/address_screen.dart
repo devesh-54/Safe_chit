@@ -197,17 +197,21 @@ class _AddressScreenState extends State<AddressScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            'Current address is same as permanent',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF0F172A),
+                          const Expanded(
+                            child: Text(
+                              'Current address is same as permanent',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF0F172A),
+                              ),
                             ),
                           ),
+                          const SizedBox(width: 8),
                           Switch(
                             value: _isSame,
-                            activeColor: const Color(0xFF0F4C81),
+                            activeThumbColor: WidgetStateProperty.all(const Color(0xFF0F4C81)),
+                            activeTrackColor: const Color(0xFF0F4C81).withValues(alpha: 0.5),
                             onChanged: (val) {
                               setState(() {
                                 _isSame = val;
