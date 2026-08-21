@@ -391,8 +391,10 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
         const SizedBox(height: 36),
 
         // Hero Action Buttons
-        Row(
-          mainAxisAlignment: isDesktop ? MainAxisAlignment.start : MainAxisAlignment.center,
+        Wrap(
+          alignment: isDesktop ? WrapAlignment.start : WrapAlignment.center,
+          spacing: 14,
+          runSpacing: 12,
           children: [
             ElevatedButton(
               onPressed: widget.onStartSignUp,
@@ -408,7 +410,6 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
               ),
             ),
-            const SizedBox(width: 14),
             OutlinedButton(
               onPressed: widget.onOpenSignIn,
               style: OutlinedButton.styleFrom(
@@ -1027,8 +1028,10 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                 const SizedBox(height: 28),
 
                 // Primary Actions
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 12,
+                  runSpacing: 12,
                   children: [
                     ElevatedButton(
                       onPressed: widget.onStartSignUp,
@@ -1044,7 +1047,6 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                       ),
                     ),
-                    const SizedBox(width: 12),
                     OutlinedButton(
                       onPressed: widget.onOpenSignIn,
                       style: OutlinedButton.styleFrom(
