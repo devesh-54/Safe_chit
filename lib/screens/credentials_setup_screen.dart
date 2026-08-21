@@ -189,7 +189,7 @@ class _CredentialsSetupScreenState extends State<CredentialsSetupScreen> {
                       ),
                       child: const Icon(
                         Icons.key_outlined,
-                        color: Color(0xFFF59E0B),
+                        color: Colors.white,
                         size: 28,
                       ),
                     ),
