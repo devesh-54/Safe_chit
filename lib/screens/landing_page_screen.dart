@@ -222,7 +222,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                     ),
                     child: const Icon(
                       Icons.shield_outlined,
-                      color: Color(0xFFF59E0B),
+                      color: Colors.white,
                       size: 20,
                     ),
                   ),
@@ -338,7 +338,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
           child: const Text(
             'INFORMAL CHIT FUND PROTECTION',
             style: TextStyle(
-              color: Color(0xFFD97706),
+              color: Color(0xFF0F4C81),
               fontWeight: FontWeight.bold,
               fontSize: 11,
               letterSpacing: 0.8,
@@ -381,7 +381,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
               width: 120,
               height: 3,
               decoration: BoxDecoration(
-                color: const Color(0xFFD97706),
+                color: const Color(0xFF0F4C81),
                 borderRadius: BorderRadius.circular(1.5),
               ),
             ),
@@ -446,7 +446,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
             height: 190,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFFD97706).withValues(alpha: 0.4), width: 1.5),
+              border: Border.all(color: const Color(0xFF0F4C81).withValues(alpha: 0.4), width: 1.5),
             ),
           ),
           // Inner Node Circle
@@ -467,7 +467,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
             ),
             child: const Icon(
               Icons.shield_outlined,
-              color: Color(0xFFF59E0B),
+              color: Colors.white,
               size: 32,
             ),
           ),
@@ -547,7 +547,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                                 bottomLeft: Radius.circular(12),
                               ),
                               border: Border(
-                                left: BorderSide(color: Color(0xFFD97706), width: 4),
+                                left: BorderSide(color: Color(0xFF0F4C81), width: 4),
                                 top: BorderSide(color: Color(0xFFE2DACD)),
                                 right: BorderSide(color: Color(0xFFE2DACD)),
                                 bottom: BorderSide(color: Color(0xFFE2DACD)),
@@ -561,7 +561,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
-                                    color: Color(0xFFD97706),
+                                    color: Color(0xFF0F4C81),
                                     letterSpacing: 1,
                                   ),
                                 ),
@@ -641,7 +641,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                           decoration: const BoxDecoration(
                             color: Color(0xFFFAF7F2),
                             border: Border(
-                              left: BorderSide(color: Color(0xFFD97706), width: 4),
+                              left: BorderSide(color: Color(0xFF0F4C81), width: 4),
                               top: BorderSide(color: Color(0xFFE2DACD)),
                               right: BorderSide(color: Color(0xFFE2DACD)),
                               bottom: BorderSide(color: Color(0xFFE2DACD)),
@@ -951,7 +951,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
               const Text(
                 ChitGuardLandingCopy.statValue,
                 style: TextStyle(
-                  color: Color(0xFFF59E0B),
+                  color: Color(0xFF60A5FA),
                   fontSize: 44,
                   fontWeight: FontWeight.w900,
                   letterSpacing: -1,
@@ -1002,7 +1002,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
               children: [
                 const Icon(
                   Icons.shield_outlined,
-                  color: Color(0xFFD97706),
+                  color: Color(0xFF0F4C81),
                   size: 36,
                 ),
                 const SizedBox(height: 16),
@@ -1093,7 +1093,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                           ElevatedButton(
                             onPressed: _submitWaitlist,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFD97706),
+                              backgroundColor: const Color(0xFF0F4C81),
                               foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -1127,7 +1127,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: const [
-                  Icon(Icons.shield_outlined, color: Color(0xFFD97706), size: 18),
+                  Icon(Icons.shield_outlined, color: Color(0xFF0F4C81), size: 18),
                   SizedBox(width: 8),
                   Text(
                     ChitGuardLandingCopy.appName,
