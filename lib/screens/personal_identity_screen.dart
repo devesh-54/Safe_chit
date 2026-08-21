@@ -226,7 +226,7 @@ class _PersonalIdentityScreenState extends State<PersonalIdentityScreen> {
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
                       value: _selectedGender,
-                      items: ['Male', 'Female', 'Prefer not to say']
+                       items: ['Male', 'Female']
                           .map((label) => DropdownMenuItem(
                                 value: label,
                                 child: Text(
