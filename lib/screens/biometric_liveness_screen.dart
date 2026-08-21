@@ -97,15 +97,20 @@ class _BiometricLivenessScreenState extends State<BiometricLivenessScreen> with 
 
   Future<void> _stopImageStreamAndDisposeCamera() async {
     if (_cameraController != null) {
+      final tempController = _cameraController!;
+      _cameraController = null; // Set to null synchronously to prevent draw race conditions
       try {
-        if (_cameraController!.value.isStreamingImages) {
-          await _cameraController!.stopImageStream();
+        if (tempController.value.isStreamingImages) {
+          await tempController.stopImageStream();
         }
       } catch (e) {
         debugPrint('Error stopping image stream: $e');
       }
-      await _cameraController!.dispose();
-      _cameraController = null;
+      try {
+        await tempController.dispose();
+      } catch (e) {
+        debugPrint('Error disposing camera: $e');
+      }
     }
   }
 
@@ -348,17 +353,19 @@ class _BiometricLivenessScreenState extends State<BiometricLivenessScreen> with 
   // Completed all verification stages successfully
   Future<void> _completeVerificationSuccess() async {
     _isSuccess = true;
-    _stopImageStreamAndDisposeCamera();
-
-    widget.state.setSelfiePath('liveness_selfie_complete.png');
-    await widget.state.confirmSelfieLiveness();
-
+    
+    // Set UI State to success immediately to remove CameraPreview from tree
     if (mounted) {
       setState(() {
         _uiState = LivenessUIState.success;
         _stepInstruction = 'Verification successful';
       });
     }
+
+    await _stopImageStreamAndDisposeCamera();
+
+    widget.state.setSelfiePath('liveness_selfie_complete.png');
+    await widget.state.confirmSelfieLiveness();
   }
 
   // Convert CameraImage NV21/YUV to InputImage
