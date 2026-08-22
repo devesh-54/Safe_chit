@@ -95,7 +95,8 @@ class SupabaseService {
   }
 
   /// Register username and password to Supabase and local cache
-  static Future<bool> registerUser({
+  /// Returns null if successful, or an error message string if failed.
+  static Future<String?> registerUser({
     required String username,
     required String password,
     required OnboardingState state,
@@ -104,7 +105,7 @@ class SupabaseService {
 
     // Check uniqueness
     final unique = await isUsernameUnique(cleanUsername);
-    if (!unique) return false;
+    if (!unique) return 'Username is already taken.';
 
     // Store in local fallback map
     _registeredUsernames.add(cleanUsername);
@@ -112,77 +113,68 @@ class SupabaseService {
 
     try {
       final supaClient = client;
-      if (supaClient != null) {
-        try {
-          await supaClient.from('user_onboardings').upsert({
-            'username': cleanUsername,
-            'role': state.role?.name,
-            
-            // Account Setup
-            'mobile_number': state.mobileNumber,
-            'is_mobile_verified': state.mobileStatus == VerificationStatus.verified,
-            'email': state.emailAddress,
-            'is_email_verified': state.emailStatus == VerificationStatus.verified,
-            
-            // Personal Details
-            'full_name': state.legalName,
-            'date_of_birth': state.dob?.toIso8601String().split('T')[0],
-            'gender': state.gender,
-            
-            // Government ID
-            'pan_number': state.panNumber,
-            'aadhaar_number': state.aadhaarNumber,
-            'id_document_url': state.idDocumentPath,
-            'is_gov_id_verified': state.govIdStatus == VerificationStatus.verified,
-            
-            // Address Details
-            'perm_address': state.permAddress,
-            'perm_city': state.permCity,
-            'perm_state': state.permState,
-            'perm_pin_code': state.permPinCode,
-            'is_current_same_as_permanent': state.isCurrentSameAsPermanent,
-            'curr_address': state.currAddress,
-            'curr_city': state.currCity,
-            'curr_state': state.currState,
-            'curr_pin_code': state.currPinCode,
-            
-            // Bank Account
-            'bank_account_number': state.bankAccountNumber,
-            'bank_ifsc': state.bankIfsc,
-            'bank_name': state.bankName,
-            'bank_branch': state.bankBranch,
-            'is_bank_verified': state.bankStatus == VerificationStatus.verified,
-            
-            // KYC Consent
-            'has_consented': state.hasConsented,
-            'consent_timestamp': DateTime.now().toIso8601String(),
-            
-            'updated_at': DateTime.now().toIso8601String(),
-          });
-          print('✅ Successfully stored onboarding data in user_onboardings table!');
-        } catch (e) {
-          print('⚠️ Error upserting to user_onboardings: $e');
-          try {
-            await supaClient.from('profiles').upsert({
-              'username': cleanUsername,
-              'email': state.emailAddress,
-              'mobile': state.mobileNumber,
-              'legal_name': state.legalName,
-              'created_at': DateTime.now().toIso8601String(),
-            });
-            print('✅ Fell back and upserted to profiles table!');
-          } catch (e2) {
-            print('❌ Error upserting to profiles: $e2');
-          }
-        }
+      if (supaClient == null) {
+        return 'Supabase client is not initialized.';
+      }
+
+      try {
+        await supaClient.from('user_onboardings').upsert({
+          'username': cleanUsername,
+          'role': state.role?.name,
+          
+          // Account Setup
+          'mobile_number': state.mobileNumber,
+          'is_mobile_verified': state.mobileStatus == VerificationStatus.verified,
+          'email': state.emailAddress,
+          'is_email_verified': state.emailStatus == VerificationStatus.verified,
+          
+          // Personal Details
+          'full_name': state.legalName,
+          'date_of_birth': state.dob?.toIso8601String().split('T')[0],
+          'gender': state.gender,
+          
+          // Government ID
+          'pan_number': state.panNumber,
+          'aadhaar_number': state.aadhaarNumber,
+          'id_document_url': state.idDocumentPath,
+          'is_gov_id_verified': state.govIdStatus == VerificationStatus.verified,
+          
+          // Address Details
+          'perm_address': state.permAddress,
+          'perm_city': state.permCity,
+          'perm_state': state.permState,
+          'perm_pin_code': state.permPinCode,
+          'is_current_same_as_permanent': state.isCurrentSameAsPermanent,
+          'curr_address': state.currAddress,
+          'curr_city': state.currCity,
+          'curr_state': state.currState,
+          'curr_pin_code': state.currPinCode,
+          
+          // Bank Account
+          'bank_account_number': state.bankAccountNumber,
+          'bank_ifsc': state.bankIfsc,
+          'bank_name': state.bankName,
+          'bank_branch': state.bankBranch,
+          'is_bank_verified': state.bankStatus == VerificationStatus.verified,
+          
+          // KYC Consent
+          'has_consented': state.hasConsented,
+          'consent_timestamp': DateTime.now().toIso8601String(),
+          
+          'updated_at': DateTime.now().toIso8601String(),
+        });
+        print('✅ Successfully stored onboarding data in user_onboardings table!');
+        return null; // Success!
+      } catch (e) {
+        print('⚠️ Error upserting to user_onboardings: $e');
+        return e.toString();
       }
     } catch (e) {
       if (kDebugMode) {
         print('ℹ️ Supabase registration notice: $e');
       }
+      return e.toString();
     }
-
-    return true;
   }
 
   /// Authenticate username and password for Sign In
