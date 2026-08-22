@@ -6,17 +6,29 @@ ChitGuard is a secure, state-of-the-art onboarding and KYC (Know Your Customer) 
 
 ## 📱 Features
 
-The application orchestrates a comprehensive **9-step onboarding and verification journey**:
+The application orchestrates a comprehensive **10-step onboarding and verification journey**:
 
 1. **Role Selection**: Select whether you are joining as a **Member** (saving/borrowing) or a **Host/Foreman** (creating/managing cycles).
 2. **Account Setup**: Double verification of mobile number (mock OTP: `123456`) and email address.
-3. **Personal Identity**: Input of legal name, date of birth (min. 18 years restriction), and gender.
-4. **Government ID Verification**: Formatted PAN Card validation and Aadhaar checking with secure mock document upload scanning.
-5. **Selfie & Liveness**: A guided, interactive facial liveness scanning simulator ("Blink slowly", "Hold still") to prevent spoofing/identity theft.
+3. **Personal Identity**: Input of legal name, date of birth (min. 18 years restriction), and gender (strictly limited to Male and Female).
+4. **Government ID Verification**: Formatted PAN Card validation and Aadhaar checking with real **ImagePicker** camera and photo gallery upload scanning.
+5. **Selfie & Liveness**: A guided, interactive facial liveness scanner using **Google ML Kit face detection** and device **Camera stream** to detect blink, turn, and smile gestures.
 6. **Address Details**: Integrated fields for Permanent and Current addresses, with a quick toggle to copy details if they match.
 7. **Bank Account Verification**: Mock penny-drop check with IFSC code lookup (autofills state-specific bank details for codes like `SBIN0001234` or `HDFC0000104`).
 8. **KYC Consent**: Comprehensive scrollable legal terms agreement and explicit user consent checkbox.
-9. **Verification Summary**: Live visual dashboard displaying the status of each verification component with a option to reset/restart the onboarding flow.
+9. **Credentials Setup**: Form UI to establish a unique username and secure password, executing real-time uniqueness checks and password strength calculations.
+10. **Verification Summary**: A verified passport dashboard summarizing all status details, executing direct **Supabase Database** integration to store full onboarding records.
+
+---
+
+## 🆕 Recent Updates
+
+*   **Real Camera & Image Picker**: Integrated legacy and Android SDK 33+ permissions (`READ_MEDIA_IMAGES`, `READ_EXTERNAL_STORAGE`) and real image picking for the Government ID upload step.
+*   **CameraController Lifecycle Race Fix**: Resolved camera disposed exceptions by immediately transitioning UI state to success and synchronously clearing controller references before stream teardown.
+*   **Supabase Real Integration**: Connected Step 9 credentials setup to perform real inserts/upserts into the `user_onboardings` table, fully supporting `onConflict: 'username'` updates.
+*   **Error Diagnostics**: Added detailed alert dialog notifications directly in the Flutter UI to display exact database schema/constraint errors to developers.
+*   **Color Palette Realignment**: Overhauled the color system to follow a professional, high-contrast fintech aesthetic featuring Navy (`#0A2540`), Blue (`#0F4C81`), Teal (`#007A87`), and neutral backgrounds (`#F8FAFC`, `#FFFFFF`).
+*   **Branding Asset Optimization**: Cropped out excess padding from the brand logo file (reducing it from `680x470` to `395x83`) for perfect navigation bar sizing.
 
 ---
 
