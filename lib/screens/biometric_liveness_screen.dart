@@ -433,7 +433,7 @@ class _BiometricLivenessScreenState extends State<BiometricLivenessScreen> with 
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.w800,
-                  color: Color(0xFF0F172A),
+                  color: Color(0xFF0A2540),
                 ),
               ),
               StatusBadge(status: status, compact: true),
@@ -484,7 +484,7 @@ class _BiometricLivenessScreenState extends State<BiometricLivenessScreen> with 
             const SizedBox(height: 16),
             const Text(
               'Camera Access Required',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0A2540)),
             ),
             const SizedBox(height: 8),
             const Text(

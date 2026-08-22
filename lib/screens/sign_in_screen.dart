@@ -279,7 +279,7 @@ class _SignInScreenState extends State<SignInScreen> {
                               const SizedBox(width: 8),
                               const Text(
                                 'Remember me',
-                                style: TextStyle(fontSize: 13, color: Color(0xFF475569)),
+                                style: TextStyle(fontSize: 13, color: Color(0xFF334155)),
                               ),
                             ],
                           ),

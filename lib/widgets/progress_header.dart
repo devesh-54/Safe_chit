@@ -40,7 +40,7 @@ class ProgressHeader extends StatelessWidget {
                         icon: const Icon(
                           Icons.arrow_back_rounded,
                           size: 20,
-                          color: Color(0xFF0F172A),
+                          color: Color(0xFF0A2540),
                         ),
                         onPressed: onBackPressed,
                         constraints: const BoxConstraints(
@@ -54,7 +54,7 @@ class ProgressHeader extends StatelessWidget {
               Text(
                 'Step $currentStep of $totalSteps',
                 style: const TextStyle(
-                  color: Color(0xFF475569), // slate 600
+                  color: Color(0xFF64748B), // slate 600
                   fontWeight: FontWeight.w700,
                   fontSize: 14,
                   letterSpacing: 0.5,

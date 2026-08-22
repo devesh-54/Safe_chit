@@ -53,7 +53,7 @@ class _PersonalIdentityScreenState extends State<PersonalIdentityScreen> {
             colorScheme: const ColorScheme.light(
               primary: Color(0xFF0F4C81),
               onPrimary: Colors.white,
-              onSurface: Color(0xFF0F172A),
+              onSurface: Color(0xFF0A2540),
             ),
           ),
           child: child!,
@@ -100,7 +100,7 @@ class _PersonalIdentityScreenState extends State<PersonalIdentityScreen> {
                       style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.w800,
-                        color: Color(0xFF0F172A),
+                        color: Color(0xFF0A2540),
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -108,7 +108,7 @@ class _PersonalIdentityScreenState extends State<PersonalIdentityScreen> {
                       'Enter details exactly as they appear on your government-issued identity documents to ensure successful verification.',
                       style: TextStyle(
                         fontSize: 15,
-                        color: Color(0xFF475569),
+                        color: Color(0xFF334155),
                         height: 1.4,
                       ),
                     ),
@@ -189,7 +189,7 @@ class _PersonalIdentityScreenState extends State<PersonalIdentityScreen> {
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: _selectedDob == null ? FontWeight.w400 : FontWeight.w600,
-                                color: _selectedDob == null ? const Color(0xFF94A3B8) : const Color(0xFF0F172A),
+                                color: _selectedDob == null ? const Color(0xFF94A3B8) : const Color(0xFF0A2540),
                               ),
                             ),
                             const Spacer(),
