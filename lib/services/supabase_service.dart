@@ -159,14 +159,21 @@ class SupabaseService {
             
             'updated_at': DateTime.now().toIso8601String(),
           });
-        } catch (_) {
-          await supaClient.from('profiles').upsert({
-            'username': cleanUsername,
-            'email': state.emailAddress,
-            'mobile': state.mobileNumber,
-            'legal_name': state.legalName,
-            'created_at': DateTime.now().toIso8601String(),
-          });
+          print('✅ Successfully stored onboarding data in user_onboardings table!');
+        } catch (e) {
+          print('⚠️ Error upserting to user_onboardings: $e');
+          try {
+            await supaClient.from('profiles').upsert({
+              'username': cleanUsername,
+              'email': state.emailAddress,
+              'mobile': state.mobileNumber,
+              'legal_name': state.legalName,
+              'created_at': DateTime.now().toIso8601String(),
+            });
+            print('✅ Fell back and upserted to profiles table!');
+          } catch (e2) {
+            print('❌ Error upserting to profiles: $e2');
+          }
         }
       }
     } catch (e) {
