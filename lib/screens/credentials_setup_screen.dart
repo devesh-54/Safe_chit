@@ -121,7 +121,7 @@ class _CredentialsSetupScreenState extends State<CredentialsSetupScreen> {
       final password = _passwordController.text;
 
       // Register with Supabase
-      await SupabaseService.registerUser(
+      final errorMsg = await SupabaseService.registerUser(
         username: username,
         password: password,
         state: widget.state,
@@ -129,11 +129,64 @@ class _CredentialsSetupScreenState extends State<CredentialsSetupScreen> {
 
       if (!mounted) return;
 
-      widget.state.setCredentials(username, password);
-
       setState(() {
         _isSaving = false;
       });
+
+      if (errorMsg != null) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: const Row(
+              children: [
+                Icon(Icons.error_outline_rounded, color: Colors.red, size: 28),
+                SizedBox(width: 8),
+                Text('Database Error', style: TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Failed to save onboarding data to Supabase. This is typically due to a missing table column or Row-Level Security (RLS) permission issue.',
+                  style: TextStyle(fontSize: 14, color: Color(0xFF475569)),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF2F2),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFFCA5A5)),
+                  ),
+                  child: Text(
+                    errorMsg,
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                      color: Color(0xFF991B1B),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+
+      widget.state.setCredentials(username, password);
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
