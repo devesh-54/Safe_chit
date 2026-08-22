@@ -162,7 +162,7 @@ class SupabaseService {
           'consent_timestamp': DateTime.now().toIso8601String(),
           
           'updated_at': DateTime.now().toIso8601String(),
-        });
+        }, onConflict: 'username');
         print('✅ Successfully stored onboarding data in user_onboardings table!');
         return null; // Success!
       } catch (e) {
