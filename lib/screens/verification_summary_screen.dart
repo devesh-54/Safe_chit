@@ -66,7 +66,7 @@ class VerificationSummaryScreen extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.w800,
-                        color: Color(0xFF0F172A),
+                        color: Color(0xFF0A2540),
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -74,7 +74,7 @@ class VerificationSummaryScreen extends StatelessWidget {
                       'Your verification passport is revisitable at any time under Settings > Verification Summary.',
                       style: TextStyle(
                         fontSize: 15,
-                        color: Color(0xFF475569),
+                        color: Color(0xFF334155),
                         height: 1.4,
                       ),
                     ),
@@ -114,7 +114,7 @@ class VerificationSummaryScreen extends StatelessWidget {
                             textAlign: TextAlign.center,
                             style: const TextStyle(
                               fontSize: 13,
-                              color: Color(0xFF475569),
+                              color: Color(0xFF334155),
                               height: 1.35,
                             ),
                           ),
@@ -219,7 +219,7 @@ class VerificationSummaryScreen extends StatelessWidget {
                               'Compliance audits are run periodically. Auto-checks confirm documents match central databases to ensure security.',
                               style: TextStyle(
                                 fontSize: 13,
-                                color: Color(0xFF475569),
+                                color: Color(0xFF334155),
                                 height: 1.4,
                               ),
                             ),
@@ -246,7 +246,7 @@ class VerificationSummaryScreen extends StatelessWidget {
                             ),
                             child: const Text(
                               'Start Over',
-                              style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+                              style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF334155)),
                             ),
                           ),
                         ),
@@ -349,7 +349,7 @@ class VerificationSummaryScreen extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF0F172A),
+                    color: Color(0xFF0A2540),
                   ),
                 ),
                 const SizedBox(height: 3),

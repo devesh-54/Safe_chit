@@ -153,7 +153,7 @@ class _CredentialsSetupScreenState extends State<CredentialsSetupScreen> {
               children: [
                 const Text(
                   'Failed to save onboarding data to Supabase. This is typically due to a missing table column or Row-Level Security (RLS) permission issue.',
-                  style: TextStyle(fontSize: 14, color: Color(0xFF475569)),
+                  style: TextStyle(fontSize: 14, color: Color(0xFF334155)),
                 ),
                 const SizedBox(height: 16),
                 Container(

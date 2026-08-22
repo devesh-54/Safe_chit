@@ -163,7 +163,7 @@ class _AccountSetupScreenState extends State<AccountSetupScreen> {
                       style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.w800,
-                        color: Color(0xFF0F172A),
+                        color: Color(0xFF0A2540),
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -171,7 +171,7 @@ class _AccountSetupScreenState extends State<AccountSetupScreen> {
                       'Provide contact details. Verifying mobile & email secures communications and multi-factor alerts.',
                       style: TextStyle(
                         fontSize: 15,
-                        color: Color(0xFF475569),
+                        color: Color(0xFF334155),
                         height: 1.4,
                       ),
                     ),
@@ -203,7 +203,7 @@ class _AccountSetupScreenState extends State<AccountSetupScreen> {
                               prefixStyle: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
-                                color: Color(0xFF0F172A),
+                                color: Color(0xFF0A2540),
                               ),
                               hintText: 'Enter 10-digit number',
                               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -279,7 +279,7 @@ class _AccountSetupScreenState extends State<AccountSetupScreen> {
                               style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w700,
-                                color: Color(0xFF0F172A),
+                                color: Color(0xFF0A2540),
                               ),
                             ),
                             const SizedBox(height: 8),
@@ -347,7 +347,7 @@ class _AccountSetupScreenState extends State<AccountSetupScreen> {
                                       : 'Resend code in ${_timerSeconds}s',
                                   style: TextStyle(
                                     fontSize: 13,
-                                    color: _canResend ? const Color(0xFF475569) : const Color(0xFF94A3B8),
+                                    color: _canResend ? const Color(0xFF334155) : const Color(0xFF94A3B8),
                                   ),
                                 ),
                                 if (_canResend)

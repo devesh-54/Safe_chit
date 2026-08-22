@@ -31,7 +31,7 @@ class RoleSelectionScreen extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.w800,
-                        color: Color(0xFF0F172A),
+                        color: Color(0xFF0A2540),
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -39,7 +39,7 @@ class RoleSelectionScreen extends StatelessWidget {
                       'Selecting a role customizes your experience, but identity verification is identical for both to ensure fund security.',
                       style: TextStyle(
                         fontSize: 15,
-                        color: Color(0xFF475569),
+                        color: Color(0xFF334155),
                         height: 1.4,
                       ),
                     ),
@@ -153,7 +153,7 @@ class RoleSelectionScreen extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: isSelected ? const Color(0xFF0F4C81) : const Color(0xFF0F172A),
+                      color: isSelected ? const Color(0xFF0F4C81) : const Color(0xFF0A2540),
                     ),
                   ),
                   const SizedBox(height: 6),

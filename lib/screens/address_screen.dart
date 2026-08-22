@@ -139,7 +139,7 @@ class _AddressScreenState extends State<AddressScreen> {
                           style: TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.w800,
-                            color: Color(0xFF0F172A),
+                            color: Color(0xFF0A2540),
                           ),
                         ),
                         StatusBadge(status: status, compact: true),
@@ -150,7 +150,7 @@ class _AddressScreenState extends State<AddressScreen> {
                       'Please provide your current and permanent addresses. Physical audits may be conducted for high-value funds.',
                       style: TextStyle(
                         fontSize: 15,
-                        color: Color(0xFF475569),
+                        color: Color(0xFF334155),
                         height: 1.4,
                       ),
                     ),
@@ -203,7 +203,7 @@ class _AddressScreenState extends State<AddressScreen> {
                               style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w700,
-                                color: Color(0xFF0F172A),
+                                color: Color(0xFF0A2540),
                               ),
                             ),
                           ),
@@ -408,7 +408,7 @@ class _AddressScreenState extends State<AddressScreen> {
         // State dropdown
         DropdownButtonFormField<String>(
           value: selectedState,
-          style: const TextStyle(fontSize: 15, color: Color(0xFF0F172A), fontWeight: FontWeight.w600),
+          style: const TextStyle(fontSize: 15, color: Color(0xFF0A2540), fontWeight: FontWeight.w600),
           items: _indianStates
               .map((stateName) => DropdownMenuItem(
                     value: stateName,

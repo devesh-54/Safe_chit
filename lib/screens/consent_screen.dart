@@ -59,7 +59,7 @@ class _ConsentScreenState extends State<ConsentScreen> {
                           style: TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.w800,
-                            color: Color(0xFF0F172A),
+                            color: Color(0xFF0A2540),
                           ),
                         ),
                         StatusBadge(status: status, compact: true),
@@ -70,7 +70,7 @@ class _ConsentScreenState extends State<ConsentScreen> {
                       'Please read the terms below carefully. Your consent is required to process and verify your information.',
                       style: TextStyle(
                         fontSize: 15,
-                        color: Color(0xFF475569),
+                        color: Color(0xFF334155),
                         height: 1.4,
                       ),
                     ),
@@ -95,42 +95,42 @@ class _ConsentScreenState extends State<ConsentScreen> {
                                 children: const [
                                   Text(
                                     '1. Identity Verification Consent',
-                                    style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A), fontSize: 14),
+                                    style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0A2540), fontSize: 14),
                                   ),
                                   SizedBox(height: 4),
                                   Text(
                                     'I hereby authorize ChitGuard and its registered verification partners to verify my details (including PAN, Aadhaar, address and banking information) with the respective government bodies, credit information companies, and authorized registries for licensing and risk management purposes.',
-                                    style: TextStyle(color: Color(0xFF475569), fontSize: 13, height: 1.4),
+                                    style: TextStyle(color: Color(0xFF334155), fontSize: 13, height: 1.4),
                                   ),
                                   SizedBox(height: 16),
                                   Text(
                                     '2. Biometric and Selfie Data Processing',
-                                    style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A), fontSize: 14),
+                                    style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0A2540), fontSize: 14),
                                   ),
                                   SizedBox(height: 4),
                                   Text(
                                     'I consent to the collection, scanning, and processing of my selfie photograph to perform face-match algorithm tests against government databases. This verification ensures that I am opening my account in person and protects the system from digital identity theft or spoofing.',
-                                    style: TextStyle(color: Color(0xFF475569), fontSize: 13, height: 1.4),
+                                    style: TextStyle(color: Color(0xFF334155), fontSize: 13, height: 1.4),
                                   ),
                                   SizedBox(height: 16),
                                   Text(
                                     '3. Bank Verification Penny Drop',
-                                    style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A), fontSize: 14),
+                                    style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0A2540), fontSize: 14),
                                   ),
                                   SizedBox(height: 4),
                                   Text(
                                     'I authorize the verification system to perform a trial account name match (penny-drop validation) to confirm that the bank account provided is active and registered under my legal name.',
-                                    style: TextStyle(color: Color(0xFF475569), fontSize: 13, height: 1.4),
+                                    style: TextStyle(color: Color(0xFF334155), fontSize: 13, height: 1.4),
                                   ),
                                   SizedBox(height: 16),
                                   Text(
                                     '4. Security and Data Protection',
-                                    style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A), fontSize: 14),
+                                    style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0A2540), fontSize: 14),
                                   ),
                                   SizedBox(height: 4),
                                   Text(
                                     'All documents and metadata are fully encrypted in-transit and at-rest using military-grade AES-256 protocols. Your information will never be sold, leased, or distributed to third-party marketing companies, and will strictly remain accessible only under regulatory compliance rules of the Chit Funds Act, 1982.',
-                                    style: TextStyle(color: Color(0xFF475569), fontSize: 13, height: 1.4),
+                                    style: TextStyle(color: Color(0xFF334155), fontSize: 13, height: 1.4),
                                   ),
                                 ],
                               ),

@@ -109,7 +109,7 @@ class _BankVerificationScreenState extends State<BankVerificationScreen> {
                           style: TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.w800,
-                            color: Color(0xFF0F172A),
+                            color: Color(0xFF0A2540),
                           ),
                         ),
                         StatusBadge(status: status, compact: true),
@@ -120,7 +120,7 @@ class _BankVerificationScreenState extends State<BankVerificationScreen> {
                       'Provide the account details for receiving prize payouts or chit payments. Real penny-drop testing verifies name match.',
                       style: TextStyle(
                         fontSize: 15,
-                        color: Color(0xFF475569),
+                        color: Color(0xFF334155),
                         height: 1.4,
                       ),
                     ),

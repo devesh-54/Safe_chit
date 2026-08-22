@@ -141,7 +141,7 @@ class _OnboardingContainerState extends State<OnboardingContainer> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Onboarding flow reset to beginning.'),
-        backgroundColor: Color(0xFF475569),
+        backgroundColor: Color(0xFF334155),
       ),
     );
   }

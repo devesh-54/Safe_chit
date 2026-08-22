@@ -139,7 +139,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFAF7F2), // Warm off-white / cream base
+      backgroundColor: const Color(0xFFF8FAFC), // Warm off-white / cream base
       body: SafeArea(
         child: Column(
           children: [
@@ -207,9 +207,9 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
         vertical: 14,
       ),
       decoration: const BoxDecoration(
-        color: Color(0xFFFAF7F2),
+        color: Color(0xFFF8FAFC),
         border: Border(
-          bottom: BorderSide(color: Color(0xFFE2DACD)),
+          bottom: BorderSide(color: Color(0xFFE2E8F0)),
         ),
       ),
       child: Center(
@@ -243,22 +243,22 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
               if (isDesktop) ...[
                 TextButton(
                   onPressed: () => _scrollToSection(_problemKey),
-                  child: const Text('Risk', style: TextStyle(color: Color(0xFF566573), fontSize: 14)),
+                  child: const Text('Risk', style: TextStyle(color: Color(0xFF334155), fontSize: 14)),
                 ),
                 const SizedBox(width: 12),
                 TextButton(
                   onPressed: () => _scrollToSection(_howItWorksKey),
-                  child: const Text('Steps', style: TextStyle(color: Color(0xFF566573), fontSize: 14)),
+                  child: const Text('Steps', style: TextStyle(color: Color(0xFF334155), fontSize: 14)),
                 ),
                 const SizedBox(width: 12),
                 TextButton(
                   onPressed: () => _scrollToSection(_featuresKey),
-                  child: const Text('Features', style: TextStyle(color: Color(0xFF566573), fontSize: 14)),
+                  child: const Text('Features', style: TextStyle(color: Color(0xFF334155), fontSize: 14)),
                 ),
                 const SizedBox(width: 12),
                 TextButton(
                   onPressed: () => _scrollToSection(_statsKey),
-                  child: const Text('Impact', style: TextStyle(color: Color(0xFF566573), fontSize: 14)),
+                  child: const Text('Impact', style: TextStyle(color: Color(0xFF334155), fontSize: 14)),
                 ),
                 const SizedBox(width: 24),
               ],
@@ -267,7 +267,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
               OutlinedButton(
                 onPressed: widget.onOpenSignIn,
                 style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Color(0xFF1C2833), width: 1.2),
+                  side: const BorderSide(color: Color(0xFF0A2540), width: 1.2),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   padding: EdgeInsets.symmetric(
                     horizontal: isMobile ? 12 : 16,
@@ -277,7 +277,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                 child: Text(
                   ChitGuardLandingCopy.heroCtaSecondary,
                   style: TextStyle(
-                    color: const Color(0xFF1C2833),
+                    color: const Color(0xFF0A2540),
                     fontWeight: FontWeight.w600,
                     fontSize: isMobile ? 12 : 14,
                   ),
@@ -319,7 +319,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
 
     return Container(
       width: double.infinity,
-      color: const Color(0xFFFAF7F2), // Warm cream background
+      color: const Color(0xFFF8FAFC), // Warm cream background
       padding: EdgeInsets.symmetric(
         horizontal: isDesktop ? 64 : 24,
         vertical: isDesktop ? 80 : 48,
@@ -341,9 +341,9 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
           decoration: BoxDecoration(
-            color: const Color(0xFFF2ECE1),
+            color: const Color(0xFFFFFFFF),
             borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: const Color(0xFFE2DACD)),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
           ),
           child: const Text(
             'INFORMAL CHIT FUND PROTECTION',
@@ -363,7 +363,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
           ChitGuardLandingCopy.heroTitle,
           textAlign: isDesktop ? TextAlign.left : TextAlign.center,
           style: const TextStyle(
-            color: Color(0xFF1C2833),
+            color: Color(0xFF0A2540),
             fontSize: 36,
             fontWeight: FontWeight.w800,
             height: 1.2,
@@ -381,7 +381,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
               ChitGuardLandingCopy.heroSub,
               textAlign: isDesktop ? TextAlign.left : TextAlign.center,
               style: const TextStyle(
-                color: Color(0xFF566573),
+                color: Color(0xFF334155),
                 fontSize: 16,
                 height: 1.45,
               ),
@@ -423,13 +423,13 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
             OutlinedButton(
               onPressed: widget.onOpenSignIn,
               style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Color(0xFFE2DACD), width: 1.5),
+                side: const BorderSide(color: Color(0xFFE2E8F0), width: 1.5),
                 padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
               child: const Text(
                 'Sign In',
-                style: TextStyle(fontSize: 15, color: Color(0xFF1C2833), fontWeight: FontWeight.w600),
+                style: TextStyle(fontSize: 15, color: Color(0xFF0A2540), fontWeight: FontWeight.w600),
               ),
             ),
           ],
@@ -469,16 +469,16 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                           child: Container(
                             padding: const EdgeInsets.all(28),
                             decoration: const BoxDecoration(
-                              color: Color(0xFFFAF7F2),
+                              color: Color(0xFFF8FAFC),
                               borderRadius: BorderRadius.only(
                                 topLeft: Radius.circular(12),
                                 bottomLeft: Radius.circular(12),
                               ),
                               border: Border(
                                 left: BorderSide(color: Color(0xFF0F4C81), width: 4),
-                                top: BorderSide(color: Color(0xFFE2DACD)),
-                                right: BorderSide(color: Color(0xFFE2DACD)),
-                                bottom: BorderSide(color: Color(0xFFE2DACD)),
+                                top: BorderSide(color: Color(0xFFE2E8F0)),
+                                right: BorderSide(color: Color(0xFFE2E8F0)),
+                                bottom: BorderSide(color: Color(0xFFE2E8F0)),
                               ),
                             ),
                             child: Column(
@@ -499,7 +499,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                                   style: TextStyle(
                                     fontSize: 22,
                                     fontWeight: FontWeight.bold,
-                                    color: Color(0xFF1C2833),
+                                    color: Color(0xFF0A2540),
                                   ),
                                 ),
                                 SizedBox(height: 8),
@@ -508,7 +508,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                                   style: TextStyle(
                                     fontSize: 14,
                                     height: 1.45,
-                                    color: Color(0xFF566573),
+                                    color: Color(0xFF334155),
                                   ),
                                 ),
                               ],
@@ -524,7 +524,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFFE2DACD)),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -534,7 +534,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
-                                    color: Color(0xFF566573),
+                                    color: Color(0xFF334155),
                                     letterSpacing: 1,
                                   ),
                                 ),
@@ -544,7 +544,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                                   style: TextStyle(
                                     fontSize: 20,
                                     fontWeight: FontWeight.bold,
-                                    color: Color(0xFF1C2833),
+                                    color: Color(0xFF0A2540),
                                   ),
                                 ),
                                 SizedBox(height: 8),
@@ -553,7 +553,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                                   style: TextStyle(
                                     fontSize: 14,
                                     height: 1.45,
-                                    color: Color(0xFF566573),
+                                    color: Color(0xFF334155),
                                   ),
                                 ),
                               ],
@@ -567,12 +567,12 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                         Container(
                           padding: const EdgeInsets.all(24),
                           decoration: const BoxDecoration(
-                            color: Color(0xFFFAF7F2),
+                            color: Color(0xFFF8FAFC),
                             border: Border(
                               left: BorderSide(color: Color(0xFF0F4C81), width: 4),
-                              top: BorderSide(color: Color(0xFFE2DACD)),
-                              right: BorderSide(color: Color(0xFFE2DACD)),
-                              bottom: BorderSide(color: Color(0xFFE2DACD)),
+                              top: BorderSide(color: Color(0xFFE2E8F0)),
+                              right: BorderSide(color: Color(0xFFE2E8F0)),
+                              bottom: BorderSide(color: Color(0xFFE2E8F0)),
                             ),
                           ),
                           child: Column(
@@ -583,13 +583,13 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                                 style: TextStyle(
                                   fontSize: 20,
                                   fontWeight: FontWeight.bold,
-                                  color: Color(0xFF1C2833),
+                                  color: Color(0xFF0A2540),
                                 ),
                               ),
                               SizedBox(height: 8),
                               Text(
                                 ChitGuardLandingCopy.problem2Sub,
-                                style: TextStyle(fontSize: 14, color: Color(0xFF566573)),
+                                style: TextStyle(fontSize: 14, color: Color(0xFF334155)),
                               ),
                             ],
                           ),
@@ -599,7 +599,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                           padding: const EdgeInsets.all(24),
                           decoration: BoxDecoration(
                             color: Colors.white,
-                            border: Border.all(color: const Color(0xFFE2DACD)),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -609,13 +609,13 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                                 style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
-                                  color: Color(0xFF1C2833),
+                                  color: Color(0xFF0A2540),
                                 ),
                               ),
                               SizedBox(height: 8),
                               Text(
                                 ChitGuardLandingCopy.problem1Sub,
-                                style: TextStyle(fontSize: 14, color: Color(0xFF566573)),
+                                style: TextStyle(fontSize: 14, color: Color(0xFF334155)),
                               ),
                             ],
                           ),
@@ -635,7 +635,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
 
     return Container(
       width: double.infinity,
-      color: const Color(0xFFF2ECE1), // Warm sand background
+      color: const Color(0xFFFFFFFF), // Warm sand background
       padding: const EdgeInsets.symmetric(vertical: 56, horizontal: 24),
       child: Center(
         child: ConstrainedBox(
@@ -679,7 +679,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                                   style: const TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.bold,
-                                    color: Color(0xFF1C2833),
+                                    color: Color(0xFF0A2540),
                                   ),
                                 ),
                                 const SizedBox(height: 6),
@@ -687,7 +687,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                                   st['desc']!,
                                   style: const TextStyle(
                                     fontSize: 13,
-                                    color: Color(0xFF566573),
+                                    color: Color(0xFF334155),
                                     height: 1.35,
                                   ),
                                 ),
@@ -729,7 +729,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                                       style: const TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,
-                                        color: Color(0xFF1C2833),
+                                        color: Color(0xFF0A2540),
                                       ),
                                     ),
                                     const SizedBox(height: 4),
@@ -737,7 +737,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                                       st['desc']!,
                                       style: const TextStyle(
                                         fontSize: 13,
-                                        color: Color(0xFF566573),
+                                        color: Color(0xFF334155),
                                       ),
                                     ),
                                   ],
@@ -761,7 +761,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
 
     return Container(
       width: double.infinity,
-      color: const Color(0xFFFAF7F2),
+      color: const Color(0xFFF8FAFC),
       padding: const EdgeInsets.symmetric(vertical: 56, horizontal: 24),
       child: Center(
         child: ConstrainedBox(
@@ -815,7 +815,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE2DACD)),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -835,7 +835,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF1C2833),
+                    color: Color(0xFF0A2540),
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -844,7 +844,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                   style: const TextStyle(
                     fontSize: 13,
                     height: 1.4,
-                    color: Color(0xFF566573),
+                    color: Color(0xFF334155),
                   ),
                 ),
               ],
@@ -859,7 +859,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
   Widget _buildStatCalloutSection(BuildContext context) {
     return Container(
       width: double.infinity,
-      color: const Color(0xFF1C2833), // Contrast charcoal background for single callout
+      color: const Color(0xFF0A2540), // Contrast charcoal background for single callout
       padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
       child: Center(
         child: ConstrainedBox(
@@ -869,7 +869,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
               const Text(
                 ChitGuardLandingCopy.statTitle,
                 style: TextStyle(
-                  color: Color(0xFFE2DACD),
+                  color: Color(0xFFE2E8F0),
                   fontSize: 13,
                   fontWeight: FontWeight.bold,
                   letterSpacing: 1,
@@ -911,7 +911,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
 
     return Container(
       width: double.infinity,
-      color: const Color(0xFFFAF7F2),
+      color: const Color(0xFFF8FAFC),
       padding: EdgeInsets.symmetric(
         vertical: isDesktop ? 72 : 48,
         horizontal: 24,
@@ -924,7 +924,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFE2DACD), width: 1.5),
+              border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
             ),
             child: Column(
               children: [
@@ -948,7 +948,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF1C2833),
+                    color: Color(0xFF0A2540),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -957,7 +957,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 14,
-                    color: Color(0xFF566573),
+                    color: Color(0xFF334155),
                   ),
                 ),
                 const SizedBox(height: 28),
@@ -985,20 +985,20 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                     OutlinedButton(
                       onPressed: widget.onOpenSignIn,
                       style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFF1C2833), width: 1.2),
+                        side: const BorderSide(color: Color(0xFF0A2540), width: 1.2),
                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                       child: const Text(
                         'Sign In',
-                        style: TextStyle(color: Color(0xFF1C2833), fontWeight: FontWeight.w600, fontSize: 14),
+                        style: TextStyle(color: Color(0xFF0A2540), fontWeight: FontWeight.w600, fontSize: 14),
                       ),
                     ),
                   ],
                 ),
 
                 const SizedBox(height: 24),
-                const Divider(color: Color(0xFFE2DACD)),
+                const Divider(color: Color(0xFFE2E8F0)),
                 const SizedBox(height: 16),
 
                 // Waitlist Capture
@@ -1016,11 +1016,11 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                               decoration: InputDecoration(
                                 hintText: 'Enter phone or email',
                                 hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
-                                fillColor: const Color(0xFFFAF7F2),
+                                fillColor: const Color(0xFFF8FAFC),
                                 filled: true,
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: const BorderSide(color: Color(0xFFE2DACD)),
+                                  borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
                                 ),
                                 contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                               ),
@@ -1053,8 +1053,8 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
       decoration: const BoxDecoration(
-        color: Color(0xFFFAF7F2),
-        border: Border(top: BorderSide(color: Color(0xFFE2DACD))),
+        color: Color(0xFFF8FAFC),
+        border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
       ),
       child: Center(
         child: ConstrainedBox(
@@ -1073,7 +1073,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                       errorBuilder: (context, error, stackTrace) => const Text(
                         'SafeChit',
                         style: TextStyle(
-                          color: Color(0xFF1C2833),
+                          color: Color(0xFF0A2540),
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                         ),
@@ -1107,7 +1107,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
           style: const TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,
-            color: Color(0xFF1C2833),
+            color: Color(0xFF0A2540),
             letterSpacing: -0.5,
           ),
         ),
@@ -1116,7 +1116,7 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
           sub,
           style: const TextStyle(
             fontSize: 14,
-            color: Color(0xFF566573),
+            color: Color(0xFF334155),
           ),
         ),
       ],

@@ -178,7 +178,7 @@ class _GovIdVerificationScreenState extends State<GovIdVerificationScreen> {
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF0F172A),
+                    color: Color(0xFF0A2540),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -249,7 +249,7 @@ class _GovIdVerificationScreenState extends State<GovIdVerificationScreen> {
                           style: TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.w800,
-                            color: Color(0xFF0F172A),
+                            color: Color(0xFF0A2540),
                           ),
                         ),
                         StatusBadge(status: status, compact: true),
@@ -260,7 +260,7 @@ class _GovIdVerificationScreenState extends State<GovIdVerificationScreen> {
                       'We securely verify government identifiers with central registries (NSDL/UIDAI) for fraud reduction.',
                       style: TextStyle(
                         fontSize: 15,
-                        color: Color(0xFF475569),
+                        color: Color(0xFF334155),
                         height: 1.4,
                       ),
                     ),
@@ -410,7 +410,7 @@ class _GovIdVerificationScreenState extends State<GovIdVerificationScreen> {
                                             style: const TextStyle(
                                               fontWeight: FontWeight.w700,
                                               fontSize: 14,
-                                              color: Color(0xFF0F172A),
+                                              color: Color(0xFF0A2540),
                                             ),
                                           ),
                                           const SizedBox(height: 4),
@@ -445,7 +445,7 @@ class _GovIdVerificationScreenState extends State<GovIdVerificationScreen> {
                                       style: TextStyle(
                                         fontSize: 14,
                                         fontWeight: FontWeight.w600,
-                                        color: Color(0xFF0F172A),
+                                        color: Color(0xFF0A2540),
                                       ),
                                     ),
                                     Text(
