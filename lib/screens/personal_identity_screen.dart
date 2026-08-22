@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/onboarding_state.dart';
+import '../widgets/premium_date_picker.dart';
 
 class PersonalIdentityScreen extends StatefulWidget {
   final OnboardingState state;
@@ -42,23 +43,11 @@ class _PersonalIdentityScreenState extends State<PersonalIdentityScreen> {
     final firstDate = DateTime(now.year - 100);
     final lastDate = DateTime(now.year - 18, now.month, now.day);
 
-    final DateTime? picked = await showDatePicker(
+    final DateTime? picked = await showPremiumDatePicker(
       context: context,
       initialDate: _selectedDob ?? initialDate,
       firstDate: firstDate,
       lastDate: lastDate,
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Color(0xFF0F4C81),
-              onPrimary: Colors.white,
-              onSurface: Color(0xFF0A2540),
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
 
     if (picked != null && picked != _selectedDob) {

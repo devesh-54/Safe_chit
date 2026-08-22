@@ -10,7 +10,7 @@ The application orchestrates a comprehensive **10-step onboarding and verificati
 
 1. **Role Selection**: Select whether you are joining as a **Member** (saving/borrowing) or a **Host/Foreman** (creating/managing cycles).
 2. **Account Setup**: Double verification of mobile number (mock OTP: `123456`) and email address.
-3. **Personal Identity**: Input of legal name, date of birth (min. 18 years restriction), and gender (strictly limited to Male and Female).
+3. **Personal Identity**: Input of legal name, date of birth (featuring a custom premium in-app calendar picker with fast year scroll to easily select old birth years), and gender (strictly limited to Male and Female).
 4. **Government ID Verification**: Formatted PAN Card validation and Aadhaar checking with real **ImagePicker** camera and photo gallery upload scanning.
 5. **Selfie & Liveness**: A guided, interactive facial liveness scanner using **Google ML Kit face detection** and device **Camera stream** to detect blink, turn, and smile gestures.
 6. **Address Details**: Integrated fields for Permanent and Current addresses, with a quick toggle to copy details if they match.
@@ -23,6 +23,7 @@ The application orchestrates a comprehensive **10-step onboarding and verificati
 
 ## 🆕 Recent Updates
 
+*   **Premium DOB Date Picker**: Created a custom premium in-app calendar component featuring full month/year navigation, active selections highlighted in primary blue (`#0F4C81`), and a dedicated year scroll selector to simplify selecting old birth years.
 *   **Real Camera & Image Picker**: Integrated legacy and Android SDK 33+ permissions (`READ_MEDIA_IMAGES`, `READ_EXTERNAL_STORAGE`) and real image picking for the Government ID upload step.
 *   **CameraController Lifecycle Race Fix**: Resolved camera disposed exceptions by immediately transitioning UI state to success and synchronously clearing controller references before stream teardown.
 *   **Supabase Real Integration**: Connected Step 9 credentials setup to perform real inserts/upserts into the `user_onboardings` table, fully supporting `onConflict: 'username'` updates.
