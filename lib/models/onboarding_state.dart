@@ -512,4 +512,48 @@ class OnboardingState extends ChangeNotifier {
     notifyListeners();
     return true;
   }
+
+  void prefillForDebug() {
+    _role = UserRole.member;
+    
+    _mobileNumber = '9391329177';
+    _mobileStatus = VerificationStatus.verified;
+    
+    _emailAddress = 'deveshdhanush73@gmail.com';
+    _emailStatus = VerificationStatus.verified;
+    
+    _legalName = 'S Devesh';
+    _dob = DateTime(2006, 12, 28);
+    _gender = 'Male';
+    _identityStatus = VerificationStatus.verified;
+    
+    _panNumber = 'ASHSH2006G';
+    _panStatus = VerificationStatus.verified;
+    _aadhaarNumber = '123456789012';
+    _aadhaarStatus = VerificationStatus.verified;
+    _idDocumentPath = 'gov_id_verification_placeholder.png';
+    _govIdStatus = VerificationStatus.verified;
+    
+    _selfiePath = 'liveness_selfie_complete.png';
+    _biometricStatus = VerificationStatus.verified;
+    
+    _permAddress = 'shehs';
+    _permCity = 'Jharkhand';
+    _permState = 'Jharkhand';
+    _permPinCode = '123456';
+    _isCurrentSameAsPermanent = true;
+    _addressStatus = VerificationStatus.verified;
+    
+    _bankAccountNumber = '1234567890';
+    _bankIfsc = 'SBIN0020060';
+    _bankName = 'State Bank of India';
+    _bankBranch = 'Main Branch';
+    _bankStatus = VerificationStatus.verified;
+    
+    _hasConsented = true;
+    _consentStatus = VerificationStatus.verified;
+    
+    _currentStep = 9; // Credentials setup step
+    notifyListeners();
+  }
 }

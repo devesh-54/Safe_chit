@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import '../models/onboarding_state.dart';
 
 class RoleSelectionScreen extends StatelessWidget {
@@ -85,6 +86,32 @@ class RoleSelectionScreen extends StatelessWidget {
                         ),
                       ),
                     ),
+                    if (kDebugMode) ...[
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            state.prefillForDebug();
+                          },
+                          icon: const Icon(Icons.bug_report_rounded, color: Colors.orange),
+                          label: const Text(
+                            'Debug: Prefill & Skip Steps',
+                            style: TextStyle(
+                              color: Colors.orange,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.orange, width: 1.5),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
