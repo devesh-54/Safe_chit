@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/onboarding_state.dart';
+import '../services/supabase_service.dart';
 import '../widgets/status_badge.dart';
 
 class GovIdVerificationScreen extends StatefulWidget {
@@ -26,6 +27,79 @@ class _GovIdVerificationScreenState extends State<GovIdVerificationScreen> {
   bool _isAadhaarFocused = false;
   bool _isVerifying = false;
   String? _errorMessage;
+
+  bool _isUploadingSignature = false;
+  String? _signatureUploadError;
+
+  bool _isUploadingDocument = false;
+  String? _documentUploadError;
+
+  Future<void> _pickSignatureImage() async {
+    final status = await Permission.camera.request();
+    if (!status.isGranted) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Camera permission is required to photograph your signature.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
+    try {
+      final picker = ImagePicker();
+      final XFile? file = await picker.pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice: CameraDevice.rear,
+        maxWidth: 1200,
+        maxHeight: 1200,
+        imageQuality: 85,
+      );
+
+      if (file == null) return;
+
+      setState(() {
+        _isUploadingSignature = true;
+        _signatureUploadError = null;
+      });
+
+      final String remoteFileName = 'sig_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final String? publicUrl = await SupabaseService.uploadImage(
+        bucketName: 'signatures',
+        filePath: file.path,
+        remoteFileName: remoteFileName,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _isUploadingSignature = false;
+      });
+
+      if (publicUrl != null) {
+        widget.state.setSignaturePath(publicUrl);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Signature uploaded successfully!'),
+            backgroundColor: Color(0xFF0F4C81),
+          ),
+        );
+      } else {
+        setState(() {
+          _signatureUploadError = 'Failed to upload signature. Check your connection.';
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _signatureUploadError = 'Error capturing signature: $e';
+          _isUploadingSignature = false;
+        });
+      }
+    }
+  }
 
   @override
   void initState() {
@@ -134,27 +208,45 @@ class _GovIdVerificationScreenState extends State<GovIdVerificationScreen> {
         imageQuality: 85,
       );
 
-      if (file != null) {
+      if (file == null) return;
+
+      setState(() {
+        _isUploadingDocument = true;
+        _documentUploadError = null;
+      });
+
+      final String remoteFileName = 'id_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final String? publicUrl = await SupabaseService.uploadImage(
+        bucketName: 'identity_documents',
+        filePath: file.path,
+        remoteFileName: remoteFileName,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _isUploadingDocument = false;
+      });
+
+      if (publicUrl != null) {
+        widget.state.setIdDocumentPath(publicUrl);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Document uploaded successfully!'),
+            backgroundColor: Color(0xFF0F4C81),
+          ),
+        );
+      } else {
         setState(() {
-          widget.state.setIdDocumentPath(file.path);
+          _documentUploadError = 'Failed to upload document. Check your connection.';
         });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Document selected: ${file.name}'),
-              backgroundColor: const Color(0xFF0F4C81),
-            ),
-          );
-        }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error picking document: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        setState(() {
+          _documentUploadError = 'Error picking document: $e';
+          _isUploadingDocument = false;
+        });
       }
     }
   }
@@ -371,7 +463,9 @@ class _GovIdVerificationScreenState extends State<GovIdVerificationScreen> {
                     ),
                     const SizedBox(height: 8),
                     InkWell(
-                    onTap: status != VerificationStatus.verified && !_isVerifying ? _pickDocumentOption : null,
+                      onTap: status != VerificationStatus.verified && !_isVerifying && !_isUploadingDocument
+                          ? _pickDocumentOption
+                          : null,
                       borderRadius: BorderRadius.circular(12),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 250),
@@ -384,79 +478,278 @@ class _GovIdVerificationScreenState extends State<GovIdVerificationScreen> {
                             style: hasDocument ? BorderStyle.solid : BorderStyle.none,
                           ),
                         ),
-                        child: hasDocument
-                            ? Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                        child: _isUploadingDocument
+                            ? const Center(
                                 child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Container(
-                                      padding: const EdgeInsets.all(12),
-                                      decoration: const BoxDecoration(
-                                        color: Colors.white,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: const Icon(Icons.picture_as_pdf_outlined, color: Color(0xFF0F4C81), size: 30),
-                                    ),
-                                    const SizedBox(width: 14),
-                                    Expanded(
-                                      child: Column(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            widget.state.idDocumentPath!,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w700,
-                                              fontSize: 14,
-                                              color: Color(0xFF0A2540),
-                                            ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          const Text(
-                                            '1.4 MB • Complete Scan',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: Color(0xFF64748B),
-                                            ),
-                                          ),
-                                        ],
+                                    SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Color(0xFF0F4C81),
                                       ),
                                     ),
-                                    if (status != VerificationStatus.verified)
-                                      IconButton(
-                                        icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFDC2626)),
-                                        onPressed: () {
-                                          widget.state.setIdDocumentPath(null);
-                                        },
+                                    SizedBox(width: 12),
+                                    Text(
+                                      'Uploading document scan...',
+                                      style: TextStyle(
+                                        color: Color(0xFF0A2540),
+                                        fontWeight: FontWeight.w600,
                                       ),
+                                    ),
                                   ],
                                 ),
                               )
-                            : const Center(
-                                child: Column(
+                            : hasDocument
+                                ? Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: const BoxDecoration(
+                                            color: Colors.white,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: ClipOval(
+                                            child: Image.network(
+                                              widget.state.idDocumentPath!,
+                                              width: 36,
+                                              height: 36,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (c, e, s) => const Icon(
+                                                Icons.picture_as_pdf_outlined,
+                                                color: Color(0xFF0F4C81),
+                                                size: 24,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 14),
+                                        Expanded(
+                                          child: Column(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              const Text(
+                                                'ID Document Scan Uploaded',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 14,
+                                                  color: Color(0xFF0A2540),
+                                                ),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                'Stored in Supabase identity_documents',
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                  fontSize: 12,
+                                                  color: Color(0xFF64748B),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        if (status != VerificationStatus.verified)
+                                          IconButton(
+                                            icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFDC2626)),
+                                            onPressed: () {
+                                              widget.state.setIdDocumentPath(null);
+                                            },
+                                          ),
+                                      ],
+                                    ),
+                                  )
+                                : const Center(
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.cloud_upload_outlined, size: 36, color: Color(0xFF64748B)),
+                                        SizedBox(height: 6),
+                                        Text(
+                                          'Upload scan (JPEG/PNG/PDF)',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFF0A2540),
+                                          ),
+                                        ),
+                                        Text(
+                                          'Max size 5MB',
+                                          style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                      ),
+                    ),
+                    if (_documentUploadError != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        _documentUploadError!,
+                        style: const TextStyle(
+                          color: Color(0xFFDC2626),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+
+                    // SIGNATURE UPLOAD COMPONENT
+                    const SizedBox(height: 24),
+                    const Text(
+                      'Handwritten Signature Photo',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF334155),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    InkWell(
+                      onTap: status != VerificationStatus.verified && !_isVerifying && !_isUploadingSignature
+                          ? _pickSignatureImage
+                          : null,
+                      borderRadius: BorderRadius.circular(12),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 250),
+                        height: 120,
+                        decoration: BoxDecoration(
+                          color: widget.state.signaturePath != null
+                              ? const Color(0xFFF1F5F9)
+                              : const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: widget.state.signaturePath != null
+                                ? const Color(0xFF0F4C81)
+                                : const Color(0xFFE2E8F0),
+                            width: widget.state.signaturePath != null ? 1.5 : 1.0,
+                          ),
+                        ),
+                        child: _isUploadingSignature
+                            ? const Center(
+                                child: Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(Icons.cloud_upload_outlined, size: 36, color: Color(0xFF64748B)),
-                                    SizedBox(height: 6),
-                                    Text(
-                                      'Upload scan (JPEG/PNG/PDF)',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                        color: Color(0xFF0A2540),
+                                    SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Color(0xFF0F4C81),
                                       ),
                                     ),
+                                    SizedBox(width: 12),
                                     Text(
-                                      'Max size 5MB',
-                                      style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                                      'Uploading signature scan...',
+                                      style: TextStyle(
+                                        color: Color(0xFF0A2540),
+                                        fontWeight: FontWeight.w600,
+                                      ),
                                     ),
                                   ],
                                 ),
-                              ),
+                              )
+                            : widget.state.signaturePath != null
+                                ? Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: const BoxDecoration(
+                                            color: Colors.white,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: ClipOval(
+                                            child: Image.network(
+                                              widget.state.signaturePath!,
+                                              width: 32,
+                                              height: 32,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (c, e, s) => const Icon(
+                                                Icons.gesture_rounded,
+                                                color: Color(0xFF0F4C81),
+                                                size: 24,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 14),
+                                        const Expanded(
+                                          child: Column(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                'Signature Photo Captured',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 14,
+                                                  color: Color(0xFF0A2540),
+                                                ),
+                                              ),
+                                              SizedBox(height: 4),
+                                              Text(
+                                                'Signature stored in Supabase',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Color(0xFF64748B),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        if (status != VerificationStatus.verified)
+                                          IconButton(
+                                            icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFDC2626)),
+                                            onPressed: () {
+                                              setState(() {
+                                                widget.state.setSignaturePath(null);
+                                              });
+                                            },
+                                          ),
+                                      ],
+                                    ),
+                                  )
+                                : const Center(
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.camera_alt_outlined, size: 32, color: Color(0xFF64748B)),
+                                        SizedBox(height: 6),
+                                        Text(
+                                          'Take Signature Photo',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFF0A2540),
+                                          ),
+                                        ),
+                                        Text(
+                                          'Sign on paper and snap photo',
+                                          style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                       ),
                     ),
+                    if (_signatureUploadError != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        _signatureUploadError!,
+                        style: const TextStyle(
+                          color: Color(0xFFDC2626),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
 
                     const SizedBox(height: 24),
 
@@ -554,6 +847,7 @@ class _GovIdVerificationScreenState extends State<GovIdVerificationScreen> {
                           onPressed: widget.state.panNumber.isNotEmpty &&
                                   widget.state.aadhaarNumber.length == 12 &&
                                   hasDocument &&
+                                  widget.state.signaturePath != null &&
                                   !_isVerifying
                               ? _startVerification
                               : null,

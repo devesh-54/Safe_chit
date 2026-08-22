@@ -57,7 +57,13 @@ class OnboardingState extends ChangeNotifier {
   VerificationStatus _govIdStatus = VerificationStatus.notStarted;
   VerificationStatus get govIdStatus => _govIdStatus;
 
-  // Step 5: Biometric / Liveness
+  // Step 5: Signature Photo Capture
+  String? _signaturePath;
+  String? get signaturePath => _signaturePath;
+  VerificationStatus _signatureStatus = VerificationStatus.notStarted;
+  VerificationStatus get signatureStatus => _signatureStatus;
+
+  // Step 6: Biometric / Liveness
   String? _selfiePath; // path to mock selfie image
   String? get selfiePath => _selfiePath;
   String _livenessPrompt = 'Blink slowly';
@@ -249,8 +255,9 @@ class OnboardingState extends ChangeNotifier {
     final isPanValid = panRegex.hasMatch(_panNumber);
     final isAadhaarValid = _aadhaarNumber.length == 12 && RegExp(r'^[0-9]+$').hasMatch(_aadhaarNumber);
     final hasDoc = _idDocumentPath != null;
+    final hasSignature = _signaturePath != null;
 
-    if (isPanValid && isAadhaarValid && hasDoc) {
+    if (isPanValid && isAadhaarValid && hasDoc && hasSignature) {
       _govIdStatus = VerificationStatus.verified;
       notifyListeners();
       return true;
@@ -265,7 +272,18 @@ class OnboardingState extends ChangeNotifier {
     return _govIdStatus == VerificationStatus.verified;
   }
 
-  // --- Step 5: Biometric / Liveness ---
+  // --- Step 5: Signature Photo Capture (New) ---
+  void setSignaturePath(String? path) {
+    _signaturePath = path;
+    _signatureStatus = path != null ? VerificationStatus.verified : VerificationStatus.notStarted;
+    notifyListeners();
+  }
+
+  bool isSignatureValid() {
+    return _signatureStatus == VerificationStatus.verified && _signaturePath != null;
+  }
+
+  // --- Step 6: Biometric / Liveness ---
   void setSelfiePath(String? path) {
     _selfiePath = path;
     notifyListeners();
@@ -478,9 +496,9 @@ class OnboardingState extends ChangeNotifier {
       case 8:
         return isConsentValid();
       case 9:
-        return true; // Step 9: Verification Summary
+        return isCredentialsValid();
       case 10:
-        return isCredentialsValid(); // Step 10: Username & Password Credentials
+        return true; // Step 10: Verification Summary
       default:
         return false;
     }

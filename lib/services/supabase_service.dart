@@ -1,3 +1,4 @@
+import 'dart:io';
 import '../models/onboarding_state.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
@@ -161,6 +162,9 @@ class SupabaseService {
           'has_consented': state.hasConsented,
           'consent_timestamp': DateTime.now().toIso8601String(),
           
+          // Signature Photo
+          'signature_document_url': state.signaturePath,
+          
           'updated_at': DateTime.now().toIso8601String(),
         }, onConflict: 'username');
         print('✅ Successfully stored onboarding data in user_onboardings table!');
@@ -209,5 +213,40 @@ class SupabaseService {
     }
 
     return false;
+  }
+
+  /// Uploads a local image file to a public Supabase Storage bucket
+  /// and returns its public download URL string.
+  static Future<String?> uploadImage({
+    required String bucketName,
+    required String filePath,
+    required String remoteFileName,
+  }) async {
+    try {
+      final supaClient = client;
+      if (supaClient == null) return null;
+
+      final file = File(filePath);
+      if (!await file.exists()) return null;
+
+      // Upload file to Supabase storage
+      await supaClient.storage.from(bucketName).upload(
+        remoteFileName,
+        file,
+        fileOptions: const FileOptions(
+          cacheControl: '3600',
+          upsert: true,
+        ),
+      );
+
+      // Get public URL of the uploaded file
+      final String publicUrl = supaClient.storage.from(bucketName).getPublicUrl(remoteFileName);
+      return publicUrl;
+    } catch (e) {
+      if (kDebugMode) {
+        print('⚠️ Error uploading image to bucket $bucketName: $e');
+      }
+      return null;
+    }
   }
 }
