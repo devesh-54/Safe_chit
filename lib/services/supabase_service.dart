@@ -360,7 +360,10 @@ class SupabaseService {
     final cleanUsername = username.trim().toLowerCase();
     
     // Check local fallback dictionary
-    if (cleanUsername.contains('host') || cleanUsername.contains('admin') || cleanUsername.contains('demo')) {
+    if (cleanUsername == 'member_demo' || cleanUsername.contains('member')) {
+      return UserRole.member;
+    }
+    if (cleanUsername == 'foreman_admin' || cleanUsername.contains('host') || cleanUsername.contains('foreman')) {
       return UserRole.host;
     }
     
