@@ -16,6 +16,7 @@ class ForemanDashboardScreen extends StatefulWidget {
 
 class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
   int _currentIndex = 0; // 0: Dashboard, 1: My Groups, 2: Create Group, 3: Escrow Control
+  bool _isSidebarCollapsed = false; // Collapsible / Retractable sidebar state
 
   List<ChitGroup> _groups = [];
   List<ChitMemberRisk> _members = [];
@@ -92,6 +93,15 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
         backgroundColor: const Color(0xFF0F4C81),
         foregroundColor: Colors.white,
         elevation: 0,
+        leading: IconButton(
+          icon: Icon(_isSidebarCollapsed ? Icons.menu_rounded : Icons.menu_open_rounded),
+          tooltip: _isSidebarCollapsed ? 'Expand Sidebar' : 'Retract Sidebar',
+          onPressed: () {
+            setState(() {
+              _isSidebarCollapsed = !_isSidebarCollapsed;
+            });
+          },
+        ),
         title: Row(
           children: [
             Container(
@@ -127,7 +137,7 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
       ),
       body: Row(
         children: [
-          // Desktop / Web Sidebar Navigation
+          // Animated Retractable / Collapsible Sidebar Navigation
           _buildSidebarNav(),
 
           // Main View Content
@@ -140,8 +150,10 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
   }
 
   Widget _buildSidebarNav() {
-    return Container(
-      width: 240,
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeInOut,
+      width: _isSidebarCollapsed ? 72 : 240,
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(right: BorderSide(color: Color(0xFFE2E8F0))),
@@ -154,23 +166,36 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
           _buildSidebarItem(index: 2, icon: Icons.add_circle_rounded, label: 'Create Group'),
           _buildSidebarItem(index: 3, icon: Icons.gavel_rounded, label: 'Escrow Control'),
           const Spacer(),
-          Container(
-            margin: const EdgeInsets.all(16),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: const [
-                Icon(Icons.verified_user_rounded, color: Color(0xFF007A87), size: 20),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text('Licensed Foreman Protocol', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
+          if (!_isSidebarCollapsed)
+            Container(
+              margin: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: const [
+                  Icon(Icons.verified_user_rounded, color: Color(0xFF007A87), size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text('Licensed Foreman Protocol', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
+                  ),
+                ],
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Tooltip(
+                message: 'Licensed Foreman Protocol',
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: const BoxDecoration(color: Color(0xFFF1F5F9), shape: BoxShape.circle),
+                  child: const Icon(Icons.verified_user_rounded, color: Color(0xFF007A87), size: 18),
                 ),
-              ],
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -183,6 +208,54 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
     int? badgeCount,
   }) {
     final isSelected = _currentIndex == index;
+    
+    if (_isSidebarCollapsed) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Tooltip(
+          message: label,
+          child: InkWell(
+            onTap: () {
+              setState(() {
+                _currentIndex = index;
+              });
+              if (index == 0 || index == 1) {
+                _loadDashboardData();
+              }
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: isSelected ? const Color(0xFF0F4C81) : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Icon(icon, color: isSelected ? Colors.white : const Color(0xFF64748B), size: 22),
+                  if (badgeCount != null && badgeCount > 0)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFF59E0B),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
