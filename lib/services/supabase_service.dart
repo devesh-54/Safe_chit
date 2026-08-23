@@ -1,5 +1,7 @@
 import 'dart:io';
 import '../models/onboarding_state.dart';
+import '../models/chit_group.dart';
+import '../models/member_risk.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -247,6 +249,246 @@ class SupabaseService {
         print('⚠️ Error uploading image to bucket $bucketName: $e');
       }
       return null;
+    }
+  }
+
+  // In-memory fallback tables for chit groups and members
+  static final List<ChitGroup> _mockGroups = [
+    const ChitGroup(
+      id: 'group_1',
+      name: 'Koramangala Professional Chit',
+      totalPoolSize: 1000000.0,
+      durationMonths: 10,
+      monthlyContribution: 10000.0,
+      securityDeposit: 20000.0,
+      payoutRules: 'Bidding starts at 20% discount. Minimum bid increment ₹1,000.',
+      inviteCode: 'CG-KORA-982',
+      status: 'Active',
+      currentCycle: 4,
+      membersCount: 10,
+    ),
+    const ChitGroup(
+      id: 'group_2',
+      name: 'Indiranagar Business Pool',
+      totalPoolSize: 2500000.0,
+      durationMonths: 20,
+      monthlyContribution: 12500.0,
+      securityDeposit: 50000.0,
+      payoutRules: 'Fixed payout at Month 5 and Month 10. Bidding for other months.',
+      inviteCode: 'CG-INDI-401',
+      status: 'Active',
+      currentCycle: 8,
+      membersCount: 20,
+    ),
+  ];
+
+  static final List<ChitMemberRisk> _mockMembers = [
+    ChitMemberRisk(
+      id: 'member_1',
+      groupId: 'group_1',
+      name: 'Rajesh Kumar',
+      defaultRiskScore: 84.0,
+      payoutPosition: 'Paid (Month 2)',
+      paymentTrend: 'Delayed 3x',
+      guarantorStatus: 'None',
+      amountExposed: 200000.0,
+      hasDefaulted: true,
+      lastPaymentDate: DateTime.now().subtract(const Duration(days: 15)),
+      phone: '+91 98765 43210',
+    ),
+    ChitMemberRisk(
+      id: 'member_2',
+      groupId: 'group_1',
+      name: 'Amit Sharma',
+      defaultRiskScore: 45.0,
+      payoutPosition: 'Paid (Month 3)',
+      paymentTrend: 'Delayed 1x',
+      guarantorStatus: 'Pending (1 guarantor)',
+      amountExposed: 150000.0,
+      hasDefaulted: false,
+      lastPaymentDate: DateTime.now().subtract(const Duration(days: 5)),
+      phone: '+91 87654 32109',
+    ),
+    ChitMemberRisk(
+      id: 'member_3',
+      groupId: 'group_1',
+      name: 'Priya Patel',
+      defaultRiskScore: 12.0,
+      payoutPosition: 'Unpaid (Bidder)',
+      paymentTrend: 'Always On-Time',
+      guarantorStatus: 'Verified (2 guarantors)',
+      amountExposed: 0.0,
+      hasDefaulted: false,
+      lastPaymentDate: DateTime.now().subtract(const Duration(days: 2)),
+      phone: '+91 76543 21098',
+    ),
+    ChitMemberRisk(
+      id: 'member_4',
+      groupId: 'group_1',
+      name: 'Vikram Singh',
+      defaultRiskScore: 8.0,
+      payoutPosition: 'Unpaid (Bidder)',
+      paymentTrend: 'Always On-Time',
+      guarantorStatus: 'Verified (2 guarantors)',
+      amountExposed: 0.0,
+      hasDefaulted: false,
+      lastPaymentDate: DateTime.now().subtract(const Duration(days: 3)),
+      phone: '+91 65432 10987',
+    ),
+    ChitMemberRisk(
+      id: 'member_5',
+      groupId: 'group_1',
+      name: 'Sneha Reddy',
+      defaultRiskScore: 78.0,
+      payoutPosition: 'Paid (Month 1)',
+      paymentTrend: 'Delayed 4x',
+      guarantorStatus: 'None',
+      amountExposed: 350000.0,
+      hasDefaulted: true,
+      lastPaymentDate: DateTime.now().subtract(const Duration(days: 22)),
+      phone: '+91 95432 87654',
+    ),
+  ];
+
+  /// Get user role based on username
+  static Future<UserRole> getUserRole(String username) async {
+    final cleanUsername = username.trim().toLowerCase();
+    
+    // Check local fallback dictionary
+    if (cleanUsername.contains('host') || cleanUsername.contains('admin') || cleanUsername.contains('demo')) {
+      return UserRole.host;
+    }
+    
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        final response = await supaClient
+            .from('user_onboardings')
+            .select('role')
+            .eq('username', cleanUsername)
+            .maybeSingle();
+
+        if (response != null && response['role'] != null) {
+          final roleStr = response['role'] as String;
+          return roleStr == 'host' ? UserRole.host : UserRole.member;
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase getUserRole notice: $e');
+      }
+    }
+    
+    // Default fallback
+    return UserRole.host;
+  }
+
+  /// Fetch all chit groups
+  static Future<List<ChitGroup>> getChitGroups() async {
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        final response = await supaClient.from('chit_groups').select();
+        if (response.isNotEmpty) {
+          return response.map((json) => ChitGroup.fromJson(json)).toList();
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase getChitGroups fallback to mock: $e');
+      }
+    }
+    return _mockGroups;
+  }
+
+  /// Create a new chit group
+  static Future<void> createChitGroup(ChitGroup group) async {
+    // Add to in-memory list first
+    _mockGroups.add(group);
+    
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        await supaClient.from('chit_groups').insert(group.toJson());
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase createChitGroup notice (using fallback local check): $e');
+      }
+    }
+  }
+
+  /// Fetch members for a group with risk profiles
+  static Future<List<ChitMemberRisk>> getGroupMembers(String groupId) async {
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        final response = await supaClient.from('group_members').select().eq('group_id', groupId);
+        if (response.isNotEmpty) {
+          return response.map((json) => ChitMemberRisk.fromJson(json)).toList();
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase getGroupMembers fallback to mock: $e');
+      }
+    }
+    return _mockMembers.where((m) => m.groupId == groupId).toList();
+  }
+
+  /// Trigger forfeiture for a member in a group (Escrow Control)
+  static Future<void> triggerForfeiture(String memberId) async {
+    // Update local list
+    final index = _mockMembers.indexWhere((m) => m.id == memberId);
+    if (index != -1) {
+      final oldMember = _mockMembers[index];
+      _mockMembers[index] = oldMember.copyWith(
+        forfeited: true,
+        defaultRiskScore: 100.0, // Risk is absolute after forfeiture
+        amountExposed: 0, // Cleared after forfeiture/escrow settlement
+      );
+    }
+    
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        await supaClient.from('group_members').update({
+          'forfeited': true,
+          'default_risk_score': 100.0,
+          'amount_exposed': 0,
+        }).eq('id', memberId);
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase triggerForfeiture notice: $e');
+      }
+    }
+  }
+
+  /// Generate and persist a Section 28 Default Notice
+  static Future<void> saveDefaultNotice(String memberId, String noticeText) async {
+    // Update local list
+    final index = _mockMembers.indexWhere((m) => m.id == memberId);
+    if (index != -1) {
+      final oldMember = _mockMembers[index];
+      _mockMembers[index] = oldMember.copyWith(
+        defaultNoticeSent: true,
+        defaultNoticeText: noticeText,
+      );
+    }
+    
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        await supaClient.from('group_members').update({
+          'default_notice_sent': true,
+          'default_notice_text': noticeText,
+        }).eq('id', memberId);
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase saveDefaultNotice notice: $e');
+      }
     }
   }
 }
