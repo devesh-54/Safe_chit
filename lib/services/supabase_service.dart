@@ -124,6 +124,7 @@ class SupabaseService {
       try {
         await supaClient.from('user_onboardings').upsert({
           'username': cleanUsername,
+          'password': password,
           'role': state.role?.name,
           
           // Account Setup
@@ -200,12 +201,12 @@ class SupabaseService {
       final supaClient = client;
       if (supaClient != null) {
         final response = await supaClient
-            .from('profiles')
-            .select('username')
+            .from('user_onboardings')
+            .select('password')
             .eq('username', cleanUsername)
             .maybeSingle();
 
-        if (response != null) {
+        if (response != null && response['password'] == password) {
           return true; // Match found in Supabase
         }
       }

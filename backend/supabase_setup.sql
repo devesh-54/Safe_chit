@@ -19,6 +19,7 @@ END $$;
 CREATE TABLE IF NOT EXISTS public.user_onboardings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     username VARCHAR(50) UNIQUE, -- Added via Migration
+    password TEXT, -- Added via Migration
     role user_role, -- Will be set during role selection
     
     -- Account Setup
@@ -122,3 +123,13 @@ CREATE TRIGGER update_onboarding_modtime
     BEFORE UPDATE ON public.user_onboardings
     FOR EACH ROW
     EXECUTE FUNCTION update_modified_column();
+
+-- =================================================================
+-- PART 2: DATABASE MIGRATIONS (Run on existing databases)
+-- =================================================================
+
+-- 1. Add password column to user_onboardings if not present
+ALTER TABLE public.user_onboardings ADD COLUMN IF NOT EXISTS password text;
+
+-- 2. Populate passwords for existing users to match their usernames
+UPDATE public.user_onboardings SET password = username WHERE password IS NULL;
