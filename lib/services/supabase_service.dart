@@ -3,6 +3,7 @@ import '../models/onboarding_state.dart';
 import '../models/chit_group.dart';
 import '../models/member_risk.dart';
 import '../models/chit_join_request.dart';
+import '../models/digital_agreement.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -713,5 +714,220 @@ class SupabaseService {
         print('ℹ️ Supabase respondToJoinRequest notice: $e');
       }
     }
+  }
+
+  // In-memory agreements storage fallback
+  static final List<DigitalAgreement> _mockAgreements = [];
+
+  /// Get Public Chit Groups for Discovery Marketplace
+  static Future<List<ChitGroup>> getPublicChitGroups({
+    String? query,
+    String? schemeType,
+  }) async {
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        var req = supaClient.from('chit_groups').select().eq('is_public', true);
+        if (schemeType != null && schemeType != 'All' && schemeType.isNotEmpty) {
+          req = req.eq('scheme_type', schemeType);
+        }
+        final List<dynamic> data = await req;
+        final groups = data.map((item) => ChitGroup.fromJson(item as Map<String, dynamic>)).toList();
+        if (query != null && query.trim().isNotEmpty) {
+          final q = query.trim().toLowerCase();
+          return groups.where((g) => g.name.toLowerCase().contains(q) || g.inviteCode.contains(q)).toList();
+        }
+        if (groups.isNotEmpty) return groups;
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase getPublicChitGroups fallback: $e');
+      }
+    }
+
+    // Fallback in-memory query
+    var filtered = _mockGroups.where((g) => g.isPublic).toList();
+    if (schemeType != null && schemeType != 'All' && schemeType.isNotEmpty) {
+      filtered = filtered.where((g) => g.schemeType == schemeType).toList();
+    }
+    if (query != null && query.trim().isNotEmpty) {
+      final q = query.trim().toLowerCase();
+      filtered = filtered.where((g) => g.name.toLowerCase().contains(q) || g.inviteCode.contains(q)).toList();
+    }
+    return filtered;
+  }
+
+  /// Get User Dashboard Metrics (Chits Joined, Monthly Payment Due, Defaults)
+  static Future<Map<String, dynamic>> getUserDashboardMetrics(String memberUsername) async {
+    final cleanUser = memberUsername.trim().toLowerCase();
+    int chitsJoined = 0;
+    double monthlyDue = 0.0;
+    int defaultsCount = 0;
+
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        final List<dynamic> joinReqs = await supaClient
+            .from('chit_join_requests')
+            .select('group_id, status')
+            .eq('member_username', cleanUser)
+            .eq('status', 'approved');
+        
+        chitsJoined = joinReqs.length;
+
+        for (var req in joinReqs) {
+          final groupId = req['group_id'] as String?;
+          if (groupId != null) {
+            final groupData = await supaClient
+                .from('chit_groups')
+                .select('monthly_contribution')
+                .eq('id', groupId)
+                .maybeSingle();
+            if (groupData != null) {
+              monthlyDue += (groupData['monthly_contribution'] as num).toDouble();
+            }
+          }
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase getUserDashboardMetrics fallback: $e');
+      }
+    }
+
+    if (chitsJoined == 0) {
+      final approvedMockReqs = _mockJoinRequests
+          .where((r) => (r.memberUsername == cleanUser || cleanUser == 'demo' || cleanUser.contains('member')) && r.status == 'approved')
+          .toList();
+      chitsJoined = approvedMockReqs.length;
+      for (var req in approvedMockReqs) {
+        final group = _mockGroups.firstWhere((g) => g.id == req.groupId, orElse: () => _mockGroups.first);
+        monthlyDue += group.monthlyContribution;
+      }
+    }
+
+    return {
+      'chitsJoined': chitsJoined,
+      'monthlyAmountDue': monthlyDue,
+      'totalDefaults': defaultsCount,
+    };
+  }
+
+  /// Save or Update Digital Agreement
+  static Future<bool> saveDigitalAgreement(DigitalAgreement agreement) async {
+    _mockAgreements.removeWhere((a) => a.id == agreement.id);
+    _mockAgreements.add(agreement);
+
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        await supaClient.from('digital_agreements').upsert(agreement.toJson());
+        return true;
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase saveDigitalAgreement fallback: $e');
+      }
+    }
+    return true;
+  }
+
+  /// Get Digital Agreement for Group & Member
+  static Future<DigitalAgreement?> getDigitalAgreement({
+    required String groupId,
+    required String memberUsername,
+  }) async {
+    final cleanUser = memberUsername.trim().toLowerCase();
+
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        final data = await supaClient
+            .from('digital_agreements')
+            .select()
+            .eq('group_id', groupId)
+            .eq('member_username', cleanUser)
+            .maybeSingle();
+        if (data != null) {
+          return DigitalAgreement.fromJson(data as Map<String, dynamic>);
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase getDigitalAgreement fallback: $e');
+      }
+    }
+
+    final found = _mockAgreements.where((a) => a.groupId == groupId && (a.memberUsername == cleanUser || cleanUser == 'demo')).toList();
+    if (found.isNotEmpty) return found.last;
+    return null;
+  }
+
+  /// Digitally Sign Agreement (Host or Subscriber)
+  static Future<bool> signDigitalAgreement({
+    required String agreementId,
+    required bool isForeman,
+    required String signatureUrl,
+  }) async {
+    final now = DateTime.now();
+
+    final idx = _mockAgreements.indexWhere((a) => a.id == agreementId);
+    if (idx != -1) {
+      final current = _mockAgreements[idx];
+      final updatedForemanSigned = isForeman ? true : current.foremanSigned;
+      final updatedMemberSigned = !isForeman ? true : current.memberSigned;
+      final newStatus = (updatedForemanSigned && updatedMemberSigned) ? 'fully_executed' : 'pending_signatures';
+
+      _mockAgreements[idx] = DigitalAgreement(
+        id: current.id,
+        groupId: current.groupId,
+        groupName: current.groupName,
+        foremanUsername: current.foremanUsername,
+        foremanName: current.foremanName,
+        memberUsername: current.memberUsername,
+        memberName: current.memberName,
+        poolAmount: current.poolAmount,
+        durationMonths: current.durationMonths,
+        monthlyContribution: current.monthlyContribution,
+        schemeType: current.schemeType,
+        agreementText: current.agreementText,
+        foremanSigned: updatedForemanSigned,
+        foremanSignatureUrl: isForeman ? signatureUrl : current.foremanSignatureUrl,
+        foremanSignedAt: isForeman ? now : current.foremanSignedAt,
+        memberSigned: updatedMemberSigned,
+        memberSignatureUrl: !isForeman ? signatureUrl : current.memberSignatureUrl,
+        memberSignedAt: !isForeman ? now : current.memberSignedAt,
+        status: newStatus,
+        createdAt: current.createdAt,
+      );
+    }
+
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        final updateData = isForeman
+            ? {
+                'foreman_signed': true,
+                'foreman_signature_url': signatureUrl,
+                'foreman_signed_at': now.toIso8601String(),
+              }
+            : {
+                'member_signed': true,
+                'member_signature_url': signatureUrl,
+                'member_signed_at': now.toIso8601String(),
+              };
+
+        await supaClient
+            .from('digital_agreements')
+            .update(updateData)
+            .eq('id', agreementId);
+        return true;
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase signDigitalAgreement notice: $e');
+      }
+    }
+    return true;
   }
 }
