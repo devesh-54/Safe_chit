@@ -38,12 +38,9 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
   void _generateInvite() {
     if (_formKey.currentState!.validate()) {
       final rand = Random();
-      final codeNum = rand.nextInt(900) + 100;
-      final nameAbbr = _nameController.text.length >= 4 
-          ? _nameController.text.substring(0, 4).toUpperCase().replaceAll(' ', 'X')
-          : 'CHIT';
+      final codeNum = rand.nextInt(900000) + 100000; // Produces 6-digit code e.g. 849201
       setState(() {
-        _generatedInviteCode = 'CG-$nameAbbr-$codeNum';
+        _generatedInviteCode = '$codeNum';
         _inviteGenerated = true;
       });
     }
