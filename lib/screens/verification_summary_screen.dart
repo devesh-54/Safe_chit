@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/onboarding_state.dart';
 import '../widgets/status_badge.dart';
+import 'foreman/foreman_dashboard_screen.dart';
 
 class VerificationSummaryScreen extends StatelessWidget {
   final OnboardingState state;
@@ -257,10 +258,20 @@ class VerificationSummaryScreen extends StatelessWidget {
                                 ? () {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
-                                        content: Text('Onboarding complete! Mock project session ended.'),
+                                        content: Text('Onboarding complete! Loading your Dashboard...'),
                                         backgroundColor: Color(0xFF059669),
                                       ),
                                     );
+                                    if (state.role == UserRole.host) {
+                                      Navigator.of(context).pushAndRemoveUntil(
+                                        MaterialPageRoute(
+                                          builder: (context) => const ForemanDashboardScreen(),
+                                        ),
+                                        (route) => false,
+                                      );
+                                    } else {
+                                      onRestart();
+                                    }
                                   }
                                 : null,
                             style: ElevatedButton.styleFrom(

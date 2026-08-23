@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import '../models/onboarding_state.dart';
 import '../services/supabase_service.dart';
+import 'foreman/foreman_dashboard_screen.dart';
 
 class SignInScreen extends StatefulWidget {
   final VoidCallback onStartSignUp;
@@ -61,7 +63,18 @@ class _SignInScreenState extends State<SignInScreen> {
           ),
         );
 
-        widget.onBackToLanding();
+        final role = await SupabaseService.getUserRole(username);
+        if (!mounted) return;
+
+        if (role == UserRole.host) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => const ForemanDashboardScreen(),
+            ),
+          );
+        } else {
+          widget.onBackToLanding();
+        }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(

@@ -466,52 +466,54 @@ class _LandingPageScreenState extends State<LandingPageScreen> {
                         // Left Featured Card (60%) with Gold Border
                         Expanded(
                           flex: 6,
-                          child: Container(
-                            padding: const EdgeInsets.all(28),
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFF8FAFC),
-                              borderRadius: BorderRadius.only(
-                                topLeft: Radius.circular(12),
-                                bottomLeft: Radius.circular(12),
-                              ),
-                              border: Border(
-                                left: BorderSide(color: Color(0xFF0F4C81), width: 4),
-                                top: BorderSide(color: Color(0xFFE2E8F0)),
-                                right: BorderSide(color: Color(0xFFE2E8F0)),
-                                bottom: BorderSide(color: Color(0xFFE2E8F0)),
-                              ),
+                          child: ClipRRect(
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(12),
+                              bottomLeft: Radius.circular(12),
                             ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: const [
-                                Text(
-                                  'THE UNSEEN THREAT',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF0F4C81),
-                                    letterSpacing: 1,
-                                  ),
+                            child: Container(
+                              padding: const EdgeInsets.all(28),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFF8FAFC),
+                                border: Border(
+                                  left: BorderSide(color: Color(0xFF0F4C81), width: 4),
+                                  top: BorderSide(color: Color(0xFFE2E8F0)),
+                                  right: BorderSide(color: Color(0xFFE2E8F0)),
+                                  bottom: BorderSide(color: Color(0xFFE2E8F0)),
                                 ),
-                                SizedBox(height: 12),
-                                Text(
-                                  ChitGuardLandingCopy.problem2Title,
-                                  style: TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF0A2540),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: const [
+                                  Text(
+                                    'THE UNSEEN THREAT',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF0F4C81),
+                                      letterSpacing: 1,
+                                    ),
                                   ),
-                                ),
-                                SizedBox(height: 8),
-                                Text(
-                                  ChitGuardLandingCopy.problem2Sub,
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    height: 1.45,
-                                    color: Color(0xFF334155),
+                                  SizedBox(height: 12),
+                                  Text(
+                                    ChitGuardLandingCopy.problem2Title,
+                                    style: TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF0A2540),
+                                    ),
                                   ),
-                                ),
-                              ],
+                                  SizedBox(height: 8),
+                                  Text(
+                                    ChitGuardLandingCopy.problem2Sub,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      height: 1.45,
+                                      color: Color(0xFF334155),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
