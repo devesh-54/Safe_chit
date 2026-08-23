@@ -14,11 +14,12 @@ class SupabaseService {
   static bool _isInitialized = false;
 
   // In-memory fallback registry for offline/local simulation
-  static final Set<String> _registeredUsernames = {'admin', 'host', 'demo'};
+  static final Set<String> _registeredUsernames = {'admin', 'host', 'demo', 'foreman_admin'};
   static final Map<String, String> _userCredentials = {
     'admin': 'admin123',
     'host': 'host123',
     'demo': 'demo123',
+    'foreman_admin': 'foreman123',
   };
 
   /// Initialize Supabase client

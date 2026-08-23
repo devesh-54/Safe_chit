@@ -14,6 +14,8 @@ import 'screens/bank_verification_screen.dart';
 import 'screens/consent_screen.dart';
 import 'screens/credentials_setup_screen.dart';
 import 'screens/verification_summary_screen.dart';
+import 'screens/foreman/foreman_dashboard_screen.dart';
+import 'screens/member/member_dashboard_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,6 +27,8 @@ enum AppView {
   landing,
   signIn,
   onboarding,
+  foremanDashboard,
+  memberDashboard,
 }
 
 class ChitGuardApp extends StatelessWidget {
@@ -108,17 +112,30 @@ class _AppContainerState extends State<AppContainer> {
       case AppView.onboarding:
         return OnboardingContainer(
           onBackToLanding: () => _navigateTo(AppView.landing),
+          onComplete: (role) {
+            if (role == UserRole.host) {
+              _navigateTo(AppView.foremanDashboard);
+            } else {
+              _navigateTo(AppView.memberDashboard);
+            }
+          },
         );
+      case AppView.foremanDashboard:
+        return const ForemanDashboardScreen();
+      case AppView.memberDashboard:
+        return const MemberDashboardScreen();
     }
   }
 }
 
 class OnboardingContainer extends StatefulWidget {
   final VoidCallback? onBackToLanding;
+  final void Function(UserRole role)? onComplete;
 
   const OnboardingContainer({
     super.key,
     this.onBackToLanding,
+    this.onComplete,
   });
 
   @override
@@ -226,7 +243,7 @@ class _OnboardingContainerState extends State<OnboardingContainer> {
                     totalSteps: 10,
                     onBackPressed: step > 1
                         ? () => _onboardingState.prevStep()
-                        : (widget.onBackToLanding != null ? widget.onBackToLanding : null),
+                        : widget.onBackToLanding,
                     onSummaryPressed: step < 10
                         ? () {
                             if (!_onboardingState.tryNavigateTo(10)) {
