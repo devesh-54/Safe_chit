@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/onboarding_state.dart';
 import '../services/supabase_service.dart';
 import 'foreman/foreman_dashboard_screen.dart';
+import 'member/member_dashboard_screen.dart';
 
 class SignInScreen extends StatefulWidget {
   final VoidCallback onStartSignUp;
@@ -73,7 +74,16 @@ class _SignInScreenState extends State<SignInScreen> {
             ),
           );
         } else {
-          widget.onBackToLanding();
+          final state = OnboardingState();
+          state.setCredentials(username, 'member123');
+          state.selectRole(UserRole.member);
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => MemberDashboardScreen(
+                state: state,
+              ),
+            ),
+          );
         }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
