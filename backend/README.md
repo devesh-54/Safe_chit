@@ -13,6 +13,7 @@ This directory contains modular SQL scripts categorized by feature for clean exe
 | [`03_chit_groups_and_join_requests.sql`](file:///C:/Users/ashwi/OneDrive/Desktop/python/safechit/Safe_chit/backend/03_chit_groups_and_join_requests.sql) | Chit Groups table (with 6-digit Join Code index) & Member Join Requests table | Group Creation & 6-Digit Join Code Flow |
 | [`04_waitlist.sql`](file:///C:/Users/ashwi/OneDrive/Desktop/python/safechit/Safe_chit/backend/04_waitlist.sql) | Landing Page Waitlist Phone/Email Capture Table | Landing Page Capture |
 | [`05_scheme_types_agreements_and_marketplace.sql`](file:///C:/Users/ashwi/OneDrive/Desktop/python/safechit/Safe_chit/backend/05_scheme_types_agreements_and_marketplace.sql) | Scheme Types (Bidding vs Random Picking), Public Marketplace Flag, and Legally Compliant Digital Agreements | Advanced Scheme Types & Digital Agreements |
+| [`06_member_login_seed.sql`](file:///C:/Users/ashwi/OneDrive/Desktop/python/safechit/Safe_chit/backend/06_member_login_seed.sql) | Default Subscriber/Member Credentials (`member_demo` / `member123`) | Testing Member Dashboard & Marketplace |
 
 ---
 
