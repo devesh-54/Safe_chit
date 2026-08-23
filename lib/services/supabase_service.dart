@@ -2,6 +2,7 @@ import 'dart:io';
 import '../models/onboarding_state.dart';
 import '../models/chit_group.dart';
 import '../models/member_risk.dart';
+import '../models/chit_join_request.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -490,6 +491,226 @@ class SupabaseService {
     } catch (e) {
       if (kDebugMode) {
         print('ℹ️ Supabase saveDefaultNotice notice: $e');
+      }
+    }
+  }
+
+  static final List<ChitJoinRequest> _mockJoinRequests = [
+    ChitJoinRequest(
+      id: 'req_101',
+      groupId: 'group_1',
+      groupName: 'Koramangala Professional Chit',
+      inviteCode: '849201',
+      memberUsername: 'member_demo',
+      memberName: 'Suresh Raina',
+      memberPhone: '+91 98765 12345',
+      memberEmail: 'suresh@gmail.com',
+      memberCity: 'Bengaluru',
+      reputationScore: 98.0,
+      status: 'pending',
+      createdAt: DateTime.now().subtract(const Duration(hours: 3)),
+    ),
+  ];
+
+  /// Find group by 6-digit invite code
+  static Future<ChitGroup?> getGroupByInviteCode(String code) async {
+    final cleanCode = code.trim();
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        final response = await supaClient
+            .from('chit_groups')
+            .select()
+            .eq('invite_code', cleanCode)
+            .maybeSingle();
+        if (response != null) {
+          return ChitGroup.fromJson(response);
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase getGroupByInviteCode fallback: $e');
+      }
+    }
+    
+    // Fallback search in memory
+    try {
+      return _mockGroups.firstWhere((g) => g.inviteCode.trim() == cleanCode || g.inviteCode.endsWith(cleanCode));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Submit a member join request via 6-digit code (contains non-sensitive info only)
+  static Future<bool> submitJoinRequest({
+    required String inviteCode,
+    required String memberUsername,
+  }) async {
+    final cleanCode = inviteCode.trim();
+    final cleanUsername = memberUsername.trim().toLowerCase();
+
+    // 1. Find target group
+    final group = await getGroupByInviteCode(cleanCode);
+    if (group == null) return false;
+
+    // 2. Fetch non-sensitive member details from Supabase or memory
+    String memberName = 'Member $cleanUsername';
+    String memberPhone = '+91 98765 43210';
+    String memberEmail = '$cleanUsername@gmail.com';
+    String memberCity = 'India';
+
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        final profile = await supaClient
+            .from('user_onboardings')
+            .select('full_name, mobile_number, email, perm_city')
+            .eq('username', cleanUsername)
+            .maybeSingle();
+
+        if (profile != null) {
+          memberName = profile['full_name'] as String? ?? memberName;
+          memberPhone = profile['mobile_number'] as String? ?? memberPhone;
+          memberEmail = profile['email'] as String? ?? memberEmail;
+          memberCity = profile['perm_city'] as String? ?? memberCity;
+        }
+      }
+    } catch (_) {}
+
+    final newReq = ChitJoinRequest(
+      id: 'req_${DateTime.now().millisecondsSinceEpoch}',
+      groupId: group.id,
+      groupName: group.name,
+      inviteCode: cleanCode,
+      memberUsername: cleanUsername,
+      memberName: memberName,
+      memberPhone: memberPhone,
+      memberEmail: memberEmail,
+      memberCity: memberCity,
+      reputationScore: 100.0,
+      status: 'pending',
+      createdAt: DateTime.now(),
+    );
+
+    // Save to local list
+    _mockJoinRequests.add(newReq);
+
+    // Save to Supabase chit_join_requests
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        await supaClient.from('chit_join_requests').upsert(newReq.toJson());
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase submitJoinRequest notice: $e');
+      }
+    }
+
+    return true;
+  }
+
+  /// Get pending join requests for Foreman to review
+  static Future<List<ChitJoinRequest>> getPendingJoinRequests() async {
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        final response = await supaClient
+            .from('chit_join_requests')
+            .select()
+            .eq('status', 'pending');
+        if (response.isNotEmpty) {
+          return response.map((j) => ChitJoinRequest.fromJson(j)).toList();
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase getPendingJoinRequests fallback: $e');
+      }
+    }
+    return _mockJoinRequests.where((r) => r.status == 'pending').toList();
+  }
+
+  /// Get member's join requests / joined groups
+  static Future<List<ChitJoinRequest>> getMemberJoinRequests(String memberUsername) async {
+    final cleanUsername = memberUsername.trim().toLowerCase();
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        final response = await supaClient
+            .from('chit_join_requests')
+            .select()
+            .eq('member_username', cleanUsername);
+        if (response.isNotEmpty) {
+          return response.map((j) => ChitJoinRequest.fromJson(j)).toList();
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase getMemberJoinRequests fallback: $e');
+      }
+    }
+    return _mockJoinRequests.where((r) => r.memberUsername == cleanUsername || cleanUsername == 'demo' || cleanUsername.contains('member')).toList();
+  }
+
+  /// Accept or Reject a Join Request
+  static Future<void> respondToJoinRequest({
+    required String requestId,
+    required bool accept,
+  }) async {
+    final newStatus = accept ? 'approved' : 'rejected';
+
+    // 1. Update in-memory list
+    final idx = _mockJoinRequests.indexWhere((r) => r.id == requestId);
+    if (idx != -1) {
+      final req = _mockJoinRequests[idx];
+      _mockJoinRequests[idx] = req.copyWith(status: newStatus);
+
+      if (accept) {
+        // Add as a member to group
+        _mockMembers.add(ChitMemberRisk(
+          id: 'member_${DateTime.now().millisecondsSinceEpoch}',
+          groupId: req.groupId,
+          name: req.memberName,
+          defaultRiskScore: 15.0,
+          payoutPosition: 'Unpaid (Bidder)',
+          paymentTrend: 'On-Time',
+          guarantorStatus: 'Verified',
+          amountExposed: 0,
+          hasDefaulted: false,
+          lastPaymentDate: DateTime.now(),
+          phone: req.memberPhone,
+        ));
+      }
+    }
+
+    // 2. Update Supabase table chit_join_requests
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        await supaClient
+            .from('chit_join_requests')
+            .update({'status': newStatus})
+            .eq('id', requestId);
+
+        if (accept && idx != -1) {
+          final req = _mockJoinRequests[idx];
+          await supaClient.from('group_members').insert({
+            'group_id': req.groupId,
+            'name': req.memberName,
+            'default_risk_score': 15.0,
+            'payout_position': 'Unpaid (Bidder)',
+            'payment_trend': 'On-Time',
+            'guarantor_status': 'Verified',
+            'amount_exposed': 0,
+            'has_defaulted': false,
+            'phone': req.memberPhone,
+          });
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase respondToJoinRequest notice: $e');
       }
     }
   }

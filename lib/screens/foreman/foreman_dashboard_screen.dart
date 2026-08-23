@@ -5,6 +5,8 @@ import '../../services/supabase_service.dart';
 import 'create_group_screen.dart';
 import 'escrow_controls_screen.dart';
 
+import '../../models/chit_join_request.dart';
+
 class ForemanDashboardScreen extends StatefulWidget {
   const ForemanDashboardScreen({super.key});
 
@@ -18,6 +20,7 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
   // Active group selection and states
   List<ChitGroup> _groups = [];
   List<ChitMemberRisk> _members = [];
+  List<ChitJoinRequest> _pendingRequests = [];
   ChitGroup? _selectedGroup;
   bool _isLoading = true;
   String _searchQuery = '';
@@ -34,6 +37,7 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
     });
 
     final groups = await SupabaseService.getChitGroups();
+    final pending = await SupabaseService.getPendingJoinRequests();
     
     if (groups.isNotEmpty) {
       _groups = groups;
@@ -43,6 +47,7 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
     }
 
     setState(() {
+      _pendingRequests = pending;
       _isLoading = false;
     });
   }
@@ -259,6 +264,10 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
               _buildMetricsRow(),
               const SizedBox(height: 28),
 
+              // Pending Join Requests Section
+              _buildJoinRequestsSection(),
+              const SizedBox(height: 28),
+
               // Search and List Section
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -314,6 +323,200 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildJoinRequestsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Pending Member Join Requests',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF0F4C81),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: _pendingRequests.isNotEmpty ? const Color(0xFFD97706) : const Color(0xFF007A87),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                '${_pendingRequests.length} Pending',
+                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'Members applying via 6-digit code. Reviews display basic profile info only (sensitive IDs hidden).',
+          style: TextStyle(fontSize: 12, color: Color(0xFF5A6E72)),
+        ),
+        const SizedBox(height: 12),
+
+        if (_pendingRequests.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Row(
+              children: const [
+                Icon(Icons.check_circle_outline, color: Color(0xFF007A87), size: 24),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'No pending join requests right now. Shares 6-digit code with members to invite them.',
+                    style: TextStyle(fontSize: 13, color: Color(0xFF475569)),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          Column(
+            children: _pendingRequests.map((req) => _buildJoinRequestCard(req)).toList(),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildJoinRequestCard(ChitJoinRequest req) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFD97706).withOpacity(0.4), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF2ECE1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.person_add_alt_1_rounded, color: Color(0xFF0F4C81), size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      req.memberName,
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                    ),
+                    Text(
+                      'Requested to join: ${req.groupName} (Code: ${req.inviteCode})',
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF007A87), fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDCFCE7),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '${req.reputationScore.toStringAsFixed(0)}/100 🛡️',
+                  style: const TextStyle(color: Color(0xFF166534), fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Divider(height: 1, color: Color(0xFFF1F5F9)),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              const Icon(Icons.phone_outlined, size: 14, color: Color(0xFF5A6E72)),
+              const SizedBox(width: 4),
+              Text(req.memberPhone, style: const TextStyle(fontSize: 12, color: Color(0xFF334155))),
+              const SizedBox(width: 16),
+              const Icon(Icons.email_outlined, size: 14, color: Color(0xFF5A6E72)),
+              const SizedBox(width: 4),
+              Text(req.memberEmail, style: const TextStyle(fontSize: 12, color: Color(0xFF334155))),
+              const Spacer(),
+              const Icon(Icons.location_on_outlined, size: 14, color: Color(0xFF5A6E72)),
+              const SizedBox(width: 4),
+              Text(req.memberCity, style: const TextStyle(fontSize: 12, color: Color(0xFF334155))),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    await SupabaseService.respondToJoinRequest(requestId: req.id, accept: false);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Declined join request from ${req.memberName}.')),
+                      );
+                      _loadDashboardData();
+                    }
+                  },
+                  icon: const Icon(Icons.close_rounded, size: 16, color: Color(0xFFDC2626)),
+                  label: const Text('Reject', style: TextStyle(color: Color(0xFFDC2626))),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFFFCA5A5)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    await SupabaseService.respondToJoinRequest(requestId: req.id, accept: true);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('🎉 Approved ${req.memberName} to join ${req.groupName}!'),
+                          backgroundColor: const Color(0xFF007A87),
+                        ),
+                      );
+                      _loadDashboardData();
+                    }
+                  },
+                  icon: const Icon(Icons.check_circle_rounded, size: 16),
+                  label: const Text('Accept & Approve'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0F4C81),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
