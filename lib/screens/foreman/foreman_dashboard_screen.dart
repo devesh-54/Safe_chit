@@ -79,7 +79,7 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFAF7F2), // Cream Base
+      backgroundColor: const Color(0xFFF8FAFC), // Crisp Slate/White Theme
       appBar: AppBar(
         backgroundColor: const Color(0xFF0F4C81), // Primary Deep Teal
         foregroundColor: Colors.white,

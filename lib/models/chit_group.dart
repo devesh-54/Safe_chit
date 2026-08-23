@@ -10,6 +10,9 @@ class ChitGroup {
   final String status; // 'Active', 'Pending', 'Completed'
   final int currentCycle;
   final int membersCount;
+  final String schemeType; // 'Bidding', 'Random Picking'
+  final bool isPublic; // Publicly listed in marketplace
+  final String city;
 
   const ChitGroup({
     required this.id,
@@ -23,22 +26,28 @@ class ChitGroup {
     this.status = 'Active',
     this.currentCycle = 1,
     this.membersCount = 10,
+    this.schemeType = 'Bidding',
+    this.isPublic = true,
+    this.city = 'Bengaluru',
   });
 
   /// Factory constructor to create a ChitGroup from JSON/Map
   factory ChitGroup.fromJson(Map<String, dynamic> json) {
     return ChitGroup(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      totalPoolSize: (json['total_pool_size'] as num).toDouble(),
-      durationMonths: json['duration_months'] as int,
-      monthlyContribution: (json['monthly_contribution'] as num).toDouble(),
-      securityDeposit: (json['security_deposit'] as num).toDouble(),
-      payoutRules: json['payout_rules'] as String,
-      inviteCode: json['invite_code'] as String,
+      id: json['id'] as String? ?? 'group_${DateTime.now().millisecondsSinceEpoch}',
+      name: json['name'] as String? ?? 'Chit Group',
+      totalPoolSize: (json['total_pool_size'] as num?)?.toDouble() ?? 1000000.0,
+      durationMonths: json['duration_months'] as int? ?? 10,
+      monthlyContribution: (json['monthly_contribution'] as num?)?.toDouble() ?? 10000.0,
+      securityDeposit: (json['security_deposit'] as num?)?.toDouble() ?? 25000.0,
+      payoutRules: json['payout_rules'] as String? ?? 'Standard bidding rules per Chit Funds Act 1982.',
+      inviteCode: json['invite_code'] as String? ?? '849201',
       status: json['status'] as String? ?? 'Active',
       currentCycle: json['current_cycle'] as int? ?? 1,
       membersCount: json['members_count'] as int? ?? 10,
+      schemeType: json['scheme_type'] as String? ?? 'Bidding',
+      isPublic: json['is_public'] as bool? ?? true,
+      city: json['city'] as String? ?? 'Bengaluru',
     );
   }
 
@@ -56,6 +65,9 @@ class ChitGroup {
       'status': status,
       'current_cycle': currentCycle,
       'members_count': membersCount,
+      'scheme_type': schemeType,
+      'is_public': isPublic,
+      'city': city,
     };
   }
 
@@ -72,6 +84,9 @@ class ChitGroup {
     String? status,
     int? currentCycle,
     int? membersCount,
+    String? schemeType,
+    bool? isPublic,
+    String? city,
   }) {
     return ChitGroup(
       id: id ?? this.id,
@@ -85,6 +100,9 @@ class ChitGroup {
       status: status ?? this.status,
       currentCycle: currentCycle ?? this.currentCycle,
       membersCount: membersCount ?? this.membersCount,
+      schemeType: schemeType ?? this.schemeType,
+      isPublic: isPublic ?? this.isPublic,
+      city: city ?? this.city,
     );
   }
 }
