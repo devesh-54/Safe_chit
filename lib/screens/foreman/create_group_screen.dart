@@ -23,6 +23,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
 
   double _totalPoolSize = 1000000; // default ₹10 Lakhs
   int _durationMonths = 10; // default 10 months
+  int _targetMembers = 10; // default 10 members
   double _securityDeposit = 25000; // default ₹25k
   
   bool _inviteGenerated = false;
@@ -62,7 +63,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
         inviteCode: _generatedInviteCode,
         status: 'Active',
         currentCycle: 1,
-        membersCount: 1, // just host initially
+        membersCount: _targetMembers,
       );
 
       await SupabaseService.createChitGroup(newGroup);
@@ -247,6 +248,43 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                             onChanged: (val) {
                               setState(() {
                                 _durationMonths = val.toInt();
+                              });
+                            },
+                          ),
+                          const SizedBox(height: 20),
+
+                          // Target Number of Members
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Number of Members (Capacity)',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF0F4C81),
+                                ),
+                              ),
+                              Text(
+                                '$_targetMembers Members',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFFD97706),
+                                ),
+                              ),
+                            ],
+                          ),
+                          Slider(
+                            value: _targetMembers.toDouble(),
+                            min: 5,
+                            max: 50,
+                            divisions: 45,
+                            activeColor: const Color(0xFF007A87),
+                            inactiveColor: const Color(0xFFF2ECE1),
+                            onChanged: (val) {
+                              setState(() {
+                                _targetMembers = val.toInt();
                               });
                             },
                           ),
