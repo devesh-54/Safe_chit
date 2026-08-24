@@ -24,7 +24,7 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
   ChitGroup? _selectedGroup;
   bool _isLoading = true;
   String _searchQuery = '';
-  String _selectedRiskFilter = 'All'; // 'All', 'High Risk', 'Medium Risk', 'Low Risk'
+  String _selectedRiskFilter = 'All'; // 'All', 'High Risk', 'Low Risk'
 
   // Two-party handshake pending payments state
   final List<Map<String, dynamic>> _pendingPayments = [
@@ -145,14 +145,101 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
     );
   }
 
+  // --- ANIMATION 1: Payment Confirmed Checkmark Draw-In & Scale Pulse ---
+  void _confirmPaymentHandshake(Map<String, dynamic> p) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TweenAnimationBuilder<double>(
+                tween: Tween<double>(begin: 0.0, end: 1.0),
+                duration: const Duration(milliseconds: 500),
+                curve: Curves.elasticOut,
+                builder: (context, scale, child) {
+                  return Transform.scale(
+                    scale: scale,
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: const BoxDecoration(color: Color(0xFFDCFCE7), shape: BoxShape.circle),
+                      child: const Icon(Icons.check_rounded, color: Color(0xFF166534), size: 48),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+              const Text('Payment Confirmed!', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+              const SizedBox(height: 6),
+              Text('Handshake verified for ${p["memberName"]}\nAmount: ₹${(p["amount"] as double).toStringAsFixed(0)}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () {
+                  setState(() {
+                    _pendingPayments.removeWhere((item) => item['id'] == p['id']);
+                  });
+                  Navigator.pop(context);
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF007A87), foregroundColor: Colors.white),
+                child: const Text('Done'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // --- ANIMATION 2: Payout Released Light Celebration Moment ---
+  void _confirmPayoutRelease() {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TweenAnimationBuilder<double>(
+                tween: Tween<double>(begin: 0.0, end: 1.0),
+                duration: const Duration(milliseconds: 600),
+                curve: Curves.bounceOut,
+                builder: (context, val, child) {
+                  return Transform.scale(
+                    scale: val,
+                    child: Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: const BoxDecoration(color: Color(0xFFFEF3C7), shape: BoxShape.circle),
+                      child: const Icon(Icons.stars_rounded, color: Color(0xFFD97706), size: 54),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+              const Text('🎉 Payout Released!', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+              const SizedBox(height: 6),
+              const Text('Escrow payout disbursed & verified under Section 20 of the Chit Funds Act, 1982.', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F4C81), foregroundColor: Colors.white),
+                child: const Text('Dismiss'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   double get _totalExposedAmount {
     return _members
         .where((m) => !m.forfeited)
         .fold(0.0, (sum, m) => sum + m.amountExposed);
-  }
-
-  int get _defaulterAlertsCount {
-    return _members.where((m) => m.hasDefaulted && !m.forfeited).length;
   }
 
   @override
@@ -407,41 +494,49 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
       return nameMatches;
     }).toList();
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24.0),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 900),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Group Selector Dropdown Header
-              if (_groups.isNotEmpty) ...[
-                _buildGroupSelector(),
-                const SizedBox(height: 20),
-                
-                // SECTION 1: TOP SECTION — EXPOSURE SUMMARY CARD
-                _buildSection1ExposureSummaryCard(),
-                const SizedBox(height: 24),
-              ],
+    // Pull-to-Refresh Indicator wrapper
+    return RefreshIndicator(
+      onRefresh: () async {
+        _loadDashboardData();
+      },
+      color: const Color(0xFF0F4C81),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(24.0),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 900),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Group Switcher Dropdown & Carousel
+                if (_groups.isNotEmpty) ...[
+                  _buildGroupSelector(),
+                  const SizedBox(height: 20),
+                  
+                  // SECTION 1: EXPOSURE SUMMARY CARD (with TweenAnimationBuilder Number Transition)
+                  _buildSection1ExposureSummaryCard(),
+                  const SizedBox(height: 24),
+                ],
 
-              // SECTION 2: SECOND SECTION — MEMBER RISK LIST
-              _buildSection2MemberRiskList(filteredMembers),
-              const SizedBox(height: 28),
-
-              // SECTION 3: THIRD SECTION — PENDING ACTIONS (Join Requests, Handshake Payments, Release Confirmation)
-              _buildSection3PendingActions(),
-              const SizedBox(height: 28),
-
-              // SECTION 4: FOURTH SECTION — GROUP MANAGEMENT (Payout Order, T&C, Settings)
-              if (_selectedGroup != null) ...[
-                _buildSection4GroupManagement(),
+                // SECTION 2: MEMBER RISK LIST (with AnimatedSwitcher for Risk Badges)
+                _buildSection2MemberRiskList(filteredMembers),
                 const SizedBox(height: 28),
-              ],
 
-              // SECTION 5: FIFTH SECTION — MY REPUTATION (AS FOREMAN)
-              _buildSection5ForemanReputationCard(),
-            ],
+                // SECTION 3: PENDING ACTIONS
+                _buildSection3PendingActions(),
+                const SizedBox(height: 28),
+
+                // SECTION 4: GROUP MANAGEMENT
+                if (_selectedGroup != null) ...[
+                  _buildSection4GroupManagement(),
+                  const SizedBox(height: 28),
+                ],
+
+                // SECTION 5: FOREMAN REPUTATION SCORE CARD
+                _buildSection5ForemanReputationCard(),
+              ],
+            ),
           ),
         ),
       ),
@@ -473,19 +568,32 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                 'PRIMARY EXPOSURE RISK METRIC',
                 style: TextStyle(color: Color(0xFFF59E0B), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2),
               ),
-              Chip(
-                label: Text('${_selectedGroup?.schemeType ?? "Bidding"} System'),
-                backgroundColor: Colors.white.withOpacity(0.2),
-                labelStyle: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+              Hero(
+                tag: 'scheme_type_chip_${_selectedGroup?.id ?? "default"}',
+                child: Material(
+                  color: Colors.transparent,
+                  child: Chip(
+                    label: Text('${_selectedGroup?.schemeType ?? "Bidding"} System'),
+                    backgroundColor: Colors.white.withOpacity(0.2),
+                    labelStyle: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                  ),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 10),
 
-          // Mandated Big Number: "₹X of next payout at risk"
-          Text(
-            '₹${_totalExposedAmount.toStringAsFixed(0)} of next payout at risk',
-            style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900),
+          // Number Count-Up Transition using TweenAnimationBuilder<double>
+          TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0.0, end: _totalExposedAmount),
+            duration: const Duration(milliseconds: 800),
+            curve: Curves.easeOutCubic,
+            builder: (context, value, child) {
+              return Text(
+                '₹${value.toStringAsFixed(0)} of next payout at risk',
+                style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900),
+              );
+            },
           ),
           const SizedBox(height: 6),
 
@@ -512,7 +620,7 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
           const Divider(color: Colors.white24, height: 1),
           const SizedBox(height: 14),
 
-          // Group Health at a Glance Progress Bar (Collected vs Expected)
+          // Group Health Progress Bar with TweenAnimationBuilder
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: const [
@@ -523,11 +631,18 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
           const SizedBox(height: 8),
           ClipRRect(
             borderRadius: BorderRadius.circular(6),
-            child: const LinearProgressIndicator(
-              value: 0.8,
-              minHeight: 8,
-              backgroundColor: Colors.white24,
-              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF007A87)),
+            child: TweenAnimationBuilder<double>(
+              tween: Tween<double>(begin: 0.0, end: 0.8),
+              duration: const Duration(milliseconds: 1000),
+              curve: Curves.easeInOut,
+              builder: (context, val, child) {
+                return LinearProgressIndicator(
+                  value: val,
+                  minHeight: 8,
+                  backgroundColor: Colors.white24,
+                  valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF007A87)),
+                );
+              },
             ),
           ),
         ],
@@ -590,7 +705,9 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
 
     return GestureDetector(
       onTap: () => _showMemberExplainableRisk(member),
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -600,9 +717,12 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
         ),
         child: Row(
           children: [
-            CircleAvatar(
-              backgroundColor: riskBadgeBg,
-              child: Icon(Icons.person, color: riskBadgeColor),
+            Hero(
+              tag: 'member_avatar_${member.id}',
+              child: CircleAvatar(
+                backgroundColor: riskBadgeBg,
+                child: Icon(Icons.person, color: riskBadgeColor),
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -613,10 +733,16 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                     children: [
                       Text(member.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                       const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(color: riskBadgeBg, borderRadius: BorderRadius.circular(6)),
-                        child: Text(riskLabel, style: TextStyle(color: riskBadgeColor, fontSize: 10, fontWeight: FontWeight.bold)),
+                      // AnimatedSwitcher for Risk Badge Tier Change & Color Cross-Fade
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 350),
+                        transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+                        child: Container(
+                          key: ValueKey(riskLabel),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(color: riskBadgeBg, borderRadius: BorderRadius.circular(6)),
+                          child: Text(riskLabel, style: TextStyle(color: riskBadgeColor, fontSize: 10, fontWeight: FontWeight.bold)),
+                        ),
                       ),
                     ],
                   ),
@@ -646,11 +772,11 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
         const Text('Pending Actions Requiring Approval', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
         const SizedBox(height: 12),
 
-        // Action 1: Join Requests (displaying "KYC Submitted" before approval)
+        // Action 1: Join Requests
         _buildJoinRequestsSection(),
         const SizedBox(height: 16),
 
-        // Action 2: Payments Awaiting Foreman Confirmation (Handshake)
+        // Action 2: Payments Awaiting Foreman Confirmation (Handshake with Scale Pulse)
         if (_pendingPayments.isNotEmpty) ...[
           const Text('Payments Awaiting Foreman Confirmation (Handshake)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
           const SizedBox(height: 8),
@@ -673,14 +799,7 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                     ),
                   ),
                   ElevatedButton(
-                    onPressed: () {
-                      setState(() {
-                        _pendingPayments.removeWhere((item) => item['id'] == p['id']);
-                      });
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('🎉 Payment confirmed & recorded in chit ledger!'), backgroundColor: Color(0xFF007A87)),
-                      );
-                    },
+                    onPressed: () => _confirmPaymentHandshake(p),
                     style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF007A87), foregroundColor: Colors.white),
                     child: const Text('Confirm Receipt'),
                   ),
@@ -691,7 +810,7 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
           const SizedBox(height: 16),
         ],
 
-        // Action 3: Upcoming Payout Release Confirmation
+        // Action 3: Upcoming Payout Release Confirmation (with Celebration Moment)
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -713,9 +832,7 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                 ),
               ),
               OutlinedButton(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Payout release confirmed!')));
-                },
+                onPressed: _confirmPayoutRelease,
                 child: const Text('Release Payout'),
               ),
             ],
@@ -766,7 +883,6 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                   ],
                 ),
               ),
-              // Mandated status display: "KYC Submitted" (not "verified")
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(color: const Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(12)),
@@ -834,7 +950,6 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Payout Order Management List (Locked for assigned positions)
           const Text('Subscriber Payout Order (Locked for assigned positions):', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
           const SizedBox(height: 8),
           Column(
@@ -846,7 +961,6 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Settings Panel (Contribution, Cycle Length, Deposit %)
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12)),
@@ -912,67 +1026,74 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
   }
 
   Widget _buildMyGroupsTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 900),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Foreman Chit Schemes & Groups', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                      Text('Click any group card to view 1st-of-month bidding dates & payment schedules.', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-                    ],
-                  ),
-                  ElevatedButton.icon(
-                    onPressed: () => setState(() => _currentIndex = 2),
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Create New Group'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0F4C81),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    return RefreshIndicator(
+      onRefresh: () async {
+        _loadDashboardData();
+      },
+      color: const Color(0xFF0F4C81),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(24),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 900),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Foreman Chit Schemes & Groups', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                        Text('Click any group card to view 1st-of-month bidding dates & payment schedules.', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                      ],
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-
-              if (_isLoading)
-                const Center(child: CircularProgressIndicator(color: Color(0xFF0F4C81)))
-              else if (_groups.isEmpty)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(32),
-                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFE2E8F0))),
-                  child: Column(
-                    children: [
-                      const Icon(Icons.group_add_outlined, size: 48, color: Color(0xFF94A3B8)),
-                      const SizedBox(height: 12),
-                      const Text('No Chit Groups Active', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 4),
-                      const Text('Create your first chit scheme to start risk tracking.', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: () => setState(() => _currentIndex = 2),
-                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F4C81), foregroundColor: Colors.white),
-                        child: const Text('Create a Chit Group'),
+                    ElevatedButton.icon(
+                      onPressed: () => setState(() => _currentIndex = 2),
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Text('Create New Group'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0F4C81),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
-                    ],
-                  ),
-                )
-              else
-                Column(
-                  children: _groups.map((group) => _buildForemanGroupCard(group)).toList(),
+                    ),
+                  ],
                 ),
-            ],
+                const SizedBox(height: 20),
+
+                if (_isLoading)
+                  const Center(child: CircularProgressIndicator(color: Color(0xFF0F4C81)))
+                else if (_groups.isEmpty)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(32),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFE2E8F0))),
+                    child: Column(
+                      children: [
+                        const Icon(Icons.group_add_outlined, size: 48, color: Color(0xFF94A3B8)),
+                        const SizedBox(height: 12),
+                        const Text('No Chit Groups Active', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 4),
+                        const Text('Create your first chit scheme to start risk tracking.', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: () => setState(() => _currentIndex = 2),
+                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F4C81), foregroundColor: Colors.white),
+                          child: const Text('Create a Chit Group'),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  Column(
+                    children: _groups.map((group) => _buildForemanGroupCard(group)).toList(),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1002,13 +1123,16 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
           children: [
             Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(12)),
-                  child: Icon(
-                    group.schemeType == 'Bidding' ? Icons.gavel_rounded : Icons.casino_rounded,
-                    color: const Color(0xFF0F4C81),
-                    size: 22,
+                Hero(
+                  tag: 'group_avatar_${group.id}',
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(12)),
+                    child: Icon(
+                      group.schemeType == 'Bidding' ? Icons.gavel_rounded : Icons.casino_rounded,
+                      color: const Color(0xFF0F4C81),
+                      size: 22,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 14),
