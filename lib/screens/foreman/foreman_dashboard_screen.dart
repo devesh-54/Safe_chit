@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../models/chit_group.dart';
 import '../../models/member_risk.dart';
@@ -15,8 +16,8 @@ class ForemanDashboardScreen extends StatefulWidget {
 }
 
 class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
-  int _currentIndex = 0; // 0: Dashboard, 1: My Groups, 2: Create Group, 3: Escrow Control
-  bool _isSidebarCollapsed = false; // Collapsible / Retractable sidebar state
+  int _currentIndex = 0; // 0: Dashboard, 1: My Groups, 2: Join Requests, 3: Create Group, 4: Escrow Control
+  bool _isSidebarCollapsed = false;
 
   List<ChitGroup> _groups = [];
   List<ChitMemberRisk> _members = [];
@@ -25,6 +26,10 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
   bool _isLoading = true;
   String _searchQuery = '';
   String _selectedRiskFilter = 'All'; // 'All', 'High Risk', 'Low Risk'
+
+  // Real-time live data streaming timer
+  Timer? _realtimeTimer;
+  StreamSubscription? _requestsSubscription;
 
   // Two-party handshake pending payments state
   final List<Map<String, dynamic>> _pendingPayments = [
@@ -41,6 +46,47 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
   void initState() {
     super.initState();
     _loadDashboardData();
+    _startRealtimeDataStream();
+  }
+
+  @override
+  void dispose() {
+    _realtimeTimer?.cancel();
+    _requestsSubscription?.cancel();
+    super.dispose();
+  }
+
+  /// Start Real-time Data Streaming (Updates live without needing refresh)
+  void _startRealtimeDataStream() {
+    // 1. Periodic background polling every 2 seconds for live sync
+    _realtimeTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
+      final pending = await SupabaseService.getPendingJoinRequests();
+      final groups = await SupabaseService.getChitGroups();
+      if (mounted) {
+        setState(() {
+          _pendingRequests = pending;
+          _groups = groups;
+        });
+      }
+    });
+
+    // 2. Supabase Realtime channel stream listener
+    try {
+      final supaClient = SupabaseService.client;
+      if (supaClient != null) {
+        _requestsSubscription = supaClient
+            .from('chit_join_requests')
+            .stream(primaryKey: ['id'])
+            .eq('status', 'pending')
+            .listen((data) {
+              if (mounted) {
+                setState(() {
+                  _pendingRequests = data.map((item) => ChitJoinRequest.fromJson(item)).toList();
+                });
+              }
+            });
+      }
+    } catch (_) {}
   }
 
   void _loadDashboardData() async {
@@ -145,7 +191,6 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
     );
   }
 
-  // --- ANIMATION 1: Payment Confirmed Checkmark Draw-In & Scale Pulse ---
   void _confirmPaymentHandshake(Map<String, dynamic> p) {
     showDialog(
       context: context,
@@ -193,7 +238,6 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
     );
   }
 
-  // --- ANIMATION 2: Payout Released Light Celebration Moment ---
   void _confirmPayoutRelease() {
     showDialog(
       context: context,
@@ -274,6 +318,23 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
               'ChitGuard Host Console',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
             ),
+            const SizedBox(width: 14),
+
+            // Live Real-Time Stream Status Badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF166534),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.fiber_manual_record, color: Color(0xFF86EFAC), size: 10),
+                  SizedBox(width: 6),
+                  Text('LIVE REALTIME STREAM', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                ],
+              ),
+            ),
           ],
         ),
         actions: [
@@ -317,8 +378,10 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
           const SizedBox(height: 16),
           _buildSidebarItem(index: 0, icon: Icons.dashboard_rounded, label: 'Dashboard'),
           _buildSidebarItem(index: 1, icon: Icons.groups_rounded, label: 'My Groups', badgeCount: _groups.length),
-          _buildSidebarItem(index: 2, icon: Icons.add_circle_rounded, label: 'Create Group'),
-          _buildSidebarItem(index: 3, icon: Icons.gavel_rounded, label: 'Escrow Control'),
+          // Dedicated Tab for Join Requests with Live Badge Count
+          _buildSidebarItem(index: 2, icon: Icons.person_add_rounded, label: 'Join Requests', badgeCount: _pendingRequests.length),
+          _buildSidebarItem(index: 3, icon: Icons.add_circle_rounded, label: 'Create Group'),
+          _buildSidebarItem(index: 4, icon: Icons.gavel_rounded, label: 'Escrow Control'),
           const Spacer(),
           if (!_isSidebarCollapsed)
             Container(
@@ -373,7 +436,7 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
               setState(() {
                 _currentIndex = index;
               });
-              if (index == 0 || index == 1) {
+              if (index == 0 || index == 1 || index == 2) {
                 _loadDashboardData();
               }
             },
@@ -447,7 +510,7 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
             setState(() {
               _currentIndex = index;
             });
-            if (index == 0 || index == 1) {
+            if (index == 0 || index == 1 || index == 2) {
               _loadDashboardData();
             }
           },
@@ -463,6 +526,8 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
       case 1:
         return _buildMyGroupsTab();
       case 2:
+        return _buildJoinRequestsTab();
+      case 3:
         return CreateGroupScreen(
           onGroupCreated: () {
             setState(() {
@@ -471,7 +536,7 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
             _loadDashboardData();
           },
         );
-      case 3:
+      case 4:
         return EscrowControlsScreen(
           onStateChanged: () {
             _loadDashboardData();
@@ -494,7 +559,6 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
       return nameMatches;
     }).toList();
 
-    // Pull-to-Refresh Indicator wrapper
     return RefreshIndicator(
       onRefresh: () async {
         _loadDashboardData();
@@ -509,17 +573,16 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Group Switcher Dropdown & Carousel
                 if (_groups.isNotEmpty) ...[
                   _buildGroupSelector(),
                   const SizedBox(height: 20),
                   
-                  // SECTION 1: EXPOSURE SUMMARY CARD (with TweenAnimationBuilder Number Transition)
+                  // SECTION 1: EXPOSURE SUMMARY CARD
                   _buildSection1ExposureSummaryCard(),
                   const SizedBox(height: 24),
                 ],
 
-                // SECTION 2: MEMBER RISK LIST (with AnimatedSwitcher for Risk Badges)
+                // SECTION 2: MEMBER RISK LIST
                 _buildSection2MemberRiskList(filteredMembers),
                 const SizedBox(height: 28),
 
@@ -535,6 +598,72 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
 
                 // SECTION 5: FOREMAN REPUTATION SCORE CARD
                 _buildSection5ForemanReputationCard(),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // --- DEDICATED TAB 2: MEMBER JOIN REQUESTS FULL PAGE ---
+  Widget _buildJoinRequestsTab() {
+    return RefreshIndicator(
+      onRefresh: () async {
+        _loadDashboardData();
+      },
+      color: const Color(0xFF0F4C81),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(24),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 900),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Subscriber Join Requests', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                        Text('Live streaming applicant requests submitted via 6-digit code.', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                      ],
+                    ),
+                    Chip(
+                      label: Text('${_pendingRequests.length} Live Pending'),
+                      backgroundColor: const Color(0xFFD97706),
+                      labelStyle: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+
+                if (_pendingRequests.isEmpty)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(36),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Column(
+                      children: const [
+                        Icon(Icons.check_circle_outline_rounded, size: 54, color: Color(0xFF007A87)),
+                        SizedBox(height: 14),
+                        Text('No Pending Join Requests', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                        SizedBox(height: 6),
+                        Text('All member join requests have been processed. New subscriber requests will appear here live in real time.', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                      ],
+                    ),
+                  )
+                else
+                  Column(
+                    children: _pendingRequests.map((req) => _buildJoinRequestCard(req)).toList(),
+                  ),
               ],
             ),
           ),
@@ -583,7 +712,6 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
           ),
           const SizedBox(height: 10),
 
-          // Number Count-Up Transition using TweenAnimationBuilder<double>
           TweenAnimationBuilder<double>(
             tween: Tween<double>(begin: 0.0, end: _totalExposedAmount),
             duration: const Duration(milliseconds: 800),
@@ -597,7 +725,6 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
           ),
           const SizedBox(height: 6),
 
-          // Small breakdown link
           InkWell(
             onTap: () {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -620,7 +747,6 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
           const Divider(color: Colors.white24, height: 1),
           const SizedBox(height: 14),
 
-          // Group Health Progress Bar with TweenAnimationBuilder
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: const [
@@ -733,7 +859,6 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                     children: [
                       Text(member.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                       const SizedBox(width: 8),
-                      // AnimatedSwitcher for Risk Badge Tier Change & Color Cross-Fade
                       AnimatedSwitcher(
                         duration: const Duration(milliseconds: 350),
                         transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
@@ -772,11 +897,9 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
         const Text('Pending Actions Requiring Approval', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
         const SizedBox(height: 12),
 
-        // Action 1: Join Requests
         _buildJoinRequestsSection(),
         const SizedBox(height: 16),
 
-        // Action 2: Payments Awaiting Foreman Confirmation (Handshake with Scale Pulse)
         if (_pendingPayments.isNotEmpty) ...[
           const Text('Payments Awaiting Foreman Confirmation (Handshake)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
           const SizedBox(height: 8),
@@ -810,7 +933,6 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
           const SizedBox(height: 16),
         ],
 
-        // Action 3: Upcoming Payout Release Confirmation (with Celebration Moment)
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -1051,7 +1173,7 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                       ],
                     ),
                     ElevatedButton.icon(
-                      onPressed: () => setState(() => _currentIndex = 2),
+                      onPressed: () => setState(() => _currentIndex = 3),
                       icon: const Icon(Icons.add, size: 18),
                       label: const Text('Create New Group'),
                       style: ElevatedButton.styleFrom(
@@ -1081,7 +1203,7 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                         const Text('Create your first chit scheme to start risk tracking.', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
                         const SizedBox(height: 16),
                         ElevatedButton(
-                          onPressed: () => setState(() => _currentIndex = 2),
+                          onPressed: () => setState(() => _currentIndex = 3),
                           style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F4C81), foregroundColor: Colors.white),
                           child: const Text('Create a Chit Group'),
                         ),
