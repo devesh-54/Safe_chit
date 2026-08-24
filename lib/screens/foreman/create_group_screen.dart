@@ -1,7 +1,9 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../models/chit_group.dart';
+import '../../models/digital_agreement.dart';
 import '../../services/supabase_service.dart';
+import '../common/digital_agreement_modal.dart';
 
 class CreateGroupScreen extends StatefulWidget {
   final VoidCallback? onGroupCreated;
@@ -50,41 +52,82 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
 
   void _saveGroup() async {
     if (_formKey.currentState!.validate() && _inviteGenerated) {
+      final groupId = 'group_${DateTime.now().millisecondsSinceEpoch}';
       final monthlyCont = _totalPoolSize / _durationMonths;
-      final newGroup = ChitGroup(
-        id: 'group_${DateTime.now().millisecondsSinceEpoch}',
-        name: _nameController.text.trim(),
-        totalPoolSize: _totalPoolSize,
+
+      final agreementText = DigitalAgreement.generateLegalAgreementText(
+        groupName: _nameController.text.trim(),
+        foremanName: 'Foreman Host (Licensed Organizer)',
+        memberName: 'Subscriber Roster',
+        poolAmount: _totalPoolSize,
         durationMonths: _durationMonths,
         monthlyContribution: monthlyCont,
-        securityDeposit: _securityDeposit,
-        payoutRules: _payoutRulesController.text.isEmpty
-            ? 'Standard $_schemeType rules per Chit Funds Act 1982.'
-            : _payoutRulesController.text.trim(),
-        inviteCode: _generatedInviteCode,
-        status: 'Active',
-        currentCycle: 1,
-        membersCount: _targetMembers,
         schemeType: _schemeType,
-        isPublic: _isPublic,
+        securityDeposit: _securityDeposit,
       );
 
-      await SupabaseService.createChitGroup(newGroup);
+      final agreement = DigitalAgreement(
+        id: 'agreement_$groupId',
+        groupId: groupId,
+        groupName: _nameController.text.trim(),
+        foremanUsername: 'foreman_admin',
+        foremanName: 'Foreman Host (Licensed Organizer)',
+        memberUsername: 'subscriber_group',
+        memberName: 'Subscriber Roster',
+        poolAmount: _totalPoolSize,
+        durationMonths: _durationMonths,
+        monthlyContribution: monthlyCont,
+        schemeType: _schemeType,
+        agreementText: agreementText,
+        createdAt: DateTime.now(),
+      );
 
-      if (!mounted) return;
+      // Trigger Digital Agreement modal for Host signature once during Group Creation
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => DigitalAgreementModal(
+          agreement: agreement,
+          isForeman: true,
+          onSigned: () async {
+            final newGroup = ChitGroup(
+              id: groupId,
+              name: _nameController.text.trim(),
+              totalPoolSize: _totalPoolSize,
+              durationMonths: _durationMonths,
+              monthlyContribution: monthlyCont,
+              securityDeposit: _securityDeposit,
+              payoutRules: _payoutRulesController.text.isEmpty
+                  ? 'Standard $_schemeType rules per Chit Funds Act 1982.'
+                  : _payoutRulesController.text.trim(),
+              inviteCode: _generatedInviteCode,
+              status: 'Active',
+              currentCycle: 1,
+              membersCount: _targetMembers,
+              schemeType: _schemeType,
+              isPublic: _isPublic,
+            );
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('🎉 "${newGroup.name}" created successfully as a $_schemeType Chit!'),
-          backgroundColor: const Color(0xFF007A87),
+            await SupabaseService.createChitGroup(newGroup);
+            await SupabaseService.saveDigitalAgreement(agreement);
+
+            if (!mounted) return;
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('🎉 "${newGroup.name}" created & Host Digital Agreement signed!'),
+                backgroundColor: const Color(0xFF007A87),
+              ),
+            );
+
+            if (widget.onGroupCreated != null) {
+              widget.onGroupCreated!();
+            } else {
+              Navigator.pop(context);
+            }
+          },
         ),
       );
-
-      if (widget.onGroupCreated != null) {
-        widget.onGroupCreated!();
-      } else {
-        Navigator.pop(context);
-      }
     } else if (!_inviteGenerated) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

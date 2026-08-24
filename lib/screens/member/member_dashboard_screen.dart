@@ -112,38 +112,84 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> with Sing
   }
 
   void _submitJoinRequest(ChitGroup group) async {
-    setState(() {
-      _isLoading = true;
-    });
+    final displayName = widget.state?.legalName.isNotEmpty == true 
+        ? widget.state!.legalName 
+        : _username;
 
-    final success = await SupabaseService.submitJoinRequest(
-      inviteCode: group.inviteCode,
-      memberUsername: _username,
+    final agreementText = DigitalAgreement.generateLegalAgreementText(
+      groupName: group.name,
+      foremanName: 'Foreman Host (Licensed Organizer)',
+      memberName: displayName,
+      poolAmount: group.totalPoolSize,
+      durationMonths: group.durationMonths,
+      monthlyContribution: group.monthlyContribution,
+      schemeType: group.schemeType,
+      securityDeposit: group.securityDeposit,
     );
 
-    if (mounted) {
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('🎉 Join request sent to Foreman for "${group.name}"!'),
-            backgroundColor: const Color(0xFF007A87),
-          ),
-        );
-        _codeController.clear();
-        _searchedGroup = null;
-        _loadMemberData();
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to submit join request. Please try again.'),
-            backgroundColor: Color(0xFFDC2626),
-          ),
-        );
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
+    final agreement = DigitalAgreement(
+      id: 'agreement_${group.id}_$_username',
+      groupId: group.id,
+      groupName: group.name,
+      foremanUsername: 'foreman_admin',
+      foremanName: 'Foreman Host (Licensed Organizer)',
+      memberUsername: _username,
+      memberName: displayName,
+      poolAmount: group.totalPoolSize,
+      durationMonths: group.durationMonths,
+      monthlyContribution: group.monthlyContribution,
+      schemeType: group.schemeType,
+      agreementText: agreementText,
+      foremanSigned: true, // Host signed during group creation
+      memberSigned: false,
+      createdAt: DateTime.now(),
+    );
+
+    // Trigger Digital Agreement modal for Subscriber signature once when submitting group join request
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => DigitalAgreementModal(
+        agreement: agreement,
+        isForeman: false,
+        onSigned: () async {
+          setState(() {
+            _isLoading = true;
+          });
+
+          await SupabaseService.saveDigitalAgreement(agreement);
+
+          final success = await SupabaseService.submitJoinRequest(
+            inviteCode: group.inviteCode,
+            memberUsername: _username,
+          );
+
+          if (mounted) {
+            if (success) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('🎉 Digital Agreement signed & Join request sent for "${group.name}"!'),
+                  backgroundColor: const Color(0xFF007A87),
+                ),
+              );
+              _codeController.clear();
+              _searchedGroup = null;
+              _loadMemberData();
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Failed to submit join request. Please try again.'),
+                  backgroundColor: Color(0xFFDC2626),
+                ),
+              );
+              setState(() {
+                _isLoading = false;
+              });
+            }
+          }
+        },
+      ),
+    );
   }
 
   void _openDigitalAgreement(ChitJoinRequest req) async {
