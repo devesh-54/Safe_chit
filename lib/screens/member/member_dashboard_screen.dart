@@ -19,8 +19,7 @@ class MemberDashboardScreen extends StatefulWidget {
   State<MemberDashboardScreen> createState() => _MemberDashboardScreenState();
 }
 
-class _MemberDashboardScreenState extends State<MemberDashboardScreen> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
   final _codeController = TextEditingController();
   final _searchController = TextEditingController();
 
@@ -37,11 +36,11 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> with Sing
 
   String _username = 'demo_member';
   String _selectedFilterType = 'All'; // 'All', 'Bidding', 'Random Picking'
+  int _currentIndex = 0; // 0: Overview, 1: Joined Schemes, 2: Discovery
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
     if (widget.state != null && widget.state!.username.isNotEmpty) {
       _username = widget.state!.username;
     }
@@ -50,7 +49,6 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> with Sing
 
   @override
   void dispose() {
-    _tabController.dispose();
     _codeController.dispose();
     _searchController.dispose();
     super.dispose();
@@ -78,135 +76,37 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> with Sing
     });
   }
 
-  void _searchGroupByCode() async {
-    final code = _codeController.text.trim();
-    if (code.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter a 6-digit Chit Group code.'),
-          backgroundColor: Color(0xFFD97706),
-        ),
-      );
-      return;
-    }
 
-    setState(() {
-      _isSearching = true;
-      _searchedGroup = null;
-    });
-
-    final group = await SupabaseService.getGroupByInviteCode(code);
-
-    setState(() {
-      _isSearching = false;
-      _searchedGroup = group;
-    });
-
-    if (group == null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('No group found for code "$code". Please verify with Foreman.'),
-          backgroundColor: const Color(0xFFDC2626),
-        ),
-      );
-    }
-  }
 
   void _submitJoinRequest(ChitGroup group) async {
-    final displayName = widget.state?.legalName.isNotEmpty == true 
-        ? widget.state!.legalName 
-        : _username;
+    setState(() => _isLoading = true);
 
-    final agreementText = DigitalAgreement.generateLegalAgreementText(
-      groupName: group.name,
-      foremanName: 'Foreman Host (Licensed Organizer)',
-      memberName: displayName,
-      poolAmount: group.totalPoolSize,
-      durationMonths: group.durationMonths,
-      monthlyContribution: group.monthlyContribution,
-      schemeType: group.schemeType,
-      securityDeposit: group.securityDeposit,
-    );
-
-    final agreement = DigitalAgreement(
-      id: 'agreement_${group.id}_$_username',
-      groupId: group.id,
-      groupName: group.name,
-      foremanUsername: 'foreman_admin',
-      foremanName: 'Foreman Host (Licensed Organizer)',
+    await SupabaseService.submitJoinRequest(
+      inviteCode: group.inviteCode,
       memberUsername: _username,
-      memberName: displayName,
-      poolAmount: group.totalPoolSize,
-      durationMonths: group.durationMonths,
-      monthlyContribution: group.monthlyContribution,
-      schemeType: group.schemeType,
-      agreementText: agreementText,
-      foremanSigned: true, // Host signed during group creation
-      memberSigned: false,
-      createdAt: DateTime.now(),
     );
+    _loadMemberData();
 
-    // Trigger Digital Agreement modal for Subscriber signature once when submitting group join request
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => DigitalAgreementModal(
-        agreement: agreement,
-        isForeman: false,
-        onSigned: () async {
-          setState(() {
-            _isLoading = true;
-          });
-
-          await SupabaseService.saveDigitalAgreement(agreement);
-
-          final success = await SupabaseService.submitJoinRequest(
-            inviteCode: group.inviteCode,
-            memberUsername: _username,
-          );
-
-          if (mounted) {
-            if (success) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('🎉 Digital Agreement signed & Join request sent for "${group.name}"!'),
-                  backgroundColor: const Color(0xFF007A87),
-                ),
-              );
-              _codeController.clear();
-              _searchedGroup = null;
-              _loadMemberData();
-            } else {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Failed to submit join request. Please try again.'),
-                  backgroundColor: Color(0xFFDC2626),
-                ),
-              );
-              setState(() {
-                _isLoading = false;
-              });
-            }
-          }
-        },
-      ),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Request to join "${group.name}" submitted to Foreman!'),
+          backgroundColor: const Color(0xFF007A87),
+        ),
+      );
+    }
   }
 
   void _openDigitalAgreement(ChitJoinRequest req) async {
-    final displayName = widget.state?.legalName.isNotEmpty == true 
-        ? widget.state!.legalName 
-        : 'Suresh Raina';
-
     final agreementText = DigitalAgreement.generateLegalAgreementText(
       groupName: req.groupName,
       foremanName: 'Rajesh Kumar (Foreman)',
-      memberName: displayName,
-      poolAmount: 1000000,
+      memberName: req.memberName,
+      poolAmount: 1000000.0, // fallback pool representation
       durationMonths: 10,
-      monthlyContribution: 10000,
-      schemeType: 'Bidding System',
-      securityDeposit: 25000,
+      monthlyContribution: 100000.0,
+      schemeType: 'Bidding',
+      securityDeposit: 100000.0,
     );
 
     var agreement = await SupabaseService.getDigitalAgreement(
@@ -215,22 +115,20 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> with Sing
     );
 
     agreement ??= DigitalAgreement(
-      id: 'agreement_${req.id}',
+      id: 'agreement_${req.groupId}',
       groupId: req.groupId,
       groupName: req.groupName,
       foremanUsername: 'foreman_admin',
       foremanName: 'Rajesh Kumar (Foreman)',
       memberUsername: _username,
-      memberName: displayName,
-      poolAmount: 1000000,
+      memberName: req.memberName,
+      poolAmount: 1000000.0,
       durationMonths: 10,
-      monthlyContribution: 10000,
-      schemeType: 'Bidding System',
+      monthlyContribution: 100000.0,
+      schemeType: 'Bidding',
       agreementText: agreementText,
       createdAt: DateTime.now(),
     );
-
-    await SupabaseService.saveDigitalAgreement(agreement);
 
     if (mounted) {
       showDialog(
@@ -253,11 +151,16 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> with Sing
         : 'Suresh Raina';
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC), // Pure Crisp Off-White & Dark Blue Theme
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
+        leading: Container(
+          margin: const EdgeInsets.all(8),
+          decoration: const BoxDecoration(color: Colors.white24, shape: BoxShape.circle),
+          child: const Icon(Icons.shield, color: Colors.white, size: 20),
+        ),
         title: const Text(
-          '👤 Member Savings & Discovery Dashboard',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+          'Member Dashboard',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
         backgroundColor: const Color(0xFF0F4C81),
         foregroundColor: Colors.white,
@@ -277,31 +180,256 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> with Sing
             onPressed: () => Navigator.pop(context),
           ),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: const Color(0xFFF59E0B),
-          indicatorWeight: 3,
-          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-          unselectedLabelStyle: const TextStyle(fontSize: 13),
-          tabs: const [
-            Tab(icon: Icon(Icons.dashboard_outlined, size: 18), text: 'My Chits & Code Join'),
-            Tab(icon: Icon(Icons.storefront_outlined, size: 18), text: 'Public Chit Marketplace'),
-          ],
-        ),
       ),
       body: SafeArea(
-        child: TabBarView(
-          controller: _tabController,
-          children: [
-            _buildMyChitsTab(displayName),
-            _buildMarketplaceTab(),
-          ],
-        ),
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator(color: Color(0xFF0F4C81)))
+            : IndexedStack(
+                index: _currentIndex,
+                children: [
+                  _buildOverviewDashboard(displayName),
+                  _buildJoinedChitsPage(),
+                  _buildMarketplacePage(),
+                ],
+              ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: const Color(0xFF0F4C81),
+        foregroundColor: Colors.white,
+        onPressed: _openJoinChitBottomSheet,
+        tooltip: 'Join Chit Group',
+        child: const Icon(Icons.add_rounded, size: 28),
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+        },
+        type: BottomNavigationBarType.fixed,
+        selectedItemColor: const Color(0xFF0F4C81),
+        unselectedItemColor: const Color(0xFF64748B),
+        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+        unselectedLabelStyle: const TextStyle(fontSize: 12),
+        items: [
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.grid_view_rounded),
+            label: 'Dashboard',
+          ),
+          BottomNavigationBarItem(
+            icon: _buildBadgeIcon(Icons.groups_rounded, _myRequests.isNotEmpty),
+            label: 'Joined Schemes',
+          ),
+          BottomNavigationBarItem(
+            icon: _buildBadgeIcon(Icons.storefront_outlined, _publicMarketplaceGroups.isNotEmpty),
+            label: 'Discovery',
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildMyChitsTab(String displayName) {
+  Widget _buildBadgeIcon(IconData iconData, bool showBadge) {
+    if (!showBadge) return Icon(iconData);
+    return Stack(
+      children: [
+        Icon(iconData),
+        Positioned(
+          right: 0,
+          top: 0,
+          child: Container(
+            padding: const EdgeInsets.all(2),
+            decoration: const BoxDecoration(
+              color: Color(0xFFF59E0B),
+              shape: BoxShape.circle,
+            ),
+            constraints: const BoxConstraints(
+              minWidth: 8,
+              minHeight: 8,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _openJoinChitBottomSheet() {
+    setState(() {
+      _codeController.clear();
+      _searchedGroup = null;
+    });
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setSheetState) {
+            return Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).viewInsets.bottom + 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Join via 6-Digit Code',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Enter the private 6-digit code provided by your Foreman to request direct access.',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _codeController,
+                          keyboardType: TextInputType.number,
+                          maxLength: 6,
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 3),
+                          decoration: const InputDecoration(
+                            hintText: 'Enter 6-Digit Code',
+                            counterText: '',
+                            prefixIcon: Icon(Icons.vpn_key_outlined, color: Color(0xFF0F4C81)),
+                            fillColor: Color(0xFFF8FAFC),
+                            filled: true,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton(
+                        onPressed: _isSearching
+                            ? null
+                            : () async {
+                                setSheetState(() {
+                                  _isSearching = true;
+                                  _searchedGroup = null;
+                                });
+
+                                final code = _codeController.text.trim();
+                                if (code.isEmpty) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Please enter a 6-digit Chit Group code.'),
+                                      backgroundColor: Color(0xFFD97706),
+                                    ),
+                                  );
+                                  setSheetState(() {
+                                    _isSearching = false;
+                                  });
+                                  return;
+                                }
+
+                                final group = await SupabaseService.getGroupByInviteCode(code);
+
+                                setSheetState(() {
+                                  _isSearching = false;
+                                  _searchedGroup = group;
+                                });
+
+                                if (group == null && mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('No group found for code "$code". Please verify with Foreman.'),
+                                      backgroundColor: const Color(0xFFDC2626),
+                                    ),
+                                  );
+                                }
+                              },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0F4C81),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: _isSearching
+                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                            : const Text('Search', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                  if (_searchedGroup != null) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFCBD5E1)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.verified, color: Color(0xFF007A87), size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _searchedGroup!.name,
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Chip(
+                                label: Text(_searchedGroup!.schemeType),
+                                backgroundColor: const Color(0xFF0F4C81),
+                                labelStyle: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text('Total Pool: ₹${_searchedGroup!.totalPoolSize.toStringAsFixed(0)} • Monthly: ₹${_searchedGroup!.monthlyContribution.toStringAsFixed(0)}/mo'),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                _submitJoinRequest(_searchedGroup!);
+                                Navigator.pop(context);
+                              },
+                              icon: const Icon(Icons.send_rounded, size: 16),
+                              label: const Text('Send Join Request to Foreman'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF007A87),
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildOverviewDashboard(String displayName) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Center(
@@ -319,6 +447,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> with Sing
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
                       padding: const EdgeInsets.all(10),
@@ -336,28 +465,36 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> with Sing
                           Text(
                             displayName,
                             style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                           Text(
                             '@$_username • Verified Subscriber',
                             style: const TextStyle(color: Color(0xFFE2E8F0), fontSize: 12),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF007A87),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Text(
+                              '100 / 100 🛡️ Verified',
+                              style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
                           ),
                         ],
                       ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF007A87),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Text('100 / 100 🛡️ Verified', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
               ),
               const SizedBox(height: 20),
 
-              // Mandated Metrics Row (Chits Joined, Monthly Payment Due, Defaults)
+              // Mandated Metrics Row
               Row(
                 children: [
                   Expanded(
@@ -390,13 +527,9 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> with Sing
               ),
               const SizedBox(height: 28),
 
-              // Code Join Box
-              const Text('Join via 6-Digit Code', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-              const SizedBox(height: 6),
-              const Text('Enter code provided by your Foreman to request access directly.', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-              const SizedBox(height: 12),
-
+              // Welcome status card
               Container(
+                width: double.infinity,
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -404,99 +537,90 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> with Sing
                   border: Border.all(color: const Color(0xFFE2E8F0)),
                 ),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
+                        const Icon(Icons.waving_hand_rounded, color: Color(0xFFF59E0B), size: 24),
+                        const SizedBox(width: 10),
                         Expanded(
-                          child: TextField(
-                            controller: _codeController,
-                            keyboardType: TextInputType.number,
-                            maxLength: 6,
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 3),
-                            decoration: const InputDecoration(
-                              hintText: 'Enter 6-Digit Code (e.g. 849201)',
-                              counterText: '',
-                              prefixIcon: Icon(Icons.vpn_key_outlined, color: Color(0xFF0F4C81)),
-                              fillColor: Color(0xFFF8FAFC),
-                              filled: true,
-                            ),
+                          child: Text(
+                            'Welcome back, $displayName!',
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            softWrap: true,
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        ElevatedButton(
-                          onPressed: _isSearching ? null : _searchGroupByCode,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF0F4C81),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                          child: _isSearching
-                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                              : const Text('Search', style: TextStyle(fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ),
-
-                    if (_searchedGroup != null) ...[
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFCBD5E1)),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'All your joined chit schemes are in excellent standing. You can manage your payout positions, confirm monthly collections, sign legal agreements, and review your reputation score from the left navigation menu.',
+                      style: TextStyle(fontSize: 13, color: Color(0xFF475569), height: 1.5),
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              _currentIndex = 1;
+                            });
+                          },
+                          icon: const Icon(Icons.groups_rounded, size: 16),
+                          label: const Text('View Joined Schemes'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0F4C81),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.verified, color: Color(0xFF007A87), size: 20),
-                                const SizedBox(width: 8),
-                                Expanded(child: Text(_searchedGroup!.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold))),
-                                Chip(
-                                  label: Text(_searchedGroup!.schemeType),
-                                  backgroundColor: const Color(0xFF0F4C81),
-                                  labelStyle: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Text('Total Pool: ₹${_searchedGroup!.totalPoolSize.toStringAsFixed(0)} • Monthly: ₹${_searchedGroup!.monthlyContribution.toStringAsFixed(0)}/mo'),
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                onPressed: () => _submitJoinRequest(_searchedGroup!),
-                                icon: const Icon(Icons.send_rounded, size: 16),
-                                label: const Text('Send Join Request to Foreman'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF007A87),
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                ),
-                              ),
-                            ),
-                          ],
+                        const SizedBox(width: 10),
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              _currentIndex = 2;
+                            });
+                          },
+                          icon: const Icon(Icons.storefront_outlined, size: 16),
+                          label: const Text('Discover Public Chits'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF0F4C81),
+                            side: const BorderSide(color: Color(0xFF0F4C81)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ],
                 ),
               ),
-              const SizedBox(height: 32),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
-              // Joined Chits List
-              const Text('My Joined Chit Schemes', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-              const SizedBox(height: 12),
+  Widget _buildJoinedChitsPage() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 800),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('My Joined Chit Schemes', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+              const SizedBox(height: 4),
+              const Text('Manage and open dashboards for all active and approved chit groups you are a member of.', style: TextStyle(fontSize: 13, color: Color(0xFF64748B))),
+              const SizedBox(height: 20),
 
-              if (_isLoading)
-                const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator(color: Color(0xFF0F4C81))))
-              else if (_myRequests.isEmpty)
+              if (_myRequests.isEmpty)
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(32),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
@@ -508,7 +632,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> with Sing
                       SizedBox(height: 12),
                       Text('No Joined Chit Schemes Yet', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
                       SizedBox(height: 4),
-                      Text('Search a 6-digit code or browse the Public Marketplace tab.', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                      Text('Go to "Join Chit Group" to enter a 6-digit code or browse the Public Discovery tab.', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
                     ],
                   ),
                 )
@@ -523,7 +647,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> with Sing
     );
   }
 
-  Widget _buildMarketplaceTab() {
+  Widget _buildMarketplacePage() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Center(
@@ -533,7 +657,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> with Sing
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Search & Filter Header
-              const Text('Public Chit Discovery Marketplace', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+              const Text('Public Discovery Marketplace', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
               const SizedBox(height: 4),
               const Text('Discover and join verified public chit schemes hosted by licensed foremen.', style: TextStyle(fontSize: 13, color: Color(0xFF64748B))),
               const SizedBox(height: 16),
@@ -553,29 +677,32 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> with Sing
               const SizedBox(height: 14),
 
               // Filter Chips
-              Row(
-                children: ['All', 'Bidding', 'Random Picking'].map((type) {
-                  final isSelected = _selectedFilterType == type;
-                  return Container(
-                    margin: const EdgeInsets.only(right: 8),
-                    child: FilterChip(
-                      selected: isSelected,
-                      label: Text(type == 'All' ? 'All Schemes' : '$type System'),
-                      selectedColor: const Color(0xFF0F4C81),
-                      labelStyle: TextStyle(
-                        color: isSelected ? Colors.white : const Color(0xFF334155),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: ['All', 'Bidding', 'Random Picking'].map((type) {
+                    final isSelected = _selectedFilterType == type;
+                    return Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      child: FilterChip(
+                        selected: isSelected,
+                        label: Text(type == 'All' ? 'All Schemes' : '$type System'),
+                        selectedColor: const Color(0xFF0F4C81),
+                        labelStyle: TextStyle(
+                          color: isSelected ? Colors.white : const Color(0xFF334155),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                        onSelected: (selected) {
+                          setState(() {
+                            _selectedFilterType = type;
+                          });
+                          _loadMemberData();
+                        },
                       ),
-                      onSelected: (selected) {
-                        setState(() {
-                          _selectedFilterType = type;
-                        });
-                        _loadMemberData();
-                      },
-                    ),
-                  );
-                }).toList(),
+                    );
+                  }).toList(),
+                ),
               ),
               const SizedBox(height: 20),
 
@@ -609,6 +736,8 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> with Sing
       ),
     );
   }
+
+
 
   Widget _buildMetricCard({
     required String title,
@@ -686,7 +815,11 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> with Sing
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(req.groupName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                    Text('Code: ${req.inviteCode}', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Code: ${req.inviteCode} • City: ${req.memberCity}',
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                    ),
                   ],
                 ),
               ),
@@ -699,28 +832,34 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> with Sing
           ),
           const SizedBox(height: 14),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              OutlinedButton.icon(
-                onPressed: () => _openDigitalAgreement(req),
-                icon: const Icon(Icons.gavel_rounded, size: 16, color: Color(0xFF0F4C81)),
-                label: const Text('Digital Agreement', style: TextStyle(color: Color(0xFF0F4C81), fontSize: 12, fontWeight: FontWeight.bold)),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Color(0xFF0F4C81)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-              ),
-              if (req.status == 'approved')
-                ElevatedButton.icon(
-                  onPressed: () => _openMemberDashboard(req),
-                  icon: const Icon(Icons.dashboard_rounded, size: 14, color: Colors.white),
-                  label: const Text('Open Dashboard', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0F4C81),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _openDigitalAgreement(req),
+                  icon: const Icon(Icons.gavel_rounded, size: 14, color: Color(0xFF0F4C81)),
+                  label: const Text('Digital Agreement', style: TextStyle(color: Color(0xFF0F4C81), fontSize: 12, fontWeight: FontWeight.bold)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFF0F4C81)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                 ),
-              Text('City: ${req.memberCity}', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+              ),
+              if (req.status == 'approved') ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => _openMemberDashboard(req),
+                    icon: const Icon(Icons.dashboard_rounded, size: 14, color: Colors.white),
+                    label: const Text('Open Dashboard', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0F4C81),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ],
@@ -763,15 +902,33 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> with Sing
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(group.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                    Text('Hosted in ${group.city} • Code: ${group.inviteCode}', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                    Text(
+                      group.name,
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                    ),
+                    Text(
+                      'Hosted in ${group.city} • Code: ${group.inviteCode}',
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                    ),
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(color: const Color(0xFF0F4C81), borderRadius: BorderRadius.circular(12)),
-                child: Text('${group.schemeType} System', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(color: const Color(0xFF0F4C81), borderRadius: BorderRadius.circular(12)),
+                  child: Text(
+                    '${group.schemeType} System',
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
+                ),
               ),
             ],
           ),
@@ -779,28 +936,50 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> with Sing
           const Divider(height: 1, color: Color(0xFFF1F5F9)),
           const SizedBox(height: 12),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Total Pool', style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
-                  Text('₹${group.totalPoolSize.toStringAsFixed(0)}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFFD97706))),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Total Pool', style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
+                    Text(
+                      '₹${group.totalPoolSize.toStringAsFixed(0)}',
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Color(0xFFD97706)),
+                    ),
+                  ],
+                ),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Monthly Cont.', style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
-                  Text('₹${group.monthlyContribution.toStringAsFixed(0)}/mo', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFF007A87))),
-                ],
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Monthly Cont.', style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
+                    Text(
+                      '₹${group.monthlyContribution.toStringAsFixed(0)}/mo',
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Color(0xFF007A87)),
+                    ),
+                  ],
+                ),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Duration', style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
-                  Text('${group.durationMonths} Mos', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
-                ],
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Duration', style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
+                    Text(
+                      '${group.durationMonths} Mos',
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF334155)),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -830,12 +1009,15 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> with Sing
     setState(() => _isLoading = false);
 
     if (group != null && mounted) {
-      showDialog(
-        context: context,
-        builder: (_) => GroupDetailsModal(
-          group: group,
-          isForeman: false,
-          currentUsername: _username,
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => GroupDetailsModal(
+            group: group,
+            isForeman: false,
+            currentUsername: _username,
+            isApproved: req.status == 'approved',
+          ),
         ),
       );
     }
