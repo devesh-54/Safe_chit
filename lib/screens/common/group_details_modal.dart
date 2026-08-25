@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models/chit_group.dart';
@@ -6,17 +7,24 @@ import '../../models/member_risk.dart';
 import '../../models/digital_agreement.dart';
 import '../../services/supabase_service.dart';
 import 'digital_agreement_modal.dart';
+import '../../features/bidding/bidding_session_service.dart';
+import '../../features/bidding/host_schedule_screen.dart';
+import '../../features/bidding/bidding_waiting_room.dart';
+import '../../features/bidding/live_bidding_room.dart';
+import '../../features/bidding/auction_close_payout.dart';
 
 class GroupDetailsModal extends StatefulWidget {
   final ChitGroup group;
   final bool isForeman;
   final String currentUsername;
+  final bool isApproved;
 
   const GroupDetailsModal({
     super.key,
     required this.group,
     required this.isForeman,
     required this.currentUsername,
+    this.isApproved = true,
   });
 
   @override
@@ -27,6 +35,7 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
   late TabController _tabController;
   List<ChitMemberRisk> _members = [];
   bool _isLoading = true;
+  StreamSubscription<String>? _biddingStatusSub;
 
   // Bidding & Draw simulation state
   final TextEditingController _bidController = TextEditingController();
@@ -57,6 +66,15 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
     _tabController = TabController(length: 3, vsync: this);
     _loadGroupMembers();
     
+    _biddingStatusSub = BiddingSessionService.instance.statusStream.listen((groupId) {
+      if (!mounted) return;
+      if (groupId == widget.group.id) {
+        setState(() {});
+      }
+    });
+
+    BiddingSessionService.instance.startSync(widget.group.id);
+
     _userPayments = [
       {
         'cycle': 1,
@@ -79,9 +97,41 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
 
   @override
   void dispose() {
+    _biddingStatusSub?.cancel();
+    BiddingSessionService.instance.stopSync(widget.group.id);
     _tabController.dispose();
     _bidController.dispose();
     super.dispose();
+  }
+
+  void _handlePayoutReleased() {
+    final state = BiddingSessionService.instance.getOrCreateState(widget.group.id);
+    final winner = state.currentHighestBidder;
+    final winningBid = state.currentHighestBid;
+    final payoutAmount = widget.group.totalPoolSize - winningBid;
+    final dividend = winningBid / (widget.group.membersCount > 0 ? widget.group.membersCount : 10);
+    final ref = state.txnRef ?? 'TXN849102IND';
+
+    setState(() {
+      _userPayments.insert(0, {
+        'cycle': widget.group.currentCycle,
+        'amount': payoutAmount,
+        'date': DateFormat('d MMM yyyy, hh:mm a').format(DateTime.now()),
+        'foremanConfirmed': DateFormat('d MMM yyyy, hh:mm a').format(DateTime.now()),
+        'memberConfirmed': DateFormat('d MMM yyyy, hh:mm a').format(DateTime.now()),
+        'status': 'Payout Released • Ref: $ref',
+      });
+
+      _ledgerHistory.insert(0, {
+        'cycle': widget.group.currentCycle,
+        'date': DateFormat('d MMM yyyy').format(DateTime.now()),
+        'winner': winner,
+        'winningDiscount': winningBid,
+        'payoutAmount': payoutAmount,
+        'dividendPerMember': dividend,
+        'status': 'Payout Released',
+      });
+    });
   }
 
   void _loadGroupMembers() async {
@@ -228,17 +278,21 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
     final g = widget.group;
     final progressPct = (g.currentCycle / g.durationMonths).clamp(0.0, 1.0);
 
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      backgroundColor: Colors.white,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 850),
-        height: MediaQuery.of(context).size.height * 0.90,
-        padding: const EdgeInsets.all(24),
-        child: widget.isForeman
-            ? _buildForemanDashboard(g, progressPct)
-            : _buildMemberDashboard(g),
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: AppBar(
+        title: Text(g.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        backgroundColor: const Color(0xFF0F4C81),
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: widget.isForeman
+              ? _buildForemanDashboard(g, progressPct)
+              : _buildMemberDashboard(g),
+        ),
       ),
     );
   }
@@ -247,44 +301,19 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Modal Header
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0F4C81).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                g.schemeType == 'Bidding' ? Icons.gavel_rounded : Icons.casino_rounded,
-                color: const Color(0xFF0F4C81),
-                size: 26,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    g.name,
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                  ),
-                  Text(
-                    'Code: ${g.inviteCode} • ${g.city} • ${g.schemeType} Scheme',
-                    style: const TextStyle(fontSize: 12, color: Color(0xFF007A87), fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.close),
-              onPressed: () => Navigator.pop(context),
-            ),
-          ],
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            'Code: ${g.inviteCode} • ${g.city} • ${g.schemeType} Scheme',
+            style: const TextStyle(fontSize: 12, color: Color(0xFF007A87), fontWeight: FontWeight.bold),
+          ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
 
         // Tab Bar: 1. Scheme Auction/Draw | 2. Member Roster | 3. Payout Ledger
         TabBar(
@@ -326,42 +355,17 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Modal Header
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0F4C81).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                g.schemeType == 'Bidding' ? Icons.gavel_rounded : Icons.casino_rounded,
-                color: const Color(0xFF0F4C81),
-                size: 26,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    g.name,
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                  ),
-                  Text(
-                    'Code: ${g.inviteCode} • ${g.city} • ${g.schemeType} Scheme',
-                    style: const TextStyle(fontSize: 12, color: Color(0xFF007A87), fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.close),
-              onPressed: () => Navigator.pop(context),
-            ),
-          ],
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            'Code: ${g.inviteCode} • ${g.city} • ${g.schemeType} Scheme',
+            style: const TextStyle(fontSize: 12, color: Color(0xFF007A87), fontWeight: FontWeight.bold),
+          ),
         ),
         const SizedBox(height: 12),
 
@@ -379,23 +383,37 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Cycle ${g.currentCycle} of ${g.durationMonths}',
-                    style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
+                  Expanded(
+                    child: Text(
+                      'Cycle ${g.currentCycle} of ${g.durationMonths}',
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Icon(Icons.shield_outlined, color: Colors.white, size: 10),
-                        SizedBox(width: 4),
-                        Text('Trusted Member', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                      ],
+                  ),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.shield_outlined, color: Colors.white, size: 10),
+                          SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              'Trusted Member',
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                              style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -405,46 +423,57 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'NEXT CONTRIBUTION',
-                        style: TextStyle(color: Color(0xFFE2E8F0), fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 0.5),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '₹${g.monthlyContribution.toStringAsFixed(0)}',
-                        style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900),
-                      ),
-                      const SizedBox(height: 2),
-                      const Text(
-                        'Due: 10th of this Month',
-                        style: TextStyle(color: Color(0xFFE2E8F0), fontSize: 10),
-                      ),
-                    ],
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        payoutTurnLabel,
-                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 8),
-                      ElevatedButton.icon(
-                        onPressed: () => _openRazorpayCardCheckout(g.monthlyContribution),
-                        icon: const Icon(Icons.credit_card_rounded, size: 14),
-                        label: const Text('Pay by Card', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFF59E0B),
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'NEXT CONTRIBUTION',
+                          style: TextStyle(color: Color(0xFFE2E8F0), fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 0.5),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 4),
+                        Text(
+                          '₹${g.monthlyContribution.toStringAsFixed(0)}',
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                          style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900),
+                        ),
+                        const SizedBox(height: 2),
+                        const Text(
+                          'Due: 10th of this Month',
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                          style: TextStyle(color: Color(0xFFE2E8F0), fontSize: 10),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          payoutTurnLabel,
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        ElevatedButton.icon(
+                          onPressed: () => _openRazorpayCardCheckout(g.monthlyContribution),
+                          icon: const Icon(Icons.credit_card_rounded, size: 14),
+                          label: const Text('Pay by Card', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFF59E0B),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -460,6 +489,10 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // ACTIVE BIDDING / DRAW INTERACTIVE TERMINAL
+                _buildMemberAuctionBidPanel(g),
+                const SizedBox(height: 14),
+
                 // SECOND SECTION — This Cycle
                 _buildMemberCycleProgress(g),
                 const SizedBox(height: 14),
@@ -481,6 +514,157 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
         ),
       ],
     );
+  }
+
+  Widget _buildMemberAuctionBidPanel(ChitGroup g) {
+    final bidState = BiddingSessionService.instance.getOrCreateState(g.id);
+
+    if (g.schemeType == 'Bidding') {
+      if (bidState.scheduledStartTime == null) {
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Row(
+            children: const [
+              Icon(Icons.info_outline, color: Color(0xFF0F4C81), size: 20),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'No bidding session has been scheduled by the Foreman for this cycle yet.',
+                  style: TextStyle(color: Color(0xFF475569), fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+        );
+      } else if (bidState.scheduledStartTime != null && !bidState.isAuctionActive && !bidState.isAuctionEnded) {
+        return BiddingWaitingRoom(
+          groupId: g.id,
+          scheduledTime: bidState.scheduledStartTime!,
+          onTimerExpired: () {
+            setState(() {});
+          },
+        );
+      } else if (bidState.isAuctionActive && !bidState.isAuctionEnded) {
+        return Container(
+          height: 380, // Bound height inside details column
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: LiveBiddingRoom(
+            group: g,
+            currentUsername: widget.currentUsername,
+            isForeman: false,
+            isApproved: widget.isApproved,
+            onAuctionEnded: () {
+              setState(() {});
+            },
+          ),
+        );
+      } else {
+        // Auction Concluded
+        return AuctionClosePayout(
+          group: g,
+          currentUsername: widget.currentUsername,
+          isForeman: false,
+          onPayoutReleased: _handlePayoutReleased,
+        );
+      }
+    } else {
+      // Random Draw System
+      return Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFF007A87).withOpacity(0.2), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.02),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'LUCKY DRAW DRAW STATUS',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F4C81), letterSpacing: 0.5),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF3C7),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    'Draw Eligible',
+                    style: TextStyle(
+                      color: Color(0xFFB45309),
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            if (_luckyDrawWinner != null) ...[
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(color: const Color(0xFFDCFCE7), borderRadius: BorderRadius.circular(12)),
+                child: Row(
+                  children: [
+                    const Icon(Icons.stars, color: Color(0xFF166534), size: 24),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('LUCKY DRAW WINNER SELECTED!', style: TextStyle(color: Color(0xFF15803D), fontSize: 10, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 2),
+                          Text('Winner: $_luckyDrawWinner', style: const TextStyle(color: Color(0xFF166534), fontSize: 14, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ] else ...[
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(12)),
+                child: Row(
+                  children: const [
+                    Icon(Icons.info_outline, color: Color(0xFF475569), size: 20),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Draw will be conducted by Foreman Rajesh Kumar at the end of the current cycle. Keep an eye on updates!',
+                        style: TextStyle(color: Color(0xFF334155), fontSize: 12, height: 1.4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
   }
 
   Widget _buildMemberCycleProgress(ChitGroup g) {
@@ -546,10 +730,22 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Monthly Collection:', style: TextStyle(fontSize: 12, color: Color(0xFF334155))),
-              Text(
-                '₹${collectedAmount.toStringAsFixed(0)} / ₹${targetAmount.toStringAsFixed(0)}',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81)),
+              const Expanded(
+                child: Text(
+                  'Monthly Collection:',
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  style: TextStyle(fontSize: 12, color: Color(0xFF334155)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  '₹${collectedAmount.toStringAsFixed(0)} / ₹${targetAmount.toStringAsFixed(0)}',
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81)),
+                ),
               ),
             ],
           ),
@@ -639,26 +835,35 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                           ],
                         ),
                       ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            '₹${tx['amount'].toStringAsFixed(0)}',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F4C81)),
-                          ),
-                          const SizedBox(height: 2),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: const [
-                              Icon(Icons.check, color: Colors.green, size: 10),
-                              SizedBox(width: 2),
-                              Text(
-                                'Confirmed by both parties',
-                                style: TextStyle(color: Colors.green, fontSize: 9, fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                        ],
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              '₹${tx['amount'].toStringAsFixed(0)}',
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F4C81)),
+                            ),
+                            const SizedBox(height: 2),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: const [
+                                Icon(Icons.check, color: Colors.green, size: 10),
+                                SizedBox(width: 2),
+                                Flexible(
+                                  child: Text(
+                                    'Double Confirmed',
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                    style: TextStyle(color: Colors.green, fontSize: 9, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -705,7 +910,14 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                       children: const [
                         Icon(Icons.shield_outlined, color: Color(0xFF007A87), size: 10),
                         SizedBox(width: 4),
-                        Text('Trusted Foreman (Reputation Score: 98/100)', style: TextStyle(color: Color(0xFF007A87), fontSize: 10, fontWeight: FontWeight.w600)),
+                        Flexible(
+                          child: Text(
+                            'Trusted Foreman (Score: 98/100)',
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                            style: TextStyle(color: Color(0xFF007A87), fontSize: 10, fontWeight: FontWeight.w600),
+                          ),
+                        ),
                       ],
                     ),
                   ],
@@ -1025,8 +1237,7 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
 
   // --- TAB 1: AUCTION / RANDOM DRAW FUNCTIONALITY ---
   Widget _buildSchemeAuctionTab(ChitGroup g, double progressPct) {
-    final dividendPerMember = _currentWinningBid / (g.membersCount > 0 ? g.membersCount : 10);
-    final discountedPayout = g.totalPoolSize - _currentWinningBid;
+    final bidState = BiddingSessionService.instance.getOrCreateState(g.id);
 
     return SingleChildScrollView(
       child: Column(
@@ -1080,91 +1291,150 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
           ),
           const SizedBox(height: 16),
 
-          // Interactive Bidding Section vs Random Draw Section
+          // Host Console Bidding Session Flow
           if (g.schemeType == 'Bidding') ...[
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF007A87).withOpacity(0.3), width: 1.5),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('LIVE MONTHLY AUCTION (CYCLE 1)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F4C81))),
-                      Chip(
-                        label: const Text('Bidding Active'),
-                        backgroundColor: const Color(0xFFDCFCE7),
-                        labelStyle: const TextStyle(color: Color(0xFF166534), fontSize: 10, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Top Discount Bid:', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
-                            Text('₹${_currentWinningBid.toStringAsFixed(0)}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFFD97706))),
-                            Text('Bidder: $_currentWinningBidder', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF007A87))),
-                          ],
-                        ),
-                      ),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Winner Take-Home Payout:', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
-                            Text('₹${discountedPayout.toStringAsFixed(0)}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF0F4C81))),
-                            Text('Member Dividend Gain: ₹${dividendPerMember.toStringAsFixed(0)}/user', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF166534))),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Bid Input Field
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _bidController,
-                          keyboardType: TextInputType.number,
-                          decoration: InputDecoration(
-                            hintText: 'Enter discount bid amount (₹)...',
-                            fillColor: Colors.white,
-                            filled: true,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFCBD5E1))),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      ElevatedButton.icon(
-                        onPressed: _submitAuctionBid,
-                        icon: const Icon(Icons.gavel, size: 16),
-                        label: const Text('Place Bid'),
+            if (bidState.scheduledStartTime == null) ...[
+              // Screen A: No session scheduled -> Show Schedule button
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Column(
+                  children: [
+                    const Icon(Icons.calendar_month_rounded, size: 48, color: Color(0xFF64748B)),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'No Auction Scheduled for this Cycle',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1E293B)),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'As the host/foreman, you must schedule a bidding session. Members will receive advance reminders.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.4),
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => HostScheduleScreen(group: g),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.schedule_rounded, size: 16),
+                        label: const Text('Schedule Bidding Session'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF0F4C81),
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
                       ),
-                    ],
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
-            ),
+            ] else if (bidState.scheduledStartTime != null && !bidState.isAuctionActive && !bidState.isAuctionEnded) ...[
+              // Screen B: Session scheduled but not started
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Column(
+                  children: [
+                    const Icon(Icons.event_available_rounded, size: 48, color: Color(0xFF0F4C81)),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Bidding Session Scheduled',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F4C81)),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Scheduled to start: ${DateFormat('d MMM yyyy, hh:mm a').format(bidState.scheduledStartTime!)}',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B)),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Reminders have been sent to all group members.',
+                      style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => BiddingSessionService.instance.cancelSchedule(g.id),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFFDC2626),
+                              side: const BorderSide(color: Color(0xFFFCA5A5)),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            child: const Text('Cancel Schedule', style: TextStyle(fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () {
+                              final maxCap = g.totalPoolSize * 0.30;
+                              BiddingSessionService.instance.startAuction(g.id, 50000.0, maxCap);
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF0F4C81),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            child: const Text('Start Now', style: TextStyle(fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ] else if (bidState.isAuctionActive && !bidState.isAuctionEnded) ...[
+              // Screen C: Live Bidding Room (Active)
+              Container(
+                height: 480, // Constrained height for tab view
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: LiveBiddingRoom(
+                  group: g,
+                  currentUsername: widget.currentUsername,
+                  isForeman: true,
+                  isApproved: true,
+                  onAuctionEnded: () => setState(() {}),
+                ),
+              ),
+            ] else if (bidState.isAuctionEnded) ...[
+              // Screen D: Auction Ended / Concluded Summary
+              AuctionClosePayout(
+                group: g,
+                currentUsername: widget.currentUsername,
+                isForeman: true,
+                onPayoutReleased: _handlePayoutReleased,
+              ),
+            ],
           ] else ...[
-            // Random Picking Chit System
+            // Random Draw Lucky Draw panel (retains existing draw UI)
             Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(

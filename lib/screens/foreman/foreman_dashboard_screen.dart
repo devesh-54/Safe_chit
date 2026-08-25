@@ -314,25 +314,36 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
               child: const Icon(Icons.shield, color: Color(0xFFF59E0B), size: 20),
             ),
             const SizedBox(width: 10),
-            const Text(
-              'ChitGuard Host Console',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-            ),
-            const SizedBox(width: 14),
-
-            // Live Real-Time Stream Status Badge
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFF166534),
-                borderRadius: BorderRadius.circular(12),
+            const Expanded(
+              child: Text(
+                'Host Console',
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
-              child: const Row(
-                children: [
-                  Icon(Icons.fiber_manual_record, color: Color(0xFF86EFAC), size: 10),
-                  SizedBox(width: 6),
-                  Text('LIVE REALTIME STREAM', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                ],
+            ),
+            const SizedBox(width: 8),
+            // Live Real-Time Stream Status Badge (Flexible)
+            Flexible(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF166534),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.fiber_manual_record, color: Color(0xFF86EFAC), size: 8),
+                    SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        'LIVE',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -857,7 +868,14 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                 children: [
                   Row(
                     children: [
-                      Text(member.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                      Expanded(
+                        child: Text(
+                          member.name,
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                        ),
+                      ),
                       const SizedBox(width: 8),
                       AnimatedSwitcher(
                         duration: const Duration(milliseconds: 350),
