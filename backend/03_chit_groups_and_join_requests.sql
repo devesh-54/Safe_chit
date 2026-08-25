@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS public.group_members (
     guarantor_status VARCHAR(100) DEFAULT 'Verified',
     amount_exposed NUMERIC DEFAULT 0,
     has_defaulted BOOLEAN DEFAULT FALSE,
+    last_payment_date TIMESTAMPTZ DEFAULT NOW(),
     forfeited BOOLEAN DEFAULT FALSE,
     default_notice_sent BOOLEAN DEFAULT FALSE,
     default_notice_text TEXT,
