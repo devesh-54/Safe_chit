@@ -171,17 +171,21 @@ class _PersonalIdentityScreenState extends State<PersonalIdentityScreen> {
                           children: [
                             const Icon(Icons.calendar_today_outlined, color: Color(0xFF64748B), size: 20),
                             const SizedBox(width: 12),
-                            Text(
-                              _selectedDob == null
-                                  ? 'Select date of birth'
-                                  : DateFormat('dd MMMM yyyy').format(_selectedDob!),
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: _selectedDob == null ? FontWeight.w400 : FontWeight.w600,
-                                color: _selectedDob == null ? const Color(0xFF94A3B8) : const Color(0xFF0A2540),
+                            Expanded(
+                              child: Text(
+                                _selectedDob == null
+                                    ? 'Select date of birth'
+                                    : DateFormat('dd MMMM yyyy').format(_selectedDob!),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: _selectedDob == null ? FontWeight.w400 : FontWeight.w600,
+                                  color: _selectedDob == null ? const Color(0xFF94A3B8) : const Color(0xFF0A2540),
+                                ),
                               ),
                             ),
-                            const Spacer(),
+                            const SizedBox(width: 8),
                             const Icon(Icons.chevron_right_rounded, color: Color(0xFF64748B)),
                           ],
                         ),

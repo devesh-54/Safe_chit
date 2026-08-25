@@ -109,7 +109,10 @@ class _AuctionClosePayoutState extends State<AuctionClosePayout> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('TXN REFERENCE', style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
+                    const Expanded(
+                      child: Text('TXN REFERENCE', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
+                    ),
+                    const SizedBox(width: 8),
                     SelectableText(refNum, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
                   ],
                 ),
@@ -159,10 +162,15 @@ class _AuctionClosePayoutState extends State<AuctionClosePayout> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'SESSION SUMMARY',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF64748B), letterSpacing: 0.8),
+              const Expanded(
+                child: Text(
+                  'SESSION SUMMARY',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF64748B), letterSpacing: 0.8),
+                ),
               ),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
@@ -269,9 +277,15 @@ class _AuctionClosePayoutState extends State<AuctionClosePayout> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text('Winning Bidder', style: TextStyle(fontSize: 13, color: Color(0xFF64748B))),
-                      Text(
-                        winner + (isCurrentUserWinner ? ' (You)' : ''),
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          winner + (isCurrentUserWinner ? ' (You)' : ''),
+                          textAlign: TextAlign.end,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                        ),
                       ),
                     ],
                   ),

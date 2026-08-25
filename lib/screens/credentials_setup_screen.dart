@@ -144,7 +144,9 @@ class _CredentialsSetupScreenState extends State<CredentialsSetupScreen> {
               children: [
                 Icon(Icons.error_outline_rounded, color: Colors.red, size: 28),
                 SizedBox(width: 8),
-                Text('Database Error', style: TextStyle(fontWeight: FontWeight.bold)),
+                Expanded(
+                  child: Text('Database Error', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
               ],
             ),
             content: Column(
@@ -299,14 +301,19 @@ class _CredentialsSetupScreenState extends State<CredentialsSetupScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            'Choose Unique Username',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF0A2540),
+                          const Expanded(
+                            child: Text(
+                              'Choose Unique Username',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF0A2540),
+                              ),
                             ),
                           ),
+                          const SizedBox(width: 8),
                           if (_isCheckingUsername)
                             Row(
                               children: const [

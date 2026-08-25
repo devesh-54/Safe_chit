@@ -600,9 +600,13 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'LUCKY DRAW DRAW STATUS',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F4C81), letterSpacing: 0.5),
+                const Expanded(
+                  child: Text(
+                    'LUCKY DRAW DRAW STATUS',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F4C81), letterSpacing: 0.5),
+                  ),
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -1187,9 +1191,16 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Row(
             children: const [
-              Icon(Icons.report_problem_outlined, color: Color(0xFFDC2626)),
-              SizedBox(width: 8),
-              Text('Flag a Discrepancy', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const Icon(Icons.report_problem_outlined, color: Color(0xFFDC2626)),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Flag a Discrepancy',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+              ),
             ],
           ),
           content: Column(
@@ -1260,7 +1271,14 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                         children: [
                           Icon(g.schemeType == 'Bidding' ? Icons.gavel : Icons.casino, color: const Color(0xFFF59E0B), size: 16),
                           const SizedBox(width: 6),
-                          Text(g.schemeType == 'Bidding' ? 'Bidding Auction Starts' : 'Lucky Draw Date', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                          Expanded(
+                            child: Text(
+                              g.schemeType == 'Bidding' ? 'Bidding Auction Starts' : 'Lucky Draw Date',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 4),
@@ -1278,7 +1296,14 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                         children: const [
                           Icon(Icons.payment_rounded, color: Color(0xFF86EFAC), size: 16),
                           SizedBox(width: 6),
-                          Text('Subscriber Payment Due', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                          Expanded(
+                            child: Text(
+                              'Subscriber Payment Due',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 4),
@@ -1448,7 +1473,14 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('RANDOM PICKING CHIT (LUCKY DRAW)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F4C81))),
+                      const Expanded(
+                        child: Text(
+                          'RANDOM PICKING CHIT (LUCKY DRAW)',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F4C81)),
+                        ),
+                      ),
                       Chip(
                         label: const Text('Draw Eligible'),
                         backgroundColor: const Color(0xFFFEF3C7),

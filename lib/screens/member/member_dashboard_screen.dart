@@ -280,9 +280,13 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'Join via 6-Digit Code',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                      const Expanded(
+                        child: Text(
+                          'Join via 6-Digit Code',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                        ),
                       ),
                       IconButton(
                         icon: const Icon(Icons.close),
@@ -562,33 +566,47 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                     const SizedBox(height: 18),
                     Row(
                       children: [
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            setState(() {
-                              _currentIndex = 1;
-                            });
-                          },
-                          icon: const Icon(Icons.groups_rounded, size: 16),
-                          label: const Text('View Joined Schemes'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF0F4C81),
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              setState(() {
+                                _currentIndex = 1;
+                              });
+                            },
+                            icon: const Icon(Icons.groups_rounded, size: 16),
+                            label: const Text(
+                              'View Joined Schemes',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF0F4C81),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 10),
-                        OutlinedButton.icon(
-                          onPressed: () {
-                            setState(() {
-                              _currentIndex = 2;
-                            });
-                          },
-                          icon: const Icon(Icons.storefront_outlined, size: 16),
-                          label: const Text('Discover Public Chits'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF0F4C81),
-                            side: const BorderSide(color: Color(0xFF0F4C81)),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () {
+                              setState(() {
+                                _currentIndex = 2;
+                              });
+                            },
+                            icon: const Icon(Icons.storefront_outlined, size: 16),
+                            label: const Text(
+                              'Discover Public Chits',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF0F4C81),
+                              side: const BorderSide(color: Color(0xFF0F4C81)),
+                              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
                           ),
                         ),
                       ],
