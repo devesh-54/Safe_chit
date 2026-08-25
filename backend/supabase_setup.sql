@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS public.user_onboardings (
 CREATE UNIQUE INDEX IF NOT EXISTS user_onboardings_username_lower_idx 
 ON public.user_onboardings (LOWER(username));
 
--- 3. Chit Groups Table (with 6-Digit Unique Join Code)
+-- 3. Chit Groups Table (with 6-Digit Unique Join Code & Filter/Discovery fields)
 CREATE TABLE IF NOT EXISTS public.chit_groups (
     id VARCHAR(100) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -65,12 +65,19 @@ CREATE TABLE IF NOT EXISTS public.chit_groups (
     status VARCHAR(50) DEFAULT 'Active',
     current_cycle INT DEFAULT 1,
     members_count INT DEFAULT 1,
+    scheme_type VARCHAR(50) DEFAULT 'Bidding', -- 'Bidding' or 'Random Picking'
+    is_public BOOLEAN DEFAULT TRUE,
+    city VARCHAR(100) DEFAULT 'Bengaluru',
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Index on 6-digit invite_code for instant lookup
 CREATE UNIQUE INDEX IF NOT EXISTS chit_groups_invite_code_idx 
 ON public.chit_groups (invite_code);
+
+-- Index on is_public and scheme_type for fast discovery queries
+CREATE INDEX IF NOT EXISTS chit_groups_public_discovery_idx 
+ON public.chit_groups (is_public, scheme_type);
 
 -- 4. Chit Join Requests Table (Non-sensitive member info only)
 CREATE TABLE IF NOT EXISTS public.chit_join_requests (
@@ -88,10 +95,65 @@ CREATE TABLE IF NOT EXISTS public.chit_join_requests (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 5. Enable Row Level Security (RLS) & Public Policies
+-- 5. Group Members Table (Active Members in Group with Credit/Risk Profile)
+CREATE TABLE IF NOT EXISTS public.group_members (
+    id VARCHAR(100) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    group_id VARCHAR(100) REFERENCES public.chit_groups(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    default_risk_score NUMERIC DEFAULT 15.0,
+    payout_position VARCHAR(100) DEFAULT 'Unpaid (Bidder)',
+    payment_trend VARCHAR(100) DEFAULT 'On-Time',
+    guarantor_status VARCHAR(100) DEFAULT 'Verified',
+    amount_exposed NUMERIC DEFAULT 0,
+    has_defaulted BOOLEAN DEFAULT FALSE,
+    last_payment_date TIMESTAMPTZ DEFAULT NOW(),
+    forfeited BOOLEAN DEFAULT FALSE,
+    default_notice_sent BOOLEAN DEFAULT FALSE,
+    default_notice_text TEXT,
+    phone VARCHAR(20),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 6. Digital Agreements Table (Chit Funds Act 1982 Compliant)
+CREATE TABLE IF NOT EXISTS public.digital_agreements (
+    id VARCHAR(100) PRIMARY KEY,
+    group_id VARCHAR(100) REFERENCES public.chit_groups(id) ON DELETE CASCADE,
+    group_name VARCHAR(255) NOT NULL,
+    foreman_username VARCHAR(50) NOT NULL,
+    foreman_name VARCHAR(255) NOT NULL,
+    member_username VARCHAR(50) NOT NULL,
+    member_name VARCHAR(255) NOT NULL,
+    pool_amount NUMERIC NOT NULL,
+    duration_months INT NOT NULL,
+    monthly_contribution NUMERIC NOT NULL,
+    scheme_type VARCHAR(50) DEFAULT 'Bidding',
+    agreement_text TEXT NOT NULL,
+    foreman_signed BOOLEAN DEFAULT FALSE,
+    foreman_signature_url TEXT,
+    foreman_signed_at TIMESTAMPTZ,
+    member_signed BOOLEAN DEFAULT FALSE,
+    member_signature_url TEXT,
+    member_signed_at TIMESTAMPTZ,
+    status VARCHAR(50) DEFAULT 'pending_signatures', -- 'pending_signatures', 'fully_executed'
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 7. Landing Page Waitlist Table
+CREATE TABLE IF NOT EXISTS public.waitlist (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    contact VARCHAR(255) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, NOW()) NOT NULL
+);
+
+-- =================================================================
+-- RLS & Access Control Policies
+-- =================================================================
 ALTER TABLE public.user_onboardings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chit_groups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chit_join_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.group_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.digital_agreements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.waitlist ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Public read user_onboardings" ON public.user_onboardings FOR SELECT USING (true);
 CREATE POLICY "Public insert user_onboardings" ON public.user_onboardings FOR INSERT WITH CHECK (true);
@@ -104,3 +166,14 @@ CREATE POLICY "Public update chit_groups" ON public.chit_groups FOR UPDATE USING
 CREATE POLICY "Public read chit_join_requests" ON public.chit_join_requests FOR SELECT USING (true);
 CREATE POLICY "Public insert chit_join_requests" ON public.chit_join_requests FOR INSERT WITH CHECK (true);
 CREATE POLICY "Public update chit_join_requests" ON public.chit_join_requests FOR UPDATE USING (true);
+
+CREATE POLICY "Public read group_members" ON public.group_members FOR SELECT USING (true);
+CREATE POLICY "Public insert group_members" ON public.group_members FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public update group_members" ON public.group_members FOR UPDATE USING (true);
+
+CREATE POLICY "Public read digital_agreements" ON public.digital_agreements FOR SELECT USING (true);
+CREATE POLICY "Public insert digital_agreements" ON public.digital_agreements FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public update digital_agreements" ON public.digital_agreements FOR UPDATE USING (true);
+
+CREATE POLICY "Allow public insert to waitlist" ON public.waitlist FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public select waitlist" ON public.waitlist FOR SELECT USING (true);

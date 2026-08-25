@@ -5,6 +5,7 @@ import '../../models/chit_join_request.dart';
 import '../../models/digital_agreement.dart';
 import '../../services/supabase_service.dart';
 import '../common/digital_agreement_modal.dart';
+import '../common/group_details_modal.dart';
 
 class MemberDashboardScreen extends StatefulWidget {
   final OnboardingState? state;
@@ -709,6 +710,16 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> with Sing
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
               ),
+              if (req.status == 'approved')
+                ElevatedButton.icon(
+                  onPressed: () => _openMemberDashboard(req),
+                  icon: const Icon(Icons.dashboard_rounded, size: 14, color: Colors.white),
+                  label: const Text('Open Dashboard', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0F4C81),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
               Text('City: ${req.memberCity}', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
             ],
           ),
@@ -811,5 +822,22 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> with Sing
         ],
       ),
     );
+  }
+
+  void _openMemberDashboard(ChitJoinRequest req) async {
+    setState(() => _isLoading = true);
+    final group = await SupabaseService.getChitGroupById(req.groupId);
+    setState(() => _isLoading = false);
+
+    if (group != null && mounted) {
+      showDialog(
+        context: context,
+        builder: (_) => GroupDetailsModal(
+          group: group,
+          isForeman: false,
+          currentUsername: _username,
+        ),
+      );
+    }
   }
 }

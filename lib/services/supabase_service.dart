@@ -409,6 +409,28 @@ class SupabaseService {
     return _mockGroups;
   }
 
+  /// Fetch a single chit group by ID
+  static Future<ChitGroup?> getChitGroupById(String id) async {
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        final response = await supaClient.from('chit_groups').select().eq('id', id).maybeSingle();
+        if (response != null) {
+          return ChitGroup.fromJson(response);
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase getChitGroupById error: $e');
+      }
+    }
+    try {
+      return _mockGroups.firstWhere((g) => g.id == id);
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Create a new chit group
   static Future<void> createChitGroup(ChitGroup group) async {
     // Add to in-memory list first
