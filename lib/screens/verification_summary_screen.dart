@@ -357,6 +357,8 @@ class VerificationSummaryScreen extends StatelessWidget {
               children: [
                 Text(
                   title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
@@ -366,6 +368,8 @@ class VerificationSummaryScreen extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                   subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 12,
                     color: Color(0xFF64748B),

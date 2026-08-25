@@ -54,14 +54,19 @@ class _ConsentScreenState extends State<ConsentScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          'KYC Consent',
-                          style: TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF0A2540),
+                        const Expanded(
+                          child: Text(
+                            'KYC Consent',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF0A2540),
+                            ),
                           ),
                         ),
+                        const SizedBox(width: 8),
                         StatusBadge(status: status, compact: true),
                       ],
                     ),

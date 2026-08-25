@@ -636,13 +636,26 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Subscriber Join Requests', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                        Text('Live streaming applicant requests submitted via 6-digit code.', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-                      ],
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Subscriber Join Requests',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                          ),
+                          Text(
+                            'Live streaming applicant requests submitted via 6-digit code.',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                          ),
+                        ],
+                      ),
                     ),
+                    const SizedBox(width: 8),
                     Chip(
                       label: Text('${_pendingRequests.length} Live Pending'),
                       backgroundColor: const Color(0xFFD97706),
@@ -761,7 +774,15 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: const [
-              Text('Cycle Group Health (Collected vs Expected):', style: TextStyle(color: Color(0xFFE2E8F0), fontSize: 12, fontWeight: FontWeight.w600)),
+              Expanded(
+                child: Text(
+                  'Cycle Group Health (Collected vs Expected):',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: Color(0xFFE2E8F0), fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+              ),
+              SizedBox(width: 8),
               Text('₹80,000 / ₹1,00,000 (80%)', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
             ],
           ),
@@ -795,7 +816,14 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('Member Default Risk Profiles', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
+            const Expanded(
+              child: Text(
+                'Member Default Risk Profiles',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81)),
+              ),
+            ),
             DropdownButton<String>(
               value: _selectedRiskFilter,
               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81)),
@@ -890,7 +918,12 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                     ],
                   ),
                   const SizedBox(height: 2),
-                  Text('Payout: ${member.payoutPosition} • Trend: ${member.paymentTrend}', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                  Text(
+                    'Payout: ${member.payoutPosition} • Trend: ${member.paymentTrend}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                  ),
                 ],
               ),
             ),
@@ -1018,8 +1051,18 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(req.memberName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                    Text('Requested: ${req.groupName} (Code: ${req.inviteCode})', style: const TextStyle(fontSize: 12, color: Color(0xFF007A87), fontWeight: FontWeight.bold)),
+                    Text(
+                      req.memberName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                    ),
+                    Text(
+                      'Requested: ${req.groupName} (Code: ${req.inviteCode})',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF007A87), fontWeight: FontWeight.bold),
+                    ),
                   ],
                 ),
               ),
@@ -1032,11 +1075,26 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
           ),
           const SizedBox(height: 10),
           Row(
-            children: [
-              Text('Phone: ${req.memberPhone}', style: const TextStyle(fontSize: 12, color: Color(0xFF475569))),
-              const Spacer(),
-              Text('City: ${req.memberCity}', style: const TextStyle(fontSize: 12, color: Color(0xFF475569))),
-            ],
+             children: [
+               Expanded(
+                 child: Text(
+                   'Phone: ${req.memberPhone}',
+                   maxLines: 1,
+                   overflow: TextOverflow.ellipsis,
+                   style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
+                 ),
+               ),
+               const SizedBox(width: 8),
+               Expanded(
+                 child: Text(
+                   'City: ${req.memberCity}',
+                   maxLines: 1,
+                   overflow: TextOverflow.ellipsis,
+                   textAlign: TextAlign.end,
+                   style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
+                 ),
+               ),
+             ],
           ),
           const SizedBox(height: 12),
           Row(
@@ -1280,8 +1338,18 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(group.name, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                      Text('6-Digit Code: ${group.inviteCode} • ${group.city}', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                      Text(
+                        group.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                      ),
+                      Text(
+                        '6-Digit Code: ${group.inviteCode} • ${group.city}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                      ),
                     ],
                   ),
                 ),
@@ -1300,11 +1368,25 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                 children: const [
                   Icon(Icons.calendar_today_rounded, size: 14, color: Color(0xFF007A87)),
                   SizedBox(width: 6),
-                  Text('Bidding/Draw: 1st of month', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-                  Spacer(),
+                  Expanded(
+                    child: Text(
+                      'Bidding: 1st/mo',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                    ),
+                  ),
+                  SizedBox(width: 6),
                   Icon(Icons.payment_rounded, size: 14, color: Color(0xFFD97706)),
                   SizedBox(width: 6),
-                  Text('Payment Due: 10th of month', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                  Expanded(
+                    child: Text(
+                      'Due: 10th/mo',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -1312,9 +1394,32 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Total Pool: ₹${group.totalPoolSize.toStringAsFixed(0)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Color(0xFFD97706))),
-                Text('Monthly: ₹${group.monthlyContribution.toStringAsFixed(0)}/mo', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Color(0xFF007A87))),
-                Text('Capacity: ${group.membersCount} Members', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
+                Expanded(
+                  child: Text(
+                    'Pool: ₹${group.totalPoolSize.toStringAsFixed(0)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Color(0xFFD97706)),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    'Monthly: ₹${group.monthlyContribution.toStringAsFixed(0)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Color(0xFF007A87)),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    'Size: ${group.membersCount} Mbrs',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF334155)),
+                  ),
+                ),
               ],
             ),
           ],

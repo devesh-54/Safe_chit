@@ -206,34 +206,41 @@ class _LiveBiddingRoomState extends State<LiveBiddingRoom> with SingleTickerProv
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 14,
-                  backgroundColor: isCurrentUser ? const Color(0xFF059669) : const Color(0xFF94A3B8),
-                  child: Text(
-                    bidderName.substring(0, 1).toUpperCase(),
-                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      bidderName + (isCurrentUser ? ' (You)' : ''),
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                        color: isCurrentUser ? const Color(0xFF065F46) : const Color(0xFF1E293B),
-                      ),
+            Expanded(
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 14,
+                    backgroundColor: isCurrentUser ? const Color(0xFF059669) : const Color(0xFF94A3B8),
+                    child: Text(
+                      bidderName.substring(0, 1).toUpperCase(),
+                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                     ),
-                    const SizedBox(height: 2),
-                    Text(timeStr, style: const TextStyle(fontSize: 10, color: Color(0xFF64748B))),
-                  ],
-                ),
-              ],
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          bidderName + (isCurrentUser ? ' (You)' : ''),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: isCurrentUser ? const Color(0xFF065F46) : const Color(0xFF1E293B),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(timeStr, style: const TextStyle(fontSize: 10, color: Color(0xFF64748B))),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
+            const SizedBox(width: 12),
             Text(
               '₹${amount.toStringAsFixed(0)}',
               style: TextStyle(
@@ -337,24 +344,30 @@ class _LiveBiddingRoomState extends State<LiveBiddingRoom> with SingleTickerProv
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('CURRENT HIGH BID DISCOUNT', style: TextStyle(color: Color(0xFFE2E8F0), fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
-                      const SizedBox(height: 4),
-                      Text('₹${leadingBid.toStringAsFixed(0)}', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900)),
-                      Text('By: $currentLeader', style: const TextStyle(color: Color(0xFFF59E0B), fontSize: 11, fontWeight: FontWeight.bold)),
-                    ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('CURRENT HIGH BID DISCOUNT', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Color(0xFFE2E8F0), fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                        const SizedBox(height: 4),
+                        Text('₹${leadingBid.toStringAsFixed(0)}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900)),
+                        Text('By: $currentLeader', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFFF59E0B), fontSize: 11, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   Container(height: 40, width: 1, color: Colors.white24),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      const Text('WINNER PAYOUT', style: TextStyle(color: Color(0xFFE2E8F0), fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
-                      const SizedBox(height: 4),
-                      Text('₹${takeHome.toStringAsFixed(0)}', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900)),
-                      Text('Dividend: +₹${dividend.toStringAsFixed(0)}/mbr', style: const TextStyle(color: Color(0xFF86EFAC), fontSize: 11, fontWeight: FontWeight.bold)),
-                    ],
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        const Text('WINNER PAYOUT', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Color(0xFFE2E8F0), fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                        const SizedBox(height: 4),
+                        Text('₹${takeHome.toStringAsFixed(0)}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900)),
+                        Text('Dividend: +₹${dividend.toStringAsFixed(0)}/mbr', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFF86EFAC), fontSize: 11, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
                   ),
                 ],
               ),

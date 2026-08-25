@@ -134,10 +134,14 @@ class _DigitalAgreementModalState extends State<DigitalAgreementModal> {
                     children: [
                       const Text(
                         'Legally Binding Digital Agreement',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
                       ),
                       Text(
                         'Chit Funds Act 1982 & BNS 2024 Compliant • ${widget.agreement.groupName}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontSize: 12, color: Color(0xFF007A87), fontWeight: FontWeight.w600),
                       ),
                     ],
@@ -232,6 +236,7 @@ class _DigitalAgreementModalState extends State<DigitalAgreementModal> {
                   Row(
                     children: [
                       Expanded(
+                        flex: 5,
                         child: TextField(
                           controller: _signatureNameController,
                           decoration: InputDecoration(
@@ -245,17 +250,25 @@ class _DigitalAgreementModalState extends State<DigitalAgreementModal> {
                         ),
                       ),
                       const SizedBox(width: 14),
-                      ElevatedButton.icon(
-                        onPressed: (_isSigning || !_hasAcceptedTerms) ? null : _executeDigitalSignature,
-                        icon: _isSigning
-                            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                            : const Icon(Icons.verified_rounded),
-                        label: const Text('Digitally Sign Agreement', style: TextStyle(fontWeight: FontWeight.bold)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0F4C81),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      Expanded(
+                        flex: 6,
+                        child: ElevatedButton.icon(
+                          onPressed: (_isSigning || !_hasAcceptedTerms) ? null : _executeDigitalSignature,
+                          icon: _isSigning
+                              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                              : const Icon(Icons.verified_rounded),
+                          label: const Text(
+                            'Digitally Sign Agreement',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0F4C81),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 18),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
                         ),
                       ),
                     ],

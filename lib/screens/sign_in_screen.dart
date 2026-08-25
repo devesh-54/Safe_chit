@@ -126,12 +126,16 @@ class _SignInScreenState extends State<SignInScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            const Text(
-              'Sign In',
-              style: TextStyle(
-                color: Color(0xFF0A2540),
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
+            const Expanded(
+              child: Text(
+                'Sign In',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Color(0xFF0A2540),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
               ),
             ),
           ],

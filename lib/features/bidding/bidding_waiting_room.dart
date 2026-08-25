@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'bidding_session_service.dart';
+
 
 class BiddingWaitingRoom extends StatefulWidget {
   final String groupId;
@@ -142,20 +142,24 @@ class _BiddingWaitingRoomState extends State<BiddingWaitingRoom> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              Column(
-                children: [
-                  const Text('DATE', style: TextStyle(fontSize: 10, color: Color(0xFF94A3B8), fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Text(dateStr, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
-                ],
+              Expanded(
+                child: Column(
+                  children: [
+                    const Text('DATE', style: TextStyle(fontSize: 10, color: Color(0xFF94A3B8), fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    Text(dateStr, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
+                  ],
+                ),
               ),
               Container(height: 24, width: 1, color: const Color(0xFFE2E8F0)),
-              Column(
-                children: [
-                  const Text('TIME', style: TextStyle(fontSize: 10, color: Color(0xFF94A3B8), fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Text(timeStr, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
-                ],
+              Expanded(
+                child: Column(
+                  children: [
+                    const Text('TIME', style: TextStyle(fontSize: 10, color: Color(0xFF94A3B8), fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    Text(timeStr, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
+                  ],
+                ),
               ),
             ],
           ),
