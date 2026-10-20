@@ -27,6 +27,8 @@ class ChitJoinRequest {
     required this.createdAt,
   });
 
+  bool get isApproved => status.toLowerCase() == 'approved';
+
   factory ChitJoinRequest.fromJson(Map<String, dynamic> json) {
     return ChitJoinRequest(
       id: json['id'] as String? ?? 'req_${DateTime.now().millisecondsSinceEpoch}',

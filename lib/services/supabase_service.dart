@@ -4,6 +4,7 @@ import '../models/chit_group.dart';
 import '../models/member_risk.dart';
 import '../models/chit_join_request.dart';
 import '../models/digital_agreement.dart';
+import '../models/chit_payment_record.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -258,32 +259,80 @@ class SupabaseService {
   }
 
   // In-memory fallback tables for chit groups and members
+  static String _currentForemanUpiId = 'devesh1@oksbi';
+  static String get foremanUpiId => _currentForemanUpiId;
+  static set foremanUpiId(String vpa) => _currentForemanUpiId = vpa.trim();
+
+  /// Updates the Foreman receiving UPI ID across Supabase, in-memory state and groups
+  static Future<bool> updateForemanUpiId(String newUpiId, {String? groupId}) async {
+    final cleanUpi = newUpiId.trim();
+    _currentForemanUpiId = cleanUpi;
+    if (groupId != null) {
+      final index = _mockGroups.indexWhere((g) => g.id == groupId);
+      if (index != -1) {
+        _mockGroups[index] = _mockGroups[index].copyWith(foremanUpiId: _currentForemanUpiId);
+      }
+    } else {
+      for (int i = 0; i < _mockGroups.length; i++) {
+        _mockGroups[i] = _mockGroups[i].copyWith(foremanUpiId: _currentForemanUpiId);
+      }
+    }
+
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        if (groupId != null) {
+          await supaClient.from('chit_groups').update({
+            'foreman_upi_id': cleanUpi,
+          }).eq('id', groupId);
+        } else {
+          // Update all chit groups if no single group is specified
+          await supaClient.from('chit_groups').update({
+            'foreman_upi_id': cleanUpi,
+          }).neq('id', '');
+        }
+        if (kDebugMode) {
+          print('✅ Supabase: Updated foreman_upi_id to $cleanUpi');
+        }
+        return true;
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase updateForemanUpiId error: $e');
+      }
+    }
+    return false;
+  }
+
+
   static final List<ChitGroup> _mockGroups = [
     const ChitGroup(
       id: 'group_1',
-      name: 'Koramangala Professional Chit',
-      totalPoolSize: 1000000.0,
-      durationMonths: 10,
-      monthlyContribution: 10000.0,
-      securityDeposit: 20000.0,
-      payoutRules: 'Bidding starts at 20% discount. Minimum bid increment ₹1,000.',
+      name: 'Koramangala Testing Chit (₹5 Pool)',
+      totalPoolSize: 5.0,
+      durationMonths: 5,
+      monthlyContribution: 1.0,
+      securityDeposit: 1.0,
+      payoutRules: 'Bidding starts at 20% discount. Minimum bid increment ₹0.10.',
       inviteCode: 'CG-KORA-982',
       status: 'Active',
-      currentCycle: 4,
-      membersCount: 10,
+      currentCycle: 1,
+      membersCount: 5,
+      foremanUpiId: 'devesh1@oksbi',
     ),
     const ChitGroup(
       id: 'group_2',
-      name: 'Indiranagar Business Pool',
-      totalPoolSize: 2500000.0,
-      durationMonths: 20,
-      monthlyContribution: 12500.0,
-      securityDeposit: 50000.0,
-      payoutRules: 'Fixed payout at Month 5 and Month 10. Bidding for other months.',
+      name: 'Indiranagar Quick Pool (₹5 Pool)',
+      totalPoolSize: 5.0,
+      durationMonths: 5,
+      monthlyContribution: 1.0,
+      securityDeposit: 1.0,
+      payoutRules: 'Fixed payout at Month 2 and Month 4. Bidding for other months.',
       inviteCode: 'CG-INDI-401',
       status: 'Active',
-      currentCycle: 8,
-      membersCount: 20,
+      currentCycle: 1,
+      membersCount: 5,
+      foremanUpiId: 'devesh1@oksbi',
     ),
   ];
 
@@ -296,7 +345,7 @@ class SupabaseService {
       payoutPosition: 'Paid (Month 2)',
       paymentTrend: 'Delayed 3x',
       guarantorStatus: 'None',
-      amountExposed: 200000.0,
+      amountExposed: 2.0,
       hasDefaulted: true,
       lastPaymentDate: DateTime.now().subtract(const Duration(days: 15)),
       phone: '+91 98765 43210',
@@ -309,7 +358,7 @@ class SupabaseService {
       payoutPosition: 'Paid (Month 3)',
       paymentTrend: 'Delayed 1x',
       guarantorStatus: 'Pending (1 guarantor)',
-      amountExposed: 150000.0,
+      amountExposed: 1.0,
       hasDefaulted: false,
       lastPaymentDate: DateTime.now().subtract(const Duration(days: 5)),
       phone: '+91 87654 32109',
@@ -348,7 +397,7 @@ class SupabaseService {
       payoutPosition: 'Paid (Month 1)',
       paymentTrend: 'Delayed 4x',
       guarantorStatus: 'None',
-      amountExposed: 350000.0,
+      amountExposed: 3.0,
       hasDefaulted: true,
       lastPaymentDate: DateTime.now().subtract(const Duration(days: 22)),
       phone: '+91 95432 87654',
@@ -434,12 +483,26 @@ class SupabaseService {
   /// Create a new chit group
   static Future<void> createChitGroup(ChitGroup group) async {
     // Add to in-memory list first
-    _mockGroups.add(group);
+    if (!_mockGroups.any((g) => g.id == group.id)) {
+      _mockGroups.add(group);
+    }
     
     try {
       final supaClient = client;
       if (supaClient != null) {
-        await supaClient.from('chit_groups').insert(group.toJson());
+        final groupJson = group.toJson();
+        try {
+          await supaClient.from('chit_groups').insert(groupJson);
+        } catch (insertError) {
+          // If foreman_upi_id column is not yet created in Supabase schema, insert without it
+          if (insertError.toString().contains('foreman_upi_id') ||
+              insertError.toString().contains('PGRST204')) {
+            groupJson.remove('foreman_upi_id');
+            await supaClient.from('chit_groups').insert(groupJson);
+          } else {
+            rethrow;
+          }
+        }
       }
     } catch (e) {
       if (kDebugMode) {
@@ -875,7 +938,7 @@ class SupabaseService {
             .eq('member_username', cleanUser)
             .maybeSingle();
         if (data != null) {
-          return DigitalAgreement.fromJson(data as Map<String, dynamic>);
+          return DigitalAgreement.fromJson(data);
         }
       }
     } catch (e) {
@@ -955,5 +1018,197 @@ class SupabaseService {
       }
     }
     return true;
+  }
+
+  // ==========================================
+  // CHIT INSTALLMENT & PAYMENT LEDGER METHODS
+  // ==========================================
+
+  static final List<ChitPaymentRecord> _mockPayments = [
+    ChitPaymentRecord(
+      id: 'pay_demo_001',
+      groupId: 'group_1',
+      groupName: 'Indiranagar Traders Chit',
+      cycle: 1,
+      memberUsername: 'member_demo',
+      memberName: 'Demo Member',
+      amount: 5000.0,
+      amountPaise: 500000,
+      paymentMethod: 'UPI',
+      status: 'PAID',
+      utr: '429182749102',
+      paymentSessionId: 'youpi_sess_001',
+      payeeVpa: 'safechit.foreman@upi',
+      payeeName: 'Rajesh Kumar (Foreman)',
+      createdAt: DateTime.now().subtract(const Duration(days: 2)),
+      completedAt: DateTime.now().subtract(const Duration(days: 2, minutes: 2)),
+      notes: 'Cycle 1 Monthly Installment Paid via Google Pay',
+    ),
+  ];
+
+  /// Records a new payment session or initiated payment in Supabase & memory
+  static Future<bool> recordPayment(ChitPaymentRecord payment) async {
+    _mockPayments.removeWhere((p) => p.id == payment.id);
+    _mockPayments.insert(0, payment);
+
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        await supaClient.from('chit_payments').upsert(payment.toMap());
+        return true;
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase recordPayment fallback: $e');
+      }
+    }
+    return true;
+  }
+
+  /// Retrieves all payments for a given Chit Group
+  static Future<List<ChitPaymentRecord>> getGroupPayments(String groupId) async {
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        final response = await supaClient
+            .from('chit_payments')
+            .select()
+            .eq('group_id', groupId)
+            .order('created_at', ascending: false);
+
+        if (response.isNotEmpty) {
+          return response.map((row) => ChitPaymentRecord.fromMap(row)).toList();
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase getGroupPayments fallback: $e');
+      }
+    }
+
+    return _mockPayments.where((p) => p.groupId == groupId).toList();
+  }
+
+  /// Retrieves all payments for a specific subscriber member
+  static Future<List<ChitPaymentRecord>> getMemberPayments(String memberUsername) async {
+    final cleanUser = memberUsername.trim().toLowerCase();
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        final response = await supaClient
+            .from('chit_payments')
+            .select()
+            .eq('member_username', cleanUser)
+            .order('created_at', ascending: false);
+
+        if (response.isNotEmpty) {
+          return response.map((row) => ChitPaymentRecord.fromMap(row)).toList();
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase getMemberPayments fallback: $e');
+      }
+    }
+
+    return _mockPayments.where((p) => p.memberUsername.toLowerCase() == cleanUser || cleanUser == 'demo').toList();
+  }
+
+  /// Updates an active payment to terminal status (PAID, FAILED, EXPIRED)
+  static Future<bool> updatePaymentStatus({
+    required String paymentId,
+    required String status,
+    String? utr,
+    DateTime? completedAt,
+  }) async {
+    final idx = _mockPayments.indexWhere((p) => p.id == paymentId);
+    if (idx != -1) {
+      final current = _mockPayments[idx];
+      _mockPayments[idx] = current.copyWith(
+        status: status,
+        utr: utr ?? current.utr,
+        completedAt: completedAt ?? DateTime.now(),
+      );
+    }
+
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        await supaClient.from('chit_payments').update({
+          'status': status,
+          if (utr != null) 'utr': utr,
+          'completed_at': (completedAt ?? DateTime.now()).toIso8601String(),
+        }).eq('id', paymentId);
+        return true;
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase updatePaymentStatus fallback: $e');
+      }
+    }
+    return true;
+  }
+
+  /// Foreman manual confirmation for in-person cash payments (CASH_COUNTER)
+  static Future<bool> confirmCashPayment({
+    required String paymentId,
+    required String foremanUsername,
+    String? notes,
+  }) async {
+    final now = DateTime.now();
+    final idx = _mockPayments.indexWhere((p) => p.id == paymentId);
+    if (idx != -1) {
+      final current = _mockPayments[idx];
+      _mockPayments[idx] = current.copyWith(
+        status: 'PAID',
+        paymentMethod: 'CASH_COUNTER',
+        completedAt: now,
+        notes: notes ?? 'Cash payment confirmed by Foreman ($foremanUsername)',
+      );
+    }
+
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        await supaClient.from('chit_payments').update({
+          'status': 'PAID',
+          'payment_method': 'CASH_COUNTER',
+          'completed_at': now.toIso8601String(),
+          'notes': notes ?? 'Cash payment confirmed by Foreman ($foremanUsername)',
+        }).eq('id', paymentId);
+        return true;
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase confirmCashPayment fallback: $e');
+      }
+    }
+    return true;
+  }
+
+  /// Find single payment by ID
+  static Future<ChitPaymentRecord?> getPaymentById(String paymentId) async {
+    final found = _mockPayments.where((p) => p.id == paymentId).toList();
+    if (found.isNotEmpty) return found.first;
+
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        final response = await supaClient
+            .from('chit_payments')
+            .select()
+            .eq('id', paymentId)
+            .maybeSingle();
+
+        if (response != null) {
+          return ChitPaymentRecord.fromMap(response);
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase getPaymentById fallback: $e');
+      }
+    }
+    return null;
   }
 }

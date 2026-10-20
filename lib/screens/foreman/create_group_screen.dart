@@ -21,11 +21,12 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _payoutRulesController = TextEditingController();
+  final _upiController = TextEditingController(text: SupabaseService.foremanUpiId);
 
-  double _totalPoolSize = 1000000; // default ₹10 Lakhs
-  int _durationMonths = 10; // default 10 months
-  int _targetMembers = 10; // default 10 members
-  double _securityDeposit = 25000; // default ₹25k
+  double _totalPoolSize = 5; // default ₹5 (test mode)
+  int _durationMonths = 5; // default 5 months (₹1/month)
+  int _targetMembers = 5; // default 5 members
+  double _securityDeposit = 1; // default ₹1
   String _schemeType = 'Bidding'; // 'Bidding' or 'Random Picking'
   bool _isPublic = true; // Listed in public discovery marketplace
 
@@ -36,6 +37,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
   void dispose() {
     _nameController.dispose();
     _payoutRulesController.dispose();
+    _upiController.dispose();
     super.dispose();
   }
 
@@ -90,6 +92,11 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
           agreement: agreement,
           isForeman: true,
           onSigned: () async {
+            final upiId = _upiController.text.trim().isNotEmpty
+                ? _upiController.text.trim()
+                : SupabaseService.foremanUpiId;
+            await SupabaseService.updateForemanUpiId(upiId, groupId: groupId);
+
             final newGroup = ChitGroup(
               id: groupId,
               name: _nameController.text.trim(),
@@ -106,6 +113,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
               membersCount: _targetMembers,
               schemeType: _schemeType,
               isPublic: _isPublic,
+              foremanUpiId: upiId,
             );
 
             await SupabaseService.createChitGroup(newGroup);
@@ -239,6 +247,34 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                           validator: (value) {
                             if (value == null || value.trim().isEmpty) {
                               return 'Please enter a group name';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Foreman Receiving UPI ID (VPA)
+                        const Text(
+                          'Foreman Receiving UPI ID (VPA) *',
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81)),
+                        ),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: _upiController,
+                          decoration: InputDecoration(
+                            hintText: 'e.g. devesh1@oksbi',
+                            prefixIcon: const Icon(Icons.alternate_email_rounded, color: Color(0xFF0F4C81), size: 20),
+                            helperText: 'Subscribers will transfer monthly contributions directly to this UPI address.',
+                            filled: true,
+                            fillColor: const Color(0xFFF8FAFC),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Please enter receiving UPI ID';
+                            }
+                            if (!value.contains('@')) {
+                              return 'Please enter a valid UPI ID (e.g. devesh1@oksbi)';
                             }
                             return null;
                           },
@@ -388,16 +424,47 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                           children: [
                             const Text('Total Chit Pool (₹)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
                             Text(
-                              '₹${_totalPoolSize.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}',
+                              _totalPoolSize < 10
+                                  ? '₹${_totalPoolSize.toStringAsFixed(2)}'
+                                  : '₹${_totalPoolSize.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}',
                               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFFD97706)),
                             ),
                           ],
                         ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
+                          children: [
+                            ActionChip(
+                              avatar: const Icon(Icons.science_rounded, size: 16, color: Color(0xFFD97706)),
+                              label: const Text('🧪 Quick Test: ₹5 Pool (₹1/mo)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                              backgroundColor: _totalPoolSize == 5 ? const Color(0xFFFEF3C7) : const Color(0xFFF1F5F9),
+                              onPressed: () {
+                                setState(() {
+                                  _totalPoolSize = 5;
+                                  _durationMonths = 5;
+                                  _targetMembers = 5;
+                                  _securityDeposit = 1;
+                                });
+                              },
+                            ),
+                            ActionChip(
+                              label: const Text('₹50,000 Pool', style: TextStyle(fontSize: 11)),
+                              onPressed: () => setState(() => _totalPoolSize = 50000),
+                            ),
+                            ActionChip(
+                              label: const Text('₹1,00,000 Pool', style: TextStyle(fontSize: 11)),
+                              onPressed: () => setState(() => _totalPoolSize = 100000),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
                         Slider(
-                          value: _totalPoolSize,
-                          min: 100000,
+                          value: _totalPoolSize.clamp(5, 5000000),
+                          min: 5,
                           max: 5000000,
-                          divisions: 49,
+                          divisions: 100,
                           activeColor: const Color(0xFF007A87),
                           onChanged: (val) => setState(() => _totalPoolSize = val),
                         ),
@@ -444,14 +511,19 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             const Text('Security Deposit (₹)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
-                            Text('₹${_securityDeposit.toStringAsFixed(0)}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFFD97706))),
+                            Text(
+                              _securityDeposit < 10
+                                  ? '₹${_securityDeposit.toStringAsFixed(2)}'
+                                  : '₹${_securityDeposit.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}',
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFFD97706)),
+                            ),
                           ],
                         ),
                         Slider(
-                          value: _securityDeposit,
-                          min: 10000,
+                          value: _securityDeposit.clamp(0.0, 200000.0),
+                          min: 0,
                           max: 200000,
-                          divisions: 19,
+                          divisions: 200,
                           activeColor: const Color(0xFF007A87),
                           onChanged: (val) => setState(() => _securityDeposit = val),
                         ),

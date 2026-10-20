@@ -222,11 +222,18 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
               Text('Handshake verified for ${p["memberName"]}\nAmount: ₹${(p["amount"] as double).toStringAsFixed(0)}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
               const SizedBox(height: 20),
               ElevatedButton(
-                onPressed: () {
+                onPressed: () async {
+                  await SupabaseService.confirmCashPayment(
+                    paymentId: p['id'].toString(),
+                    foremanUsername: 'foreman_admin',
+                    notes: 'Confirmed in-person cash payment by Foreman',
+                  );
                   setState(() {
                     _pendingPayments.removeWhere((item) => item['id'] == p['id']);
                   });
-                  Navigator.pop(context);
+                  if (mounted) {
+                    Navigator.pop(context);
+                  }
                 },
                 style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF007A87), foregroundColor: Colors.white),
                 child: const Text('Done'),
@@ -276,6 +283,238 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _showConfigureForemanUpiDialog() {
+    final currentUpi = _selectedGroup?.foremanUpiId ?? SupabaseService.foremanUpiId;
+    final controller = TextEditingController(text: currentUpi);
+    String? errorText;
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDCFCE7),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.account_balance_wallet_rounded, color: Color(0xFF16A34A), size: 22),
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    'Configure Receiving UPI ID',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                  ),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Enter your receiving UPI ID (VPA) where subscribers transfer chit installments. Member UPI app payments and QR scans will direct to this account.',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.4),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: controller,
+                  decoration: InputDecoration(
+                    labelText: 'Foreman UPI ID (VPA)',
+                    hintText: 'e.g. devesh1@oksbi',
+                    prefixIcon: const Icon(Icons.alternate_email_rounded, size: 20, color: Color(0xFF0F4C81)),
+                    errorText: errorText,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    filled: true,
+                    fillColor: const Color(0xFFF8FAFC),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Quick suggestions:',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  children: [
+                    ActionChip(
+                      label: const Text('devesh1@oksbi', style: TextStyle(fontSize: 11)),
+                      onPressed: () => setDialogState(() {
+                        controller.text = 'devesh1@oksbi';
+                        errorText = null;
+                      }),
+                    ),
+                    ActionChip(
+                      label: const Text('foreman1@oksbi', style: TextStyle(fontSize: 11)),
+                      onPressed: () => setDialogState(() {
+                        controller.text = 'foreman1@oksbi';
+                        errorText = null;
+                      }),
+                    ),
+                    ActionChip(
+                      label: const Text('safechit@oksbi', style: TextStyle(fontSize: 11)),
+                      onPressed: () => setDialogState(() {
+                        controller.text = 'safechit@oksbi';
+                        errorText = null;
+                      }),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogCtx),
+                child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+              ),
+              ElevatedButton.icon(
+                onPressed: () async {
+                  final newVpa = controller.text.trim();
+                  if (newVpa.isEmpty || !newVpa.contains('@')) {
+                    setDialogState(() {
+                      errorText = 'Please enter a valid UPI ID (e.g. devesh1@oksbi)';
+                    });
+                    return;
+                  }
+
+                  Navigator.pop(dialogCtx);
+
+                  setState(() {
+                    if (_selectedGroup != null) {
+                      _selectedGroup = _selectedGroup!.copyWith(foremanUpiId: newVpa);
+                    }
+                  });
+
+                  await SupabaseService.updateForemanUpiId(newVpa, groupId: _selectedGroup?.id);
+                  _loadDashboardData();
+
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('✅ Receiving UPI ID updated to $newVpa! Member payments will direct to this account.'),
+                        backgroundColor: const Color(0xFF16A34A),
+                        duration: const Duration(seconds: 4),
+                      ),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.check_circle_rounded, size: 16),
+                label: const Text('Save UPI ID'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0F4C81),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildForemanUpiCard() {
+    final upiId = _selectedGroup?.foremanUpiId ?? SupabaseService.foremanUpiId;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFDCFCE7),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.account_balance_wallet_rounded, color: Color(0xFF16A34A), size: 24),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Text(
+                      'RECEIVING UPI VPA',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF64748B),
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFDCFCE7),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        'Verified P2P',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF166534),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  upiId,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                const Text(
+                  'Member monthly installments transfer directly to this UPI address for instant verification.',
+                  style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          ElevatedButton.icon(
+            onPressed: _showConfigureForemanUpiDialog,
+            icon: const Icon(Icons.edit_rounded, size: 14),
+            label: const Text('Edit UPI'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0F4C81),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -349,6 +588,11 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.qr_code_2_rounded),
+            tooltip: 'Configure Receiving UPI ID',
+            onPressed: _showConfigureForemanUpiDialog,
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () {
@@ -586,6 +830,8 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
               children: [
                 if (_groups.isNotEmpty) ...[
                   _buildGroupSelector(),
+                  const SizedBox(height: 14),
+                  _buildForemanUpiCard(),
                   const SizedBox(height: 20),
                   
                   // SECTION 1: EXPOSURE SUMMARY CARD
@@ -1165,9 +1411,47 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Monthly: ₹${g.monthlyContribution.toStringAsFixed(0)}/mo', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                Text(
+                  g.monthlyContribution < 10
+                      ? 'Monthly: ₹${g.monthlyContribution.toStringAsFixed(2)}/mo'
+                      : 'Monthly: ₹${g.monthlyContribution.toStringAsFixed(0)}/mo',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                ),
                 Text('Length: ${g.durationMonths} Mos', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                Text('Deposit: ₹${g.securityDeposit.toStringAsFixed(0)}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF007A87))),
+                Text(
+                  g.securityDeposit < 10
+                      ? 'Deposit: ₹${g.securityDeposit.toStringAsFixed(2)}'
+                      : 'Deposit: ₹${g.securityDeposit.toStringAsFixed(0)}',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF007A87)),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0FDF4),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFBBF7D0)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.qr_code_rounded, size: 20, color: Color(0xFF16A34A)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Receiving UPI ID (VPA):', style: TextStyle(fontSize: 10, color: Color(0xFF64748B))),
+                      Text(g.foremanUpiId, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF14532D))),
+                    ],
+                  ),
+                ),
+                TextButton(
+                  onPressed: _showConfigureForemanUpiDialog,
+                  child: const Text('Change', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                ),
               ],
             ),
           ),
@@ -1396,7 +1680,9 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
               children: [
                 Expanded(
                   child: Text(
-                    'Pool: ₹${group.totalPoolSize.toStringAsFixed(0)}',
+                    group.totalPoolSize < 10
+                        ? 'Pool: ₹${group.totalPoolSize.toStringAsFixed(2)}'
+                        : 'Pool: ₹${group.totalPoolSize.toStringAsFixed(0)}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Color(0xFFD97706)),
@@ -1405,7 +1691,9 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
-                    'Monthly: ₹${group.monthlyContribution.toStringAsFixed(0)}',
+                    group.monthlyContribution < 10
+                        ? 'Monthly: ₹${group.monthlyContribution.toStringAsFixed(2)}'
+                        : 'Monthly: ₹${group.monthlyContribution.toStringAsFixed(0)}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Color(0xFF007A87)),
@@ -1418,6 +1706,21 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF334155)),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.alternate_email_rounded, size: 12, color: Color(0xFF16A34A)),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    'Receiving UPI: ${group.foremanUpiId}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF166534)),
                   ),
                 ),
               ],
