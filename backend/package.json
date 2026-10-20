@@ -1,0 +1,16 @@
+{
+  "name": "safechit-backend",
+  "version": "1.0.0",
+  "description": "SafeChit Backend & YouPI Payment Webhook Server",
+  "main": "youpi_webhook_handler.js",
+  "type": "module",
+  "scripts": {
+    "start": "node youpi_webhook_handler.js",
+    "dev": "node --watch youpi_webhook_handler.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.43.4",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  }
+}

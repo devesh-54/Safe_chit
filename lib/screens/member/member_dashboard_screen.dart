@@ -6,6 +6,7 @@ import '../../models/digital_agreement.dart';
 import '../../services/supabase_service.dart';
 import '../common/digital_agreement_modal.dart';
 import '../common/group_details_modal.dart';
+import '../../widgets/youpi_payment_modal.dart';
 
 class MemberDashboardScreen extends StatefulWidget {
   final OnboardingState? state;
@@ -102,11 +103,11 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
       groupName: req.groupName,
       foremanName: 'Rajesh Kumar (Foreman)',
       memberName: req.memberName,
-      poolAmount: 1000000.0, // fallback pool representation
-      durationMonths: 10,
-      monthlyContribution: 100000.0,
+      poolAmount: 5.0, // fallback pool representation
+      durationMonths: 5,
+      monthlyContribution: 1.0,
       schemeType: 'Bidding',
-      securityDeposit: 100000.0,
+      securityDeposit: 1.0,
     );
 
     var agreement = await SupabaseService.getDigitalAgreement(
@@ -122,9 +123,9 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
       foremanName: 'Rajesh Kumar (Foreman)',
       memberUsername: _username,
       memberName: req.memberName,
-      poolAmount: 1000000.0,
-      durationMonths: 10,
-      monthlyContribution: 100000.0,
+      poolAmount: 5.0,
+      durationMonths: 5,
+      monthlyContribution: 1.0,
       schemeType: 'Bidding',
       agreementText: agreementText,
       createdAt: DateTime.now(),
@@ -614,9 +615,118 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                   ],
                 ),
               ),
+              const SizedBox(height: 20),
+              _buildUpcomingDuesCard(),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildUpcomingDuesCard() {
+    final approvedGroups = _myRequests.where((r) => r.isApproved).toList();
+    if (approvedGroups.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 6, offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: const [
+              Icon(Icons.payment_rounded, color: Color(0xFF0F4C81), size: 22),
+              SizedBox(width: 8),
+              Text(
+                'Upcoming Monthly Installments',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Instant 0% fee P2P UPI payments directly to Foreman Escrow account.',
+            style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+          ),
+          const SizedBox(height: 16),
+          ...approvedGroups.map((req) {
+            return FutureBuilder<ChitGroup?>(
+              future: SupabaseService.getChitGroupById(req.groupId),
+              builder: (context, snapshot) {
+                final group = snapshot.data;
+                final amount = group?.monthlyContribution ?? 1.0;
+                final cycle = (group?.currentCycle ?? 0) + 1;
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(req.groupName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1E293B))),
+                            const SizedBox(height: 2),
+                            Text('Due Date: 10th of this month • Cycle $cycle', style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                            const SizedBox(height: 4),
+                            Text(
+                              amount < 10 ? '₹${amount.toStringAsFixed(2)}' : '₹${amount.toStringAsFixed(0)}',
+                              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFF0F4C81)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          if (group != null && mounted) {
+                            YoupiPaymentModal.show(
+                              context: context,
+                              group: group,
+                              currentUsername: _username,
+                              onPaymentSuccess: () {
+                                _loadMemberData();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('🎉 Monthly installment verified and recorded in SafeChit ledger!'),
+                                    backgroundColor: Color(0xFF16A34A),
+                                  ),
+                                );
+                              },
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.flash_on_rounded, size: 16),
+                        label: const Text('Pay via UPI'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF16A34A),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          }),
+        ],
       ),
     );
   }

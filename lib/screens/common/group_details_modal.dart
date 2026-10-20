@@ -12,6 +12,8 @@ import '../../features/bidding/host_schedule_screen.dart';
 import '../../features/bidding/bidding_waiting_room.dart';
 import '../../features/bidding/live_bidding_room.dart';
 import '../../features/bidding/auction_close_payout.dart';
+import '../../widgets/youpi_payment_modal.dart';
+import '../../models/chit_payment_record.dart';
 
 class GroupDetailsModal extends StatefulWidget {
   final ChitGroup group;
@@ -217,12 +219,20 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
   }
 
   void _makeMonthlyPayment() {
-    final amount = widget.group.monthlyContribution;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('🎉 Handshake Payment of ₹${amount.toStringAsFixed(0)} sent to Foreman for confirmation!'),
-        backgroundColor: const Color(0xFF007A87),
-      ),
+    YoupiPaymentModal.show(
+      context: context,
+      group: widget.group,
+      currentUsername: widget.currentUsername,
+      onPaymentSuccess: () {
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🎉 Monthly installment verified and recorded in SafeChit ledger!'),
+            backgroundColor: Color(0xFF16A34A),
+            duration: Duration(seconds: 4),
+          ),
+        );
+      },
     );
   }
 
@@ -433,7 +443,9 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '₹${g.monthlyContribution.toStringAsFixed(0)}',
+                          g.monthlyContribution < 10
+                              ? '₹${g.monthlyContribution.toStringAsFixed(2)}'
+                              : '₹${g.monthlyContribution.toStringAsFixed(0)}',
                           overflow: TextOverflow.ellipsis,
                           maxLines: 1,
                           style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900),
@@ -779,6 +791,27 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                   child: Text(
                     'Deposit held in escrow: ₹${g.securityDeposit.toStringAsFixed(0)}\n(Refundable security amount released upon successful completion)',
                     style: const TextStyle(color: Color(0xFF065F46), fontSize: 11, height: 1.35, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0FDF4),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFBBF7D0)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.qr_code_2_rounded, color: Color(0xFF15803D), size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Foreman Receiving UPI ID: ${g.foremanUpiId}\nInstallments transfer directly to this VPA.',
+                    style: const TextStyle(color: Color(0xFF166534), fontSize: 11, height: 1.35, fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
@@ -1414,8 +1447,9 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                         Expanded(
                           child: ElevatedButton(
                             onPressed: () {
+                              final minBid = g.totalPoolSize * 0.05;
                               final maxCap = g.totalPoolSize * 0.30;
-                              BiddingSessionService.instance.startAuction(g.id, 50000.0, maxCap);
+                              BiddingSessionService.instance.startAuction(g.id, minBid, maxCap);
                             },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF0F4C81),
@@ -1640,46 +1674,132 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
     );
   }
 
-  // --- TAB 3: PAYOUT LEDGER ---
+  // --- TAB 3: PAYOUT & INSTALLMENT LEDGER ---
   Widget _buildPayoutLedgerTab(ChitGroup g) {
-    return ListView.builder(
-      itemCount: _ledgerHistory.length,
-      itemBuilder: (context, index) {
-        final item = _ledgerHistory[index];
-        return Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Cycle ${item["cycle"]} Ledger Entry', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F4C81))),
-                  Chip(
-                    label: Text('${item["status"]}'),
-                    backgroundColor: const Color(0xFF007A87),
-                    labelStyle: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+    return FutureBuilder<List<ChitPaymentRecord>>(
+      future: SupabaseService.getGroupPayments(g.id),
+      builder: (context, snapshot) {
+        final payments = snapshot.data ?? [];
+        return ListView(
+          children: [
+            // Section 1: Recent Auction Payouts
+            if (_ledgerHistory.isNotEmpty) ...[
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text('Auction Winning Payouts & Dividends', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF64748B))),
+              ),
+              ..._ledgerHistory.map((item) {
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
                   ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Text('Winner: ${item["winner"]}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                  const Spacer(),
-                  Text('Payout: ₹${(item["payoutAmount"] as double).toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFFD97706))),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text('Date: ${item["date"]} • Member Dividend: ₹${(item["dividendPerMember"] as double).toStringAsFixed(0)}/user', style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Cycle ${item["cycle"]} Ledger Entry', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F4C81))),
+                          Chip(
+                            label: Text('${item["status"]}'),
+                            backgroundColor: const Color(0xFF007A87),
+                            labelStyle: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Text('Winner: ${item["winner"]}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          const Spacer(),
+                          Text('Payout: ₹${(item["payoutAmount"] as double).toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFFD97706))),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text('Date: ${item["date"]} • Member Dividend: ₹${(item["dividendPerMember"] as double).toStringAsFixed(0)}/user', style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                    ],
+                  ),
+                );
+              }),
             ],
-          ),
+
+            // Section 2: Verified Member Installment Collections (YouPI & Cash)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Text('Verified Subscriber Installments (YouPI & Cash)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF64748B))),
+            ),
+            if (payments.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12)),
+                child: const Center(
+                  child: Text('No installment collections recorded yet.', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                ),
+              )
+            else
+              ...payments.map((p) {
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: p.isPaid ? const Color(0xFFBBF7D0) : const Color(0xFFE2E8F0)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: p.isPaid ? const Color(0xFFDCFCE7) : const Color(0xFFFEF3C7),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          p.isPaid ? Icons.check_circle_rounded : Icons.pending_rounded,
+                          color: p.isPaid ? const Color(0xFF16A34A) : const Color(0xFFD97706),
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(p.memberName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                            Text('UTR: ${p.utr ?? "Pending verification"} • ${p.paymentMethod}', style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                          ],
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text('₹${p.amount.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: Color(0xFF15803D))),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: p.isPaid ? const Color(0xFFDCFCE7) : const Color(0xFFFEF3C7),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              p.status,
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: p.isPaid ? const Color(0xFF166534) : const Color(0xFF92400E),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              }),
+          ],
         );
       },
     );
