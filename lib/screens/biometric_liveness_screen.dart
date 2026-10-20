@@ -722,9 +722,13 @@ class _BiometricLivenessScreenState extends State<BiometricLivenessScreen> with 
         children: [
           const Icon(Icons.check_circle_outline, color: Color(0xFF10B981), size: 16),
           const SizedBox(width: 8),
-          Text(
-            text,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF374151)),
+          Expanded(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF374151)),
+            ),
           ),
         ],
       ),
