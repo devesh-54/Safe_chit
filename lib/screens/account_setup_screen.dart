@@ -495,14 +495,19 @@ class _AccountSetupScreenState extends State<AccountSetupScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF334155),
+        Expanded(
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF334155),
+            ),
           ),
         ),
+        const SizedBox(width: 8),
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 300),
           child: isVerified

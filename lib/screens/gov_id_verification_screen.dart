@@ -336,14 +336,19 @@ class _GovIdVerificationScreenState extends State<GovIdVerificationScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          'Government ID',
-                          style: TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF0A2540),
+                        const Expanded(
+                          child: Text(
+                            'Government ID',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF0A2540),
+                            ),
                           ),
                         ),
+                        const SizedBox(width: 8),
                         StatusBadge(status: status, compact: true),
                       ],
                     ),
@@ -822,12 +827,16 @@ class _GovIdVerificationScreenState extends State<GovIdVerificationScreen> {
                           children: [
                             Icon(Icons.check_circle_rounded, color: Color(0xFF059669)),
                             SizedBox(width: 12),
-                            Text(
-                              'Identity validation successful!',
-                              style: TextStyle(
-                                color: Color(0xFF065F46),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
+                            Expanded(
+                              child: Text(
+                                'Identity validation successful!',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Color(0xFF065F46),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
                               ),
                             ),
                           ],

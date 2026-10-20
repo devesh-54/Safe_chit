@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import '../models/onboarding_state.dart';
 import '../services/supabase_service.dart';
+import 'foreman/foreman_dashboard_screen.dart';
+import 'member/member_dashboard_screen.dart';
 
 class SignInScreen extends StatefulWidget {
   final VoidCallback onStartSignUp;
@@ -61,7 +64,27 @@ class _SignInScreenState extends State<SignInScreen> {
           ),
         );
 
-        widget.onBackToLanding();
+        final role = await SupabaseService.getUserRole(username);
+        if (!mounted) return;
+
+        if (role == UserRole.host) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => const ForemanDashboardScreen(),
+            ),
+          );
+        } else {
+          final state = OnboardingState();
+          state.setCredentials(username, 'member123');
+          state.selectRole(UserRole.member);
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => MemberDashboardScreen(
+                state: state,
+              ),
+            ),
+          );
+        }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -103,12 +126,16 @@ class _SignInScreenState extends State<SignInScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            const Text(
-              'Sign In',
-              style: TextStyle(
-                color: Color(0xFF0A2540),
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
+            const Expanded(
+              child: Text(
+                'Sign In',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Color(0xFF0A2540),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
               ),
             ),
           ],

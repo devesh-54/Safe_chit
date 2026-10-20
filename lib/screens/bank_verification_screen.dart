@@ -104,14 +104,19 @@ class _BankVerificationScreenState extends State<BankVerificationScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          'Bank Account',
-                          style: TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF0A2540),
+                        const Expanded(
+                          child: Text(
+                            'Bank Account',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF0A2540),
+                            ),
                           ),
                         ),
+                        const SizedBox(width: 8),
                         StatusBadge(status: status, compact: true),
                       ],
                     ),
@@ -274,9 +279,13 @@ class _BankVerificationScreenState extends State<BankVerificationScreen> {
                             child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0F4C81)),
                           ),
                           SizedBox(width: 8),
-                          Text(
-                            'Fetching branch details...',
-                            style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                          Expanded(
+                            child: Text(
+                              'Fetching branch details...',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                            ),
                           ),
                         ],
                       ),

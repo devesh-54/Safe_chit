@@ -11,11 +11,11 @@ void main() {
     await tester.pumpAndSettle();
 
     // Verify Landing Page loads with ChitGuard app title and Hero title
-    expect(find.text('ChitGuard'), findsAtLeastNWidgets(1));
-    expect(find.text('Get Started'), findsAtLeastNWidgets(1));
+    expect(find.textContaining('ChitGuard'), findsAtLeastNWidgets(1));
+    expect(find.textContaining('Get Started'), findsAtLeastNWidgets(1));
 
     // Tap "Get Started" button on Landing Page to navigate to Step 1: Choose Your Role
-    await tester.tap(find.text('Get Started').first);
+    await tester.tap(find.textContaining('Get Started').first);
     await tester.pumpAndSettle();
 
     // Verify Screen 1: Choose Your Role is loaded

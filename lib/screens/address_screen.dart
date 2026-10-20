@@ -134,14 +134,19 @@ class _AddressScreenState extends State<AddressScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          'Address Details',
-                          style: TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF0A2540),
+                        const Expanded(
+                          child: Text(
+                            'Address Details',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF0A2540),
+                            ),
                           ),
                         ),
+                        const SizedBox(width: 8),
                         StatusBadge(status: status, compact: true),
                       ],
                     ),
