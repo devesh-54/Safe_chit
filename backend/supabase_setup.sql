@@ -177,3 +177,31 @@ CREATE POLICY "Public update digital_agreements" ON public.digital_agreements FO
 
 CREATE POLICY "Allow public insert to waitlist" ON public.waitlist FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow public select waitlist" ON public.waitlist FOR SELECT USING (true);
+
+
+-- =================================================================
+-- 8. Guarantee Requests Table (Guarantor Flow & Confirmation)
+-- =================================================================
+CREATE TABLE IF NOT EXISTS public.guarantee_requests (
+    id VARCHAR(100) PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    group_id VARCHAR(100) REFERENCES public.chit_groups(id) ON DELETE CASCADE,
+    join_request_id VARCHAR(100) REFERENCES public.chit_join_requests(id) ON DELETE CASCADE,
+    member_id VARCHAR(100) NOT NULL,
+    guarantor_id VARCHAR(100) NOT NULL,
+    relation VARCHAR(50) NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'pending', -- 'pending', 'accepted', 'declined'
+    consent_text TEXT DEFAULT 'By accepting, you agree to act as a guarantor for this member''s chit commitments.',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    responded_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_guarantee_requests_guarantor ON public.guarantee_requests(guarantor_id);
+CREATE INDEX IF NOT EXISTS idx_guarantee_requests_member ON public.guarantee_requests(member_id);
+CREATE INDEX IF NOT EXISTS idx_guarantee_requests_group ON public.guarantee_requests(group_id);
+CREATE INDEX IF NOT EXISTS idx_guarantee_requests_join_req ON public.guarantee_requests(join_request_id);
+CREATE INDEX IF NOT EXISTS idx_guarantee_requests_status ON public.guarantee_requests(status);
+
+ALTER TABLE public.guarantee_requests ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public read guarantee_requests" ON public.guarantee_requests FOR SELECT USING (true);
+CREATE POLICY "Public insert guarantee_requests" ON public.guarantee_requests FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public update guarantee_requests" ON public.guarantee_requests FOR UPDATE USING (true);

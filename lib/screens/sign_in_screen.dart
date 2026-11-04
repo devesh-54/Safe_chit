@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/dev/demo_credentials.dart';
 import '../models/onboarding_state.dart';
 import '../services/supabase_service.dart';
 import 'foreman/foreman_dashboard_screen.dart';
@@ -23,9 +24,31 @@ class _SignInScreenState extends State<SignInScreen> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
+  LoginRole _selectedRole = LoginRole.member;
+  String? _roleErrorMessage;
   bool _isPasswordVisible = false;
   bool _rememberMe = true;
   bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _applyRoleCredentials(LoginRole.member);
+  }
+
+  void _applyRoleCredentials(LoginRole role) {
+    _selectedRole = role;
+    _roleErrorMessage = null;
+    if (kDemoLoginShortcuts) {
+      if (role == LoginRole.member) {
+        _usernameController.text = DemoCredentials.memberUsername;
+        _passwordController.text = DemoCredentials.memberPassword;
+      } else {
+        _usernameController.text = DemoCredentials.foremanUsername;
+        _passwordController.text = DemoCredentials.foremanPassword;
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -38,15 +61,26 @@ class _SignInScreenState extends State<SignInScreen> {
     if (_formKey.currentState!.validate()) {
       setState(() {
         _isLoading = true;
+        _roleErrorMessage = null;
       });
 
       final username = _usernameController.text.trim();
       final password = _passwordController.text;
 
-      final isAuthenticated = await SupabaseService.authenticate(
+      bool isAuthenticated = await SupabaseService.authenticate(
         username: username,
         password: password,
       );
+
+      // Dev shortcut fallback for demo credentials when offline or unseeded
+      if (!isAuthenticated && kDemoLoginShortcuts) {
+        if ((username == DemoCredentials.memberUsername &&
+                password == DemoCredentials.memberPassword) ||
+            (username == DemoCredentials.foremanUsername &&
+                password == DemoCredentials.foremanPassword)) {
+          isAuthenticated = true;
+        }
+      }
 
       if (!mounted) return;
 
@@ -55,6 +89,24 @@ class _SignInScreenState extends State<SignInScreen> {
       });
 
       if (isAuthenticated) {
+        final actualRole = await SupabaseService.getUserRole(username);
+        if (!mounted) return;
+
+        // Verify that selected toggle matches the account's actual role
+        if (_selectedRole == LoginRole.foreman && actualRole != UserRole.host) {
+          setState(() {
+            _roleErrorMessage = 'This is a member account. Switch to Member.';
+          });
+          return;
+        }
+
+        if (_selectedRole == LoginRole.member && actualRole != UserRole.member) {
+          setState(() {
+            _roleErrorMessage = 'This is a foreman account. Switch to Foreman.';
+          });
+          return;
+        }
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -64,10 +116,7 @@ class _SignInScreenState extends State<SignInScreen> {
           ),
         );
 
-        final role = await SupabaseService.getUserRole(username);
-        if (!mounted) return;
-
-        if (role == UserRole.host) {
+        if (actualRole == UserRole.host) {
           Navigator.of(context).push(
             MaterialPageRoute(
               builder: (context) => const ForemanDashboardScreen(),
@@ -96,6 +145,90 @@ class _SignInScreenState extends State<SignInScreen> {
         );
       }
     }
+  }
+
+  Widget _buildRoleToggle() {
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _buildRoleSegment(
+              role: LoginRole.member,
+              label: 'Member',
+              icon: Icons.person_outline_rounded,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: _buildRoleSegment(
+              role: LoginRole.foreman,
+              label: 'Foreman',
+              icon: Icons.admin_panel_settings_outlined,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRoleSegment({
+    required LoginRole role,
+    required String label,
+    required IconData icon,
+  }) {
+    final isSelected = _selectedRole == role;
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _applyRoleCredentials(role);
+        });
+      },
+      borderRadius: BorderRadius.circular(9),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeInOut,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF0F4C81) : Colors.transparent,
+          borderRadius: BorderRadius.circular(9),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF0F4C81).withOpacity(0.18),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: isSelected ? Colors.white : const Color(0xFF64748B),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                color: isSelected ? Colors.white : const Color(0xFF64748B),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -211,7 +344,46 @@ class _SignInScreenState extends State<SignInScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 28),
+
+                      // Segmented Role Toggle (directly ABOVE username inside the form)
+                      _buildRoleToggle(),
+
+                      // Inline Error Message for Role Mismatch
+                      if (_roleErrorMessage != null) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF2F2),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFFFCA5A5)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.error_outline_rounded,
+                                color: Color(0xFFDC2626),
+                                size: 18,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _roleErrorMessage!,
+                                  style: const TextStyle(
+                                    color: Color(0xFFDC2626),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
+                      const SizedBox(height: 20),
 
                       // Username / Email / Mobile Input
                       const Text(
@@ -230,6 +402,13 @@ class _SignInScreenState extends State<SignInScreen> {
                           hintText: 'e.g. host@chitguard.in or 9876543210',
                           prefixIcon: Icon(Icons.person_outline, color: Color(0xFF64748B)),
                         ),
+                        onChanged: (value) {
+                          if (_roleErrorMessage != null) {
+                            setState(() {
+                              _roleErrorMessage = null;
+                            });
+                          }
+                        },
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
                             return 'Please enter your username, email, or phone';
@@ -269,6 +448,13 @@ class _SignInScreenState extends State<SignInScreen> {
                             },
                           ),
                         ),
+                        onChanged: (value) {
+                          if (_roleErrorMessage != null) {
+                            setState(() {
+                              _roleErrorMessage = null;
+                            });
+                          }
+                        },
                         validator: (value) {
                           if (value == null || value.isEmpty) {
                             return 'Please enter your password';
