@@ -224,6 +224,11 @@ class OnboardingState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setLegalName(String name) {
+    _legalName = name;
+    notifyListeners();
+  }
+
   bool isPersonalIdentityValid() {
     return _legalName.isNotEmpty && _dob != null && _identityStatus == VerificationStatus.verified;
   }

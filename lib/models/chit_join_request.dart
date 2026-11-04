@@ -11,6 +11,9 @@ class ChitJoinRequest {
   final double reputationScore;
   final String status; // 'pending', 'approved', 'rejected'
   final DateTime createdAt;
+  final String? guarantorUsername;
+  final String? guarantorRelation;
+  final String? guarantorStatus; // 'pending', 'accepted', 'declined'
 
   ChitJoinRequest({
     required this.id,
@@ -25,13 +28,18 @@ class ChitJoinRequest {
     required this.reputationScore,
     required this.status,
     required this.createdAt,
+    this.guarantorUsername,
+    this.guarantorRelation,
+    this.guarantorStatus,
   });
 
   bool get isApproved => status.toLowerCase() == 'approved';
 
   factory ChitJoinRequest.fromJson(Map<String, dynamic> json) {
     return ChitJoinRequest(
-      id: json['id'] as String? ?? 'req_${DateTime.now().millisecondsSinceEpoch}',
+      id:
+          json['id'] as String? ??
+          'req_${DateTime.now().millisecondsSinceEpoch}',
       groupId: json['group_id'] as String? ?? '',
       groupName: json['group_name'] as String? ?? 'Chit Group',
       inviteCode: json['invite_code'] as String? ?? '',
@@ -42,13 +50,37 @@ class ChitJoinRequest {
       memberCity: json['member_city'] as String? ?? '',
       reputationScore: (json['reputation_score'] as num?)?.toDouble() ?? 100.0,
       status: json['status'] as String? ?? 'pending',
-      createdAt: json['created_at'] != null 
-          ? DateTime.parse(json['created_at'] as String) 
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'] as String)
           : DateTime.now(),
+      guarantorUsername: json['guarantor_username'] as String?,
+      guarantorRelation: json['guarantor_relation'] as String?,
+      guarantorStatus: json['guarantor_status'] as String?,
     );
   }
 
   Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'group_id': groupId,
+      'group_name': groupName,
+      'invite_code': inviteCode,
+      'member_username': memberUsername,
+      'member_name': memberName,
+      'member_phone': memberPhone,
+      'member_email': memberEmail,
+      'member_city': memberCity,
+      'reputation_score': reputationScore,
+      'status': status,
+      'created_at': createdAt.toIso8601String(),
+      if (guarantorUsername != null) 'guarantor_username': guarantorUsername,
+      if (guarantorRelation != null) 'guarantor_relation': guarantorRelation,
+      if (guarantorStatus != null) 'guarantor_status': guarantorStatus,
+    };
+  }
+
+  /// Core database columns that are guaranteed to exist on public.chit_join_requests
+  Map<String, dynamic> toDbJson() {
     return {
       'id': id,
       'group_id': groupId,
@@ -78,6 +110,9 @@ class ChitJoinRequest {
     double? reputationScore,
     String? status,
     DateTime? createdAt,
+    String? guarantorUsername,
+    String? guarantorRelation,
+    String? guarantorStatus,
   }) {
     return ChitJoinRequest(
       id: id ?? this.id,
@@ -92,6 +127,9 @@ class ChitJoinRequest {
       reputationScore: reputationScore ?? this.reputationScore,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
+      guarantorUsername: guarantorUsername ?? this.guarantorUsername,
+      guarantorRelation: guarantorRelation ?? this.guarantorRelation,
+      guarantorStatus: guarantorStatus ?? this.guarantorStatus,
     );
   }
 }
