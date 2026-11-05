@@ -16,6 +16,8 @@ import 'create_group_screen.dart';
 
 import 'escrow_controls_screen.dart';
 
+import '../profile/user_profile_screen.dart';
+
 class ForemanDashboardScreen extends StatefulWidget {
   const ForemanDashboardScreen({super.key});
 
@@ -27,11 +29,11 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
   int _currentIndex =
       0; // 0: Dashboard, 1: My Groups, 2: Join Requests, 3: Create Group, 4: Escrow Control
 
-  bool _isSidebarCollapsed = false;
-
   List<ChitGroup> _groups = [];
 
   List<ChitMemberRisk> _members = [];
+
+  Map<String, List<ChitMemberRisk>> _groupMembersMap = {};
 
   List<ChitJoinRequest> _pendingRequests = [];
 
@@ -158,9 +160,16 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
         _selectedGroup = groups.first;
       }
 
-      _members = await SupabaseService.getGroupMembers(_selectedGroup!.id);
+      final Map<String, List<ChitMemberRisk>> memberMap = {};
+      for (var g in groups) {
+        memberMap[g.id] = await SupabaseService.getGroupMembers(g.id);
+      }
+      _groupMembersMap = memberMap;
+      _members = memberMap[_selectedGroup!.id] ?? [];
     } else {
       _selectedGroup = null;
+      _groupMembersMap = {};
+      _members = [];
     }
 
     setState(() {
@@ -246,7 +255,7 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
             Text(
               'Amount Exposed: ₹${m.amountExposed.toStringAsFixed(0)}',
               style: const TextStyle(
-                color: Color(0xFFD97706),
+                color: Color(0xFF059669),
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -422,13 +431,13 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                       padding: const EdgeInsets.all(20),
 
                       decoration: const BoxDecoration(
-                        color: Color(0xFFFEF3C7),
+                        color: Color(0xFFDCFCE7),
                         shape: BoxShape.circle,
                       ),
 
                       child: const Icon(
                         Icons.stars_rounded,
-                        color: Color(0xFFD97706),
+                        color: Color(0xFF059669),
                         size: 54,
                       ),
                     ),
@@ -875,18 +884,13 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
 
         elevation: 0,
 
-        leading: IconButton(
-          icon: Icon(
-            _isSidebarCollapsed ? Icons.menu_rounded : Icons.menu_open_rounded,
+        leading: Container(
+          margin: const EdgeInsets.all(8),
+          decoration: const BoxDecoration(
+            color: Colors.white24,
+            shape: BoxShape.circle,
           ),
-
-          tooltip: _isSidebarCollapsed ? 'Expand Sidebar' : 'Retract Sidebar',
-
-          onPressed: () {
-            setState(() {
-              _isSidebarCollapsed = !_isSidebarCollapsed;
-            });
-          },
+          child: const Icon(Icons.shield, color: Colors.white, size: 20),
         ),
 
         title: Row(
@@ -900,11 +904,7 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                 shape: BoxShape.circle,
               ),
 
-              child: const Icon(
-                Icons.shield,
-                color: Color(0xFFF59E0B),
-                size: 20,
-              ),
+              child: const Icon(Icons.shield, color: Colors.white, size: 20),
             ),
 
             const SizedBox(width: 10),
@@ -974,6 +974,23 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
           ),
 
           IconButton(
+            icon: const Icon(Icons.account_circle_outlined),
+            tooltip: 'My Profile & Performance',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const UserProfileScreen(
+                    username: 'foreman_admin',
+                    isOwnProfile: true,
+                    initialRole: 'foreman',
+                  ),
+                ),
+              );
+            },
+          ),
+
+          IconButton(
             icon: const Icon(Icons.refresh),
 
             onPressed: () {
@@ -996,283 +1013,90 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
         ],
       ),
 
-      body: Row(
-        children: [
-          _buildSidebarNav(),
+      body: SafeArea(child: _buildBodyContent()),
 
-          Expanded(child: _buildBodyContent()),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSidebarNav() {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-
-      curve: Curves.easeInOut,
-
-      width: _isSidebarCollapsed ? 72 : 240,
-
-      decoration: const BoxDecoration(
-        color: Colors.white,
-
-        border: Border(right: BorderSide(color: Color(0xFFE2E8F0))),
-      ),
-
-      child: Column(
-        children: [
-          const SizedBox(height: 16),
-
-          _buildSidebarItem(
-            index: 0,
-            icon: Icons.dashboard_rounded,
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+          if (index == 0 || index == 1 || index == 2) {
+            _loadDashboardData();
+          }
+        },
+        type: BottomNavigationBarType.fixed,
+        selectedItemColor: const Color(0xFF0F4C81),
+        unselectedItemColor: const Color(0xFF64748B),
+        selectedLabelStyle: const TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 11,
+        ),
+        unselectedLabelStyle: const TextStyle(fontSize: 11),
+        items: [
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.dashboard_rounded),
             label: 'Dashboard',
           ),
-
-          _buildSidebarItem(
-            index: 1,
-            icon: Icons.groups_rounded,
+          BottomNavigationBarItem(
+            icon: _buildBadgeIcon(
+              Icons.groups_rounded,
+              _groups.isNotEmpty,
+              _groups.length,
+            ),
             label: 'My Groups',
-            badgeCount: _groups.length,
           ),
-
-          // Dedicated Tab for Join Requests with Live Badge Count
-          _buildSidebarItem(
-            index: 2,
-            icon: Icons.person_add_rounded,
+          BottomNavigationBarItem(
+            icon: _buildBadgeIcon(
+              Icons.person_add_rounded,
+              _pendingRequests.isNotEmpty,
+              _pendingRequests.length,
+            ),
             label: 'Join Requests',
-            badgeCount: _pendingRequests.length,
           ),
-
-          _buildSidebarItem(
-            index: 3,
-            icon: Icons.add_circle_rounded,
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.add_circle_outline_rounded),
             label: 'Create Group',
           ),
-
-          _buildSidebarItem(
-            index: 4,
-            icon: Icons.gavel_rounded,
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.gavel_rounded),
             label: 'Escrow Control',
           ),
-
-          const Spacer(),
-
-          if (!_isSidebarCollapsed)
-            Container(
-              margin: const EdgeInsets.all(16),
-
-              padding: const EdgeInsets.all(12),
-
-              decoration: BoxDecoration(
-                color: const Color(0xFFF1F5F9),
-
-                borderRadius: BorderRadius.circular(12),
-              ),
-
-              child: Row(
-                children: const [
-                  Icon(
-                    Icons.verified_user_rounded,
-                    color: Color(0xFF007A87),
-                    size: 20,
-                  ),
-
-                  SizedBox(width: 8),
-
-                  Expanded(
-                    child: Text(
-                      'Licensed Foreman Protocol',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF0F4C81),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            )
-          else
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-
-              child: Tooltip(
-                message: 'Licensed Foreman Protocol',
-
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFF1F5F9),
-                    shape: BoxShape.circle,
-                  ),
-
-                  child: const Icon(
-                    Icons.verified_user_rounded,
-                    color: Color(0xFF007A87),
-                    size: 18,
-                  ),
-                ),
-              ),
-            ),
         ],
       ),
     );
   }
 
-  Widget _buildSidebarItem({
-    required int index,
-
-    required IconData icon,
-
-    required String label,
-
-    int? badgeCount,
-  }) {
-    final isSelected = _currentIndex == index;
-
-    if (_isSidebarCollapsed) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-
-        child: Tooltip(
-          message: label,
-
-          child: InkWell(
-            onTap: () {
-              setState(() {
-                _currentIndex = index;
-              });
-
-              if (index == 0 || index == 1 || index == 2) {
-                _loadDashboardData();
-              }
-            },
-
-            borderRadius: BorderRadius.circular(12),
-
-            child: Container(
-              width: 48,
-
-              height: 48,
-
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? const Color(0xFF0F4C81)
-                    : Colors.transparent,
-
-                borderRadius: BorderRadius.circular(12),
-              ),
-
-              child: Stack(
-                alignment: Alignment.center,
-
-                children: [
-                  Icon(
-                    icon,
-                    color: isSelected ? Colors.white : const Color(0xFF64748B),
-                    size: 22,
-                  ),
-
-                  if (badgeCount != null && badgeCount > 0)
-                    Positioned(
-                      top: 8,
-
-                      right: 8,
-
-                      child: Container(
-                        width: 8,
-
-                        height: 8,
-
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFF59E0B),
-
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
+  Widget _buildBadgeIcon(IconData iconData, bool showBadge, [int? count]) {
+    if (!showBadge && (count == null || count == 0)) return Icon(iconData);
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Icon(iconData),
+        Positioned(
+          right: -6,
+          top: -3,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+            decoration: const BoxDecoration(
+              color: Color(0xFF10B981),
+              borderRadius: BorderRadius.all(Radius.circular(10)),
             ),
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-
-      child: Material(
-        color: isSelected ? const Color(0xFF0F4C81) : Colors.transparent,
-
-        borderRadius: BorderRadius.circular(12),
-
-        clipBehavior: Clip.antiAlias,
-
-        child: ListTile(
-          leading: Icon(
-            icon,
-            color: isSelected ? Colors.white : const Color(0xFF64748B),
-            size: 20,
-          ),
-
-          title: Text(
-            label,
-
-            style: TextStyle(
-              color: isSelected ? Colors.white : const Color(0xFF334155),
-
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-
-              fontSize: 14,
-            ),
-          ),
-
-          trailing: badgeCount != null && badgeCount > 0
-              ? Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 2,
-                  ),
-
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? const Color(0xFFF59E0B)
-                        : const Color(0xFFF1F5F9),
-
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-
-                  child: Text(
-                    '$badgeCount',
-
-                    style: TextStyle(
-                      color: isSelected
-                          ? Colors.white
-                          : const Color(0xFF0F4C81),
-
-                      fontSize: 11,
-
+            constraints: const BoxConstraints(minWidth: 16, minHeight: 14),
+            child: count != null && count > 0
+                ? Text(
+                    '$count',
+                    style: const TextStyle(
+                      fontSize: 9,
                       fontWeight: FontWeight.bold,
+                      color: Colors.white,
                     ),
-                  ),
-                )
-              : null,
-
-          onTap: () {
-            setState(() {
-              _currentIndex = index;
-            });
-
-            if (index == 0 || index == 1 || index == 2) {
-              _loadDashboardData();
-            }
-          },
+                    textAlign: TextAlign.center,
+                  )
+                : const SizedBox(width: 4, height: 4),
+          ),
         ),
-      ),
+      ],
     );
   }
 
@@ -1460,7 +1284,7 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                     Chip(
                       label: Text('${_pendingRequests.length} Live Pending'),
 
-                      backgroundColor: const Color(0xFFD97706),
+                      backgroundColor: const Color(0xFF059669),
 
                       labelStyle: const TextStyle(
                         color: Colors.white,
@@ -1567,7 +1391,7 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                 'PRIMARY EXPOSURE RISK METRIC',
 
                 style: TextStyle(
-                  color: Color(0xFFF59E0B),
+                  color: Color(0xFF059669),
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
                   letterSpacing: 1.2,
@@ -1889,16 +1713,60 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: Text(
-                          member.name,
-
-                          overflow: TextOverflow.ellipsis,
-
-                          maxLines: 1,
-
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
+                        child: GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => UserProfileScreen(
+                                  username: member.name,
+                                  isOwnProfile: false,
+                                ),
+                              ),
+                            );
+                          },
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  member.name,
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                    color: Color(0xFF0F172A),
+                                    decoration: TextDecoration.underline,
+                                    decorationColor: Color(0xFFCBD5E1),
+                                  ),
+                                ),
+                              ),
+                              if (member.isHostMember) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFDCFCE7),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: const Color(0xFFBBF7D0),
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    'Host · Month 2',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF166534),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                         ),
                       ),
@@ -1964,7 +1832,7 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                   style: const TextStyle(
                     fontWeight: FontWeight.w900,
                     fontSize: 14,
-                    color: Color(0xFFD97706),
+                    color: Color(0xFF059669),
                   ),
                 ),
 
@@ -2192,7 +2060,7 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: const Color(0xFFD97706).withOpacity(0.4),
+          color: const Color(0xFF059669).withOpacity(0.35),
           width: 1.5,
         ),
       ),
@@ -2208,17 +2076,42 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
 
                   children: [
-                    Text(
-                      req.memberName,
-
-                      maxLines: 1,
-
-                      overflow: TextOverflow.ellipsis,
-
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF0F172A),
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => UserProfileScreen(
+                              username: req.memberUsername,
+                              isOwnProfile: false,
+                            ),
+                          ),
+                        );
+                      },
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              req.memberName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF0F172A),
+                                decoration: TextDecoration.underline,
+                                decorationColor: Color(0xFFCBD5E1),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(
+                            Icons.open_in_new_rounded,
+                            size: 14,
+                            color: Color(0xFF007A87),
+                          ),
+                        ],
                       ),
                     ),
 
@@ -2246,14 +2139,14 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                 ),
 
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFEF3C7),
+                  color: const Color(0xFFDCFCE7),
                   borderRadius: BorderRadius.circular(12),
                 ),
 
                 child: const Text(
                   'KYC Submitted',
                   style: TextStyle(
-                    color: Color(0xFF92400E),
+                    color: Color(0xFF166534),
                     fontSize: 11,
                     fontWeight: FontWeight.bold,
                   ),
@@ -2325,7 +2218,7 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                           ? const Color(0xFF86EFAC)
                           : (req.guarantorStatus == 'declined'
                                 ? const Color(0xFFFECACA)
-                                : const Color(0xFFFDE68A)))
+                                : const Color(0xFFBBF7D0)))
                     : const Color(0xFFE2E8F0),
               ),
             ),
@@ -2348,26 +2241,43 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                             ? const Color(0xFF16A34A)
                             : (req.guarantorStatus == 'declined'
                                   ? const Color(0xFFDC2626)
-                                  : const Color(0xFFD97706)))
+                                  : const Color(0xFF059669)))
                       : const Color(0xFF64748B),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    req.guarantorUsername != null &&
-                            req.guarantorUsername!.isNotEmpty
-                        ? 'Guarantor: @${req.guarantorUsername} (${req.guarantorRelation ?? "Friend"})'
-                        : 'Guarantor: No guarantor nominated',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color:
-                          req.guarantorUsername != null &&
-                              req.guarantorUsername!.isNotEmpty
-                          ? const Color(0xFF0F172A)
-                          : const Color(0xFF64748B),
-                    ),
-                  ),
+                  child: req.guarantorUsername != null &&
+                          req.guarantorUsername!.isNotEmpty
+                      ? GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => UserProfileScreen(
+                                  username: req.guarantorUsername!,
+                                  isOwnProfile: false,
+                                ),
+                              ),
+                            );
+                          },
+                          child: Text(
+                            'Guarantor: @${req.guarantorUsername} (${req.guarantorRelation ?? "Friend"})',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF007A87),
+                              decoration: TextDecoration.underline,
+                            ),
+                          ),
+                        )
+                      : const Text(
+                          'Guarantor: No guarantor nominated',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF64748B),
+                          ),
+                        ),
                 ),
                 if (req.guarantorUsername != null &&
                     req.guarantorUsername!.isNotEmpty)
@@ -2381,7 +2291,7 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                           ? const Color(0xFFDCFCE7)
                           : (req.guarantorStatus == 'declined'
                                 ? const Color(0xFFFEE2E2)
-                                : const Color(0xFFFEF3C7)),
+                                : const Color(0xFFDCFCE7)),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
@@ -2397,7 +2307,7 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                             ? const Color(0xFF166534)
                             : (req.guarantorStatus == 'declined'
                                   ? const Color(0xFF991B1B)
-                                  : const Color(0xFF92400E)),
+                                  : const Color(0xFF166534)),
                       ),
                     ),
                   ),
@@ -2727,7 +2637,7 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
               Text(
                 'FOREMAN REPUTATION SCORE',
                 style: TextStyle(
-                  color: Color(0xFFF59E0B),
+                  color: Color(0xFF38BDF8),
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
                   letterSpacing: 1.1,
@@ -2905,89 +2815,75 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
   }
 
   Widget _buildForemanGroupCard(ChitGroup group) {
+    final groupMembers = _groupMembersMap[group.id] ??
+        _members.where((m) => m.groupId == group.id).toList();
+    final bool isAlreadyMember = groupMembers.any(
+      (m) =>
+          m.isHostMember ||
+          m.name.trim().toLowerCase() == 'foreman_admin',
+    );
+    final bool canJoinAsMember = group.currentCycle <= 1 &&
+        group.membersCount < group.durationMonths &&
+        !isAlreadyMember;
+
     return GestureDetector(
       onTap: () => _openGroupDetails(group),
-
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
-
         padding: const EdgeInsets.all(20),
-
         decoration: BoxDecoration(
           color: Colors.white,
-
           borderRadius: BorderRadius.circular(16),
-
           border: Border.all(color: const Color(0xFFE2E8F0)),
-
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.02),
-
               blurRadius: 8,
-
               offset: const Offset(0, 2),
             ),
           ],
         ),
-
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-
           children: [
             Row(
               children: [
                 Hero(
                   tag: 'group_avatar_${group.id}',
-
                   child: Container(
                     padding: const EdgeInsets.all(10),
-
                     decoration: BoxDecoration(
                       color: const Color(0xFFF1F5F9),
                       borderRadius: BorderRadius.circular(12),
                     ),
-
                     child: Icon(
                       group.schemeType == 'Bidding'
                           ? Icons.gavel_rounded
                           : Icons.casino_rounded,
-
                       color: const Color(0xFF0F4C81),
-
                       size: 22,
                     ),
                   ),
                 ),
-
                 const SizedBox(width: 14),
-
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-
                     children: [
                       Text(
                         group.name,
-
                         maxLines: 1,
-
                         overflow: TextOverflow.ellipsis,
-
                         style: const TextStyle(
                           fontSize: 17,
                           fontWeight: FontWeight.bold,
                           color: Color(0xFF0F172A),
                         ),
                       ),
-
                       Text(
                         '6-Digit Code: ${group.inviteCode} • ${group.city}',
-
                         maxLines: 1,
-
                         overflow: TextOverflow.ellipsis,
-
                         style: const TextStyle(
                           fontSize: 12,
                           color: Color(0xFF64748B),
@@ -2996,12 +2892,9 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                     ],
                   ),
                 ),
-
                 Chip(
                   label: Text(group.schemeType),
-
                   backgroundColor: const Color(0xFF0F4C81),
-
                   labelStyle: const TextStyle(
                     color: Colors.white,
                     fontSize: 11,
@@ -3010,17 +2903,13 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                 ),
               ],
             ),
-
             const SizedBox(height: 16),
-
             Container(
               padding: const EdgeInsets.all(12),
-
               decoration: BoxDecoration(
                 color: const Color(0xFFF8FAFC),
                 borderRadius: BorderRadius.circular(10),
               ),
-
               child: Row(
                 children: const [
                   Icon(
@@ -3028,17 +2917,12 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                     size: 14,
                     color: Color(0xFF007A87),
                   ),
-
                   SizedBox(width: 6),
-
                   Expanded(
                     child: Text(
                       'Bidding: 1st/mo',
-
                       maxLines: 1,
-
                       overflow: TextOverflow.ellipsis,
-
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
@@ -3046,25 +2930,18 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                       ),
                     ),
                   ),
-
                   SizedBox(width: 6),
-
                   Icon(
                     Icons.payment_rounded,
                     size: 14,
-                    color: Color(0xFFD97706),
+                    color: Color(0xFF059669),
                   ),
-
                   SizedBox(width: 6),
-
                   Expanded(
                     child: Text(
                       'Due: 10th/mo',
-
                       maxLines: 1,
-
                       overflow: TextOverflow.ellipsis,
-
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
@@ -3075,43 +2952,32 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                 ],
               ),
             ),
-
             const SizedBox(height: 14),
-
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-
               children: [
                 Expanded(
                   child: Text(
                     group.totalPoolSize < 10
                         ? 'Pool: ₹${group.totalPoolSize.toStringAsFixed(2)}'
                         : 'Pool: ₹${group.totalPoolSize.toStringAsFixed(0)}',
-
                     maxLines: 1,
-
                     overflow: TextOverflow.ellipsis,
-
                     style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w900,
-                      color: Color(0xFFD97706),
+                      color: Color(0xFF059669),
                     ),
                   ),
                 ),
-
                 const SizedBox(width: 4),
-
                 Expanded(
                   child: Text(
                     group.monthlyContribution < 10
                         ? 'Monthly: ₹${group.monthlyContribution.toStringAsFixed(2)}'
                         : 'Monthly: ₹${group.monthlyContribution.toStringAsFixed(0)}',
-
                     maxLines: 1,
-
                     overflow: TextOverflow.ellipsis,
-
                     style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w900,
@@ -3119,17 +2985,12 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                     ),
                   ),
                 ),
-
                 const SizedBox(width: 4),
-
                 Expanded(
                   child: Text(
-                    'Size: ${group.membersCount} Mbrs',
-
+                    'Size: ${group.membersCount}/${group.durationMonths} Mbrs',
                     maxLines: 1,
-
                     overflow: TextOverflow.ellipsis,
-
                     style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
@@ -3139,9 +3000,7 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                 ),
               ],
             ),
-
             const SizedBox(height: 8),
-
             Row(
               children: [
                 const Icon(
@@ -3149,17 +3008,12 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                   size: 12,
                   color: Color(0xFF16A34A),
                 ),
-
                 const SizedBox(width: 4),
-
                 Expanded(
                   child: Text(
                     'Receiving UPI: ${group.foremanUpiId}',
-
                     maxLines: 1,
-
                     overflow: TextOverflow.ellipsis,
-
                     style: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
@@ -3169,6 +3023,90 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                 ),
               ],
             ),
+            if (isAlreadyMember) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDCFCE7),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFBBF7D0)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Icon(
+                      Icons.verified_user_rounded,
+                      size: 16,
+                      color: Color(0xFF166534),
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      "You're a member · Payout: Month 2",
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF166534),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ] else if (canJoinAsMember) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    final success = await SupabaseService.joinGroupAsHostMember(
+                      group: group,
+                      foremanUsername: 'foreman_admin',
+                    );
+                    if (success) {
+                      _loadDashboardData();
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              "Joined group as member! Payout assigned to Month 2.",
+                            ),
+                            backgroundColor: Color(0xFF059669),
+                          ),
+                        );
+                      }
+                    } else {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              "Unable to join group as member. Please check seat availability or group cycle status.",
+                            ),
+                            backgroundColor: Color(0xFFDC2626),
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.person_add_alt_1_rounded, size: 16),
+                  label: const Text('Join as member'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF0F4C81),
+                    side: const BorderSide(
+                      color: Color(0xFF0F4C81),
+                      width: 1.5,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),

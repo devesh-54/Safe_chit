@@ -13,6 +13,7 @@ class ChitMemberRisk {
   final bool forfeited; // Escrow forfeiture trigger status
   final bool defaultNoticeSent;
   final String? defaultNoticeText;
+  final bool isHostMember;
 
   const ChitMemberRisk({
     required this.id,
@@ -29,6 +30,7 @@ class ChitMemberRisk {
     this.forfeited = false,
     this.defaultNoticeSent = false,
     this.defaultNoticeText,
+    this.isHostMember = false,
   });
 
   /// Factory constructor to create a ChitMemberRisk from JSON/Map
@@ -48,6 +50,7 @@ class ChitMemberRisk {
       forfeited: json['forfeited'] as bool? ?? false,
       defaultNoticeSent: json['default_notice_sent'] as bool? ?? false,
       defaultNoticeText: json['default_notice_text'] as String?,
+      isHostMember: json['is_host_member'] as bool? ?? false,
     );
   }
 
@@ -68,6 +71,7 @@ class ChitMemberRisk {
       'forfeited': forfeited,
       'default_notice_sent': defaultNoticeSent,
       'default_notice_text': defaultNoticeText,
+      'is_host_member': isHostMember,
     };
   }
 
@@ -87,6 +91,7 @@ class ChitMemberRisk {
     bool? forfeited,
     bool? defaultNoticeSent,
     String? defaultNoticeText,
+    bool? isHostMember,
   }) {
     return ChitMemberRisk(
       id: id ?? this.id,
@@ -103,6 +108,7 @@ class ChitMemberRisk {
       forfeited: forfeited ?? this.forfeited,
       defaultNoticeSent: defaultNoticeSent ?? this.defaultNoticeSent,
       defaultNoticeText: defaultNoticeText ?? this.defaultNoticeText,
+      isHostMember: isHostMember ?? this.isHostMember,
     );
   }
 }

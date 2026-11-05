@@ -36,7 +36,9 @@ class _EscrowControlsScreenState extends State<EscrowControlsScreen> {
     final members = await SupabaseService.getGroupMembers(_selectedGroupId);
     setState(() {
       // Filter for those with defaults or high risk (e.g. risk score > 40)
-      _defaulters = members.where((m) => m.hasDefaulted || m.defaultRiskScore > 40).toList();
+      _defaulters = members
+          .where((m) => m.hasDefaulted || m.defaultRiskScore > 40)
+          .toList();
       _isLoading = false;
     });
   }
@@ -50,11 +52,18 @@ class _EscrowControlsScreenState extends State<EscrowControlsScreen> {
           surfaceTintColor: Colors.transparent,
           title: Row(
             children: const [
-              Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 28),
+              Icon(
+                Icons.warning_amber_rounded,
+                color: Color(0xFFDC2626),
+                size: 28,
+              ),
               SizedBox(width: 8),
               Text(
                 'Trigger Forfeiture?',
-                style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0A2540)),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF0A2540),
+                ),
               ),
             ],
           ),
@@ -64,7 +73,10 @@ class _EscrowControlsScreenState extends State<EscrowControlsScreen> {
             children: [
               Text(
                 'Are you sure you want to trigger forfeiture for ${member.name}?',
-                style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF334155)),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF334155),
+                ),
               ),
               const SizedBox(height: 12),
               const Text(
@@ -73,14 +85,21 @@ class _EscrowControlsScreenState extends State<EscrowControlsScreen> {
                 '• Freeze and lock their security deposit (₹20,000) in escrow.\n'
                 '• Reallocate their chit portion or distribute liability to the host.\n'
                 '• Mark default status permanently in credit scoring registries.',
-                style: TextStyle(fontSize: 13, height: 1.5, color: Color(0xFF5A6E72)),
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.5,
+                  color: Color(0xFF5A6E72),
+                ),
               ),
             ],
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel', style: TextStyle(color: Color(0xFF5A6E72))),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: Color(0xFF5A6E72)),
+              ),
             ),
             ElevatedButton(
               onPressed: () async {
@@ -96,13 +115,18 @@ class _EscrowControlsScreenState extends State<EscrowControlsScreen> {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('🔒 Forfeiture triggered and logged for ${member.name}.'),
+                      content: Text(
+                        '🔒 Forfeiture triggered and logged for ${member.name}.',
+                      ),
                       backgroundColor: const Color(0xFFDC2626),
                     ),
                   );
                 }
               },
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFDC2626), foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFDC2626),
+                foregroundColor: Colors.white,
+              ),
               child: const Text('Trigger Forfeiture'),
             ),
           ],
@@ -113,11 +137,16 @@ class _EscrowControlsScreenState extends State<EscrowControlsScreen> {
 
   void _showNoticeDialog(ChitMemberRisk member) {
     final today = DateFormat('dd MMM yyyy').format(DateTime.now());
-    final outstandingAmt = member.amountExposed > 0 ? member.amountExposed : 20000.0;
-    final monthsOverdue = member.paymentTrend.contains('3x') ? 3 : (member.paymentTrend.contains('4x') ? 4 : 2);
+    final outstandingAmt = member.amountExposed > 0
+        ? member.amountExposed
+        : 20000.0;
+    final monthsOverdue = member.paymentTrend.contains('3x')
+        ? 3
+        : (member.paymentTrend.contains('4x') ? 4 : 2);
     final secDeposit = 20000.0;
 
-    final noticeText = 'FORMAL DEMAND NOTICE\n'
+    final noticeText =
+        'FORMAL DEMAND NOTICE\n'
         '(Under Section 28 of the Chit Funds Act, 1982)\n\n'
         'To:\n'
         'Name: ${member.name}\n'
@@ -138,7 +167,9 @@ class _EscrowControlsScreenState extends State<EscrowControlsScreen> {
       builder: (BuildContext context) {
         return Dialog(
           backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 500),
             child: Padding(
@@ -152,12 +183,16 @@ class _EscrowControlsScreenState extends State<EscrowControlsScreen> {
                     children: [
                       const Text(
                         'Section 28 Default Notice',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81)),
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF0F4C81),
+                        ),
                       ),
                       IconButton(
                         icon: const Icon(Icons.close, color: Color(0xFF5A6E72)),
                         onPressed: () => Navigator.pop(context),
-                      )
+                      ),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -197,15 +232,22 @@ class _EscrowControlsScreenState extends State<EscrowControlsScreen> {
                             Clipboard.setData(ClipboardData(text: noticeText));
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('Legal notice text copied to clipboard!'),
+                                content: Text(
+                                  'Legal notice text copied to clipboard!',
+                                ),
                                 backgroundColor: Color(0xFF0F4C81),
                               ),
                             );
                           },
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 14),
-                            side: const BorderSide(color: Color(0xFF0F4C81), width: 1.2),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            side: const BorderSide(
+                              color: Color(0xFF0F4C81),
+                              width: 1.2,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -225,7 +267,10 @@ class _EscrowControlsScreenState extends State<EscrowControlsScreen> {
                             setState(() {
                               _isLoading = true;
                             });
-                            await SupabaseService.saveDefaultNotice(member.id, noticeText);
+                            await SupabaseService.saveDefaultNotice(
+                              member.id,
+                              noticeText,
+                            );
                             _loadDefaulters();
                             if (widget.onStateChanged != null) {
                               widget.onStateChanged!();
@@ -233,7 +278,9 @@ class _EscrowControlsScreenState extends State<EscrowControlsScreen> {
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('📨 Notice dispatched to member via SMS & Email!'),
+                                  content: Text(
+                                    '📨 Notice dispatched to member via SMS & Email!',
+                                  ),
                                   backgroundColor: Color(0xFF007A87),
                                 ),
                               );
@@ -243,7 +290,9 @@ class _EscrowControlsScreenState extends State<EscrowControlsScreen> {
                             backgroundColor: const Color(0xFF0F4C81),
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -256,7 +305,7 @@ class _EscrowControlsScreenState extends State<EscrowControlsScreen> {
                         ),
                       ),
                     ],
-                  )
+                  ),
                 ],
               ),
             ),
@@ -294,16 +343,20 @@ class _EscrowControlsScreenState extends State<EscrowControlsScreen> {
               // Defaulters List
               Expanded(
                 child: _isLoading
-                    ? const Center(child: CircularProgressIndicator(color: Color(0xFF0F4C81)))
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          color: Color(0xFF0F4C81),
+                        ),
+                      )
                     : _defaulters.isEmpty
-                        ? _buildNoDefaultersView()
-                        : ListView.builder(
-                            itemCount: _defaulters.length,
-                            itemBuilder: (context, index) {
-                              final member = _defaulters[index];
-                              return _buildDefaulterCard(member);
-                            },
-                          ),
+                    ? _buildNoDefaultersView()
+                    : ListView.builder(
+                        itemCount: _defaulters.length,
+                        itemBuilder: (context, index) {
+                          final member = _defaulters[index];
+                          return _buildDefaulterCard(member);
+                        },
+                      ),
               ),
             ],
           ),
@@ -334,7 +387,11 @@ class _EscrowControlsScreenState extends State<EscrowControlsScreen> {
       children: [
         const Text(
           'Escrow & Default Controls',
-          style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: Color(0xFF0F4C81)),
+          style: TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.w800,
+            color: Color(0xFF0F4C81),
+          ),
         ),
         const SizedBox(height: 6),
         const Text(
@@ -358,7 +415,7 @@ class _EscrowControlsScreenState extends State<EscrowControlsScreen> {
                 color: const Color(0xFF0F4C81).withOpacity(0.12),
                 blurRadius: 15,
                 offset: const Offset(0, 8),
-              )
+              ),
             ],
           ),
           child: Row(
@@ -412,7 +469,7 @@ class _EscrowControlsScreenState extends State<EscrowControlsScreen> {
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFFD97706), // Gold Accent
+                      color: Color(0xFF059669), // Emerald Money Accent
                     ),
                   ),
                 ],
@@ -431,13 +488,24 @@ class _EscrowControlsScreenState extends State<EscrowControlsScreen> {
         children: [
           Container(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: const Color(0xFFE2E8F0), shape: BoxShape.circle),
-            child: const Icon(Icons.verified_rounded, size: 36, color: Color(0xFF007A87)),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE2E8F0),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.verified_rounded,
+              size: 36,
+              color: Color(0xFF007A87),
+            ),
           ),
           const SizedBox(height: 16),
           const Text(
             'All Clear! No Active Defaulters',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0A2540)),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF0A2540),
+            ),
           ),
           const SizedBox(height: 6),
           const Text(
@@ -452,7 +520,7 @@ class _EscrowControlsScreenState extends State<EscrowControlsScreen> {
   Widget _buildDefaulterCard(ChitMemberRisk member) {
     Color riskColor = member.defaultRiskScore > 75
         ? const Color(0xFFDC2626) // Red
-        : const Color(0xFFD97706); // Amber
+        : const Color(0xFF0284C7); // Moderate Risk (Sky Blue)
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -461,7 +529,9 @@ class _EscrowControlsScreenState extends State<EscrowControlsScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: member.forfeited ? const Color(0xFFCBD5E1) : riskColor.withOpacity(0.3),
+          color: member.forfeited
+              ? const Color(0xFFCBD5E1)
+              : riskColor.withOpacity(0.3),
           width: member.forfeited ? 1 : 1.5,
         ),
       ),
@@ -481,13 +551,18 @@ class _EscrowControlsScreenState extends State<EscrowControlsScreen> {
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                       color: const Color(0xFF0A2540),
-                      decoration: member.forfeited ? TextDecoration.lineThrough : null,
+                      decoration: member.forfeited
+                          ? TextDecoration.lineThrough
+                          : null,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     member.phone,
-                    style: const TextStyle(fontSize: 12, color: Color(0xFF5A6E72)),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF5A6E72),
+                    ),
                   ),
                 ],
               ),
@@ -503,33 +578,66 @@ class _EscrowControlsScreenState extends State<EscrowControlsScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('OUTSTANDING DUES', style: TextStyle(fontSize: 10, color: Color(0xFF5A6E72), fontWeight: FontWeight.bold)),
+                  const Text(
+                    'OUTSTANDING DUES',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Color(0xFF5A6E72),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                   const SizedBox(height: 4),
                   Text(
                     '₹${member.amountExposed.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}',
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF0A2540)),
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF0A2540),
+                    ),
                   ),
                 ],
               ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('PAYMENT TRACK', style: TextStyle(fontSize: 10, color: Color(0xFF5A6E72), fontWeight: FontWeight.bold)),
+                  const Text(
+                    'PAYMENT TRACK',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Color(0xFF5A6E72),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                   const SizedBox(height: 4),
                   Text(
                     member.paymentTrend,
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF334155)),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF334155),
+                    ),
                   ),
                 ],
               ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('AUCTION STATUS', style: TextStyle(fontSize: 10, color: Color(0xFF5A6E72), fontWeight: FontWeight.bold)),
+                  const Text(
+                    'AUCTION STATUS',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Color(0xFF5A6E72),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                   const SizedBox(height: 4),
                   Text(
                     member.payoutPosition,
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF334155)),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF334155),
+                    ),
                   ),
                 ],
               ),
@@ -546,27 +654,39 @@ class _EscrowControlsScreenState extends State<EscrowControlsScreen> {
                     onPressed: () => _showNoticeDialog(member),
                     style: OutlinedButton.styleFrom(
                       side: BorderSide(
-                        color: member.defaultNoticeSent ? const Color(0xFF007A87) : const Color(0xFF0F4C81),
+                        color: member.defaultNoticeSent
+                            ? const Color(0xFF007A87)
+                            : const Color(0xFF0F4C81),
                         width: 1.2,
                       ),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
-                          member.defaultNoticeSent ? Icons.mark_email_read_rounded : Icons.description_outlined,
+                          member.defaultNoticeSent
+                              ? Icons.mark_email_read_rounded
+                              : Icons.description_outlined,
                           size: 16,
-                          color: member.defaultNoticeSent ? const Color(0xFF007A87) : const Color(0xFF0F4C81),
+                          color: member.defaultNoticeSent
+                              ? const Color(0xFF007A87)
+                              : const Color(0xFF0F4C81),
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          member.defaultNoticeSent ? 'Notice Dispatched' : 'Section 28 Notice',
+                          member.defaultNoticeSent
+                              ? 'Notice Dispatched'
+                              : 'Section 28 Notice',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
-                            color: member.defaultNoticeSent ? const Color(0xFF007A87) : const Color(0xFF0F4C81),
+                            color: member.defaultNoticeSent
+                                ? const Color(0xFF007A87)
+                                : const Color(0xFF0F4C81),
                           ),
                         ),
                       ],
@@ -581,7 +701,9 @@ class _EscrowControlsScreenState extends State<EscrowControlsScreen> {
                       backgroundColor: const Color(0xFFDC2626),
                       foregroundColor: Colors.white,
                       elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
                     child: Row(
@@ -589,7 +711,13 @@ class _EscrowControlsScreenState extends State<EscrowControlsScreen> {
                       children: const [
                         Icon(Icons.lock_outline, size: 16),
                         SizedBox(width: 8),
-                        Text('Trigger Forfeiture', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        Text(
+                          'Trigger Forfeiture',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -606,12 +734,20 @@ class _EscrowControlsScreenState extends State<EscrowControlsScreen> {
               ),
               child: Row(
                 children: const [
-                  Icon(Icons.lock_person_rounded, size: 16, color: Color(0xFF64748B)),
+                  Icon(
+                    Icons.lock_person_rounded,
+                    size: 16,
+                    color: Color(0xFF64748B),
+                  ),
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Account forfeited. Locked deposit held in escrow. Legally flagged.',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF64748B),
+                      ),
                     ),
                   ),
                 ],
@@ -632,7 +768,11 @@ class _EscrowControlsScreenState extends State<EscrowControlsScreen> {
         ),
         child: const Text(
           'FORFEITED',
-          style: TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontSize: 10,
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       );
     }
@@ -647,7 +787,11 @@ class _EscrowControlsScreenState extends State<EscrowControlsScreen> {
         ),
         child: const Text(
           'NOTICE SENT',
-          style: TextStyle(fontSize: 10, color: Color(0xFF007A87), fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontSize: 10,
+            color: Color(0xFF007A87),
+            fontWeight: FontWeight.bold,
+          ),
         ),
       );
     }
@@ -661,7 +805,11 @@ class _EscrowControlsScreenState extends State<EscrowControlsScreen> {
       ),
       child: const Text(
         'DEFAULT OVERDUE',
-        style: TextStyle(fontSize: 10, color: Color(0xFFDC2626), fontWeight: FontWeight.bold),
+        style: TextStyle(
+          fontSize: 10,
+          color: Color(0xFFDC2626),
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }

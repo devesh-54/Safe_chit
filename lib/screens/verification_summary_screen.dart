@@ -16,7 +16,7 @@ class VerificationSummaryScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final overall = state.overallStatus;
-    
+
     Color overallColor;
     String overallTitle;
     String overallDesc;
@@ -26,25 +26,29 @@ class VerificationSummaryScreen extends StatelessWidget {
       case VerificationStatus.verified:
         overallColor = const Color(0xFF059669); // Emerald 600
         overallTitle = 'Account Fully Verified';
-        overallDesc = 'Your identity is validated. You have unlocked standard chit limits.';
+        overallDesc =
+            'Your identity is validated. You have unlocked standard chit limits.';
         overallIcon = Icons.verified_user_rounded;
         break;
       case VerificationStatus.inProgress:
-        overallColor = const Color(0xFFD97706); // Amber 600
+        overallColor = const Color(0xFF0284C7); // Sky 600
         overallTitle = 'Verification Pending';
-        overallDesc = 'Some identity items are currently being processed or require input.';
+        overallDesc =
+            'Some identity items are currently being processed or require input.';
         overallIcon = Icons.security_rounded;
         break;
       case VerificationStatus.failed:
         overallColor = const Color(0xFFDC2626); // Red 600
         overallTitle = 'Verification Rejected';
-        overallDesc = 'One or more identity items failed central registry validation checks.';
+        overallDesc =
+            'One or more identity items failed central registry validation checks.';
         overallIcon = Icons.gpp_bad_rounded;
         break;
       case VerificationStatus.notStarted:
         overallColor = const Color(0xFF64748B); // Slate 500
         overallTitle = 'Onboarding Not Complete';
-        overallDesc = 'Please complete the registration steps to access ChitGuard.';
+        overallDesc =
+            'Please complete the registration steps to access ChitGuard.';
         overallIcon = Icons.shield_outlined;
         break;
     }
@@ -53,9 +57,7 @@ class VerificationSummaryScreen extends StatelessWidget {
       builder: (context, constraints) {
         return SingleChildScrollView(
           child: ConstrainedBox(
-            constraints: BoxConstraints(
-              minHeight: constraints.maxHeight,
-            ),
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
             child: IntrinsicHeight(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
@@ -88,7 +90,10 @@ class VerificationSummaryScreen extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: overallColor.withOpacity(0.06),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: overallColor.withOpacity(0.15), width: 1.5),
+                        border: Border.all(
+                          color: overallColor.withOpacity(0.15),
+                          width: 1.5,
+                        ),
                       ),
                       child: Column(
                         children: [
@@ -98,7 +103,11 @@ class VerificationSummaryScreen extends StatelessWidget {
                               color: overallColor.withOpacity(0.12),
                               shape: BoxShape.circle,
                             ),
-                            child: Icon(overallIcon, size: 40, color: overallColor),
+                            child: Icon(
+                              overallIcon,
+                              size: 40,
+                              color: overallColor,
+                            ),
                           ),
                           const SizedBox(height: 14),
                           Text(
@@ -141,61 +150,83 @@ class VerificationSummaryScreen extends StatelessWidget {
                     // CHECKLIST ITEMS
                     _buildChecklistItem(
                       title: 'Role Selection',
-                      subtitle: state.role == UserRole.member ? 'Member selected' : 'Host (Foreman) selected',
-                      status: state.role != null ? VerificationStatus.verified : VerificationStatus.notStarted,
+                      subtitle: state.role == UserRole.member
+                          ? 'Member selected'
+                          : 'Host (Foreman) selected',
+                      status: state.role != null
+                          ? VerificationStatus.verified
+                          : VerificationStatus.notStarted,
                       icon: Icons.badge_outlined,
                     ),
                     _buildChecklistItem(
                       title: 'Mobile Verification',
-                      subtitle: state.mobileNumber.isNotEmpty ? '+91 ${state.mobileNumber}' : 'Not verified',
+                      subtitle: state.mobileNumber.isNotEmpty
+                          ? '+91 ${state.mobileNumber}'
+                          : 'Not verified',
                       status: state.mobileStatus,
                       icon: Icons.phone_android_rounded,
                     ),
                     _buildChecklistItem(
                       title: 'Email Verification',
-                      subtitle: state.emailAddress.isNotEmpty ? state.emailAddress : 'Not verified',
+                      subtitle: state.emailAddress.isNotEmpty
+                          ? state.emailAddress
+                          : 'Not verified',
                       status: state.emailStatus,
                       icon: Icons.alternate_email_rounded,
                     ),
                     _buildChecklistItem(
                       title: 'Personal Details',
-                      subtitle: state.legalName.isNotEmpty ? state.legalName : 'Not completed',
+                      subtitle: state.legalName.isNotEmpty
+                          ? state.legalName
+                          : 'Not completed',
                       status: state.identityStatus,
                       icon: Icons.face_retouching_natural_rounded,
                     ),
                     _buildChecklistItem(
                       title: 'Government ID Lookup',
-                      subtitle: state.panNumber.isNotEmpty ? 'PAN: ${state.panNumber}' : 'Not uploaded',
+                      subtitle: state.panNumber.isNotEmpty
+                          ? 'PAN: ${state.panNumber}'
+                          : 'Not uploaded',
                       status: state.govIdStatus,
                       icon: Icons.credit_card_rounded,
                     ),
                     _buildChecklistItem(
                       title: 'Biometric Face-match',
-                      subtitle: state.selfiePath != null ? 'Liveness selfie recorded' : 'Not recorded',
+                      subtitle: state.selfiePath != null
+                          ? 'Liveness selfie recorded'
+                          : 'Not recorded',
                       status: state.biometricStatus,
                       icon: Icons.photo_camera_front_rounded,
                     ),
                     _buildChecklistItem(
                       title: 'Address Verification',
-                      subtitle: state.permAddress.isNotEmpty ? '${state.permCity}, ${state.permState}' : 'Not entered',
+                      subtitle: state.permAddress.isNotEmpty
+                          ? '${state.permCity}, ${state.permState}'
+                          : 'Not entered',
                       status: state.addressStatus,
                       icon: Icons.location_on_outlined,
                     ),
                     _buildChecklistItem(
                       title: 'Bank Verification',
-                      subtitle: state.bankName.isNotEmpty ? '${state.bankName} • ${state.bankIfsc}' : 'Not linked',
+                      subtitle: state.bankName.isNotEmpty
+                          ? '${state.bankName} • ${state.bankIfsc}'
+                          : 'Not linked',
                       status: state.bankStatus,
                       icon: Icons.account_balance_rounded,
                     ),
                     _buildChecklistItem(
                       title: 'KYC Legal Consent',
-                      subtitle: state.hasConsented ? 'Authorized' : 'Pending agreement',
+                      subtitle: state.hasConsented
+                          ? 'Authorized'
+                          : 'Pending agreement',
                       status: state.consentStatus,
                       icon: Icons.description_outlined,
                     ),
                     _buildChecklistItem(
                       title: 'Supabase Credentials',
-                      subtitle: state.username.isNotEmpty ? 'Username: ${state.username}' : 'Not configured',
+                      subtitle: state.username.isNotEmpty
+                          ? 'Username: ${state.username}'
+                          : 'Not configured',
                       status: state.credentialsStatus,
                       icon: Icons.key_outlined,
                     ),
@@ -213,7 +244,11 @@ class VerificationSummaryScreen extends StatelessWidget {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: const [
-                          Icon(Icons.info_outline_rounded, color: Color(0xFF0F4C81), size: 20),
+                          Icon(
+                            Icons.info_outline_rounded,
+                            color: Color(0xFF0F4C81),
+                            size: 20,
+                          ),
                           SizedBox(width: 12),
                           Expanded(
                             child: Text(
@@ -247,7 +282,10 @@ class VerificationSummaryScreen extends StatelessWidget {
                             ),
                             child: const Text(
                               'Start Over',
-                              style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF334155)),
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF334155),
+                              ),
                             ),
                           ),
                         ),
@@ -258,14 +296,17 @@ class VerificationSummaryScreen extends StatelessWidget {
                                 ? () {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
-                                        content: Text('Onboarding complete! Loading your Dashboard...'),
+                                        content: Text(
+                                          'Onboarding complete! Loading your Dashboard...',
+                                        ),
                                         backgroundColor: Color(0xFF059669),
                                       ),
                                     );
                                     if (state.role == UserRole.host) {
                                       Navigator.of(context).pushAndRemoveUntil(
                                         MaterialPageRoute(
-                                          builder: (context) => const ForemanDashboardScreen(),
+                                          builder: (context) =>
+                                              const ForemanDashboardScreen(),
                                         ),
                                         (route) => false,
                                       );
@@ -318,7 +359,7 @@ class VerificationSummaryScreen extends StatelessWidget {
         checkIcon = Icons.check_circle_rounded;
         break;
       case VerificationStatus.inProgress:
-        checkColor = const Color(0xFFF59E0B); // Amber
+        checkColor = const Color(0xFF0284C7); // Sky
         checkIcon = Icons.hourglass_empty_rounded;
         break;
       case VerificationStatus.failed:

@@ -5,11 +5,7 @@ class StatusBadge extends StatelessWidget {
   final VerificationStatus status;
   final bool compact;
 
-  const StatusBadge({
-    super.key,
-    required this.status,
-    this.compact = false,
-  });
+  const StatusBadge({super.key, required this.status, this.compact = false});
 
   @override
   Widget build(BuildContext context) {
@@ -26,8 +22,8 @@ class StatusBadge extends StatelessWidget {
         icon = Icons.radio_button_unchecked;
         break;
       case VerificationStatus.inProgress:
-        backgroundColor = const Color(0xFFFEF3C7); // amber 100
-        textColor = const Color(0xFFD97706); // amber 600
+        backgroundColor = const Color(0xFFE0F2FE); // sky 100
+        textColor = const Color(0xFF0284C7); // sky 600
         label = 'Verifying...';
         icon = Icons.hourglass_top_rounded;
         break;

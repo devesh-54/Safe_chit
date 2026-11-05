@@ -9,6 +9,7 @@ import '../common/group_details_modal.dart';
 import '../../widgets/youpi_payment_modal.dart';
 import '../../models/guarantee_request.dart';
 import '../../core/config/guarantor_rules.dart';
+import '../profile/user_profile_screen.dart';
 
 class MemberDashboardScreen extends StatefulWidget {
   final OnboardingState? state;
@@ -587,7 +588,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                                   borderRadius: BorderRadius.circular(16),
                                   border: Border.all(
                                     color: isPending
-                                        ? const Color(0xFFF59E0B)
+                                        ? const Color(0xFF10B981)
                                         : const Color(0xFFE2E8F0),
                                     width: isPending ? 1.5 : 1,
                                   ),
@@ -614,12 +615,48 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.start,
                                             children: [
-                                              Text(
-                                                req.memberName ?? req.memberId,
-                                                style: const TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 15,
-                                                  color: Color(0xFF0F172A),
+                                              GestureDetector(
+                                                onTap: () {
+                                                  Navigator.push(
+                                                    context,
+                                                    MaterialPageRoute(
+                                                      builder: (_) =>
+                                                          UserProfileScreen(
+                                                        username: req.memberId,
+                                                        isOwnProfile: false,
+                                                      ),
+                                                    ),
+                                                  );
+                                                },
+                                                child: Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    Flexible(
+                                                      child: Text(
+                                                        req.memberName ??
+                                                            req.memberId,
+                                                        style: const TextStyle(
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          fontSize: 15,
+                                                          color:
+                                                              Color(0xFF0F172A),
+                                                          decoration:
+                                                              TextDecoration
+                                                                  .underline,
+                                                          decorationColor:
+                                                              Color(0xFFCBD5E1),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    const Icon(
+                                                      Icons.open_in_new_rounded,
+                                                      size: 13,
+                                                      color: Color(0xFF007A87),
+                                                    ),
+                                                  ],
                                                 ),
                                               ),
                                               Text(
@@ -644,7 +681,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                                                 : (req.status == 'declined'
                                                       ? const Color(0xFFFEE2E2)
                                                       : const Color(
-                                                          0xFFFEF3C7,
+                                                          0xFFDCFCE7,
                                                         )),
                                             borderRadius: BorderRadius.circular(
                                               8,
@@ -662,7 +699,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                                                             0xFF991B1B,
                                                           )
                                                         : const Color(
-                                                            0xFF92400E,
+                                                            0xFF166534,
                                                           )),
                                             ),
                                           ),
@@ -1024,7 +1061,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                   child: Container(
                     padding: const EdgeInsets.all(4),
                     decoration: const BoxDecoration(
-                      color: Color(0xFFF59E0B),
+                      color: Color(0xFF10B981),
                       shape: BoxShape.circle,
                     ),
                     child: Text(
@@ -1032,12 +1069,28 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                       style: const TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
-                        color: Colors.black,
+                        color: Colors.white,
                       ),
                     ),
                   ),
                 ),
             ],
+          ),
+          IconButton(
+            icon: const Icon(Icons.account_circle_outlined),
+            tooltip: 'My Performance Profile',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => UserProfileScreen(
+                    username: _username,
+                    isOwnProfile: true,
+                    initialRole: 'member',
+                  ),
+                ),
+              );
+            },
           ),
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -1133,7 +1186,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
           child: Container(
             padding: const EdgeInsets.all(2),
             decoration: const BoxDecoration(
-              color: Color(0xFFF59E0B),
+              color: Color(0xFF10B981),
               shape: BoxShape.circle,
             ),
             constraints: const BoxConstraints(minWidth: 8, minHeight: 8),
@@ -1239,7 +1292,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                                       content: Text(
                                         'Please enter a 6-digit Chit Group code.',
                                       ),
-                                      backgroundColor: Color(0xFFD97706),
+                                      backgroundColor: Color(0xFF0F4C81),
                                     ),
                                   );
                                   setSheetState(() {
@@ -1387,75 +1440,101 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // User Profile Banner
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0F4C81),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.15),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.person,
-                        color: Color(0xFFF59E0B),
-                        size: 28,
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => UserProfileScreen(
+                        username: _username,
+                        isOwnProfile: true,
+                        initialRole: 'member',
                       ),
                     ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            displayName,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                  );
+                },
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F4C81),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.15),
+                            shape: BoxShape.circle,
                           ),
-                          Text(
-                            '@$_username • Verified Subscriber',
-                            style: const TextStyle(
-                              color: Color(0xFFE2E8F0),
-                              fontSize: 12,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          child: const Icon(
+                            Icons.person,
+                            color: Colors.white,
+                            size: 28,
                           ),
-                          const SizedBox(height: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF007A87),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: const Text(
-                              '100 / 100 🛡️ Verified',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                displayName,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                            ),
+                              Text(
+                                '@$_username • Verified Subscriber',
+                                style: const TextStyle(
+                                  color: Color(0xFFE2E8F0),
+                                  fontSize: 12,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF007A87),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: const Text(
+                                      'View Performance & Score →',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        ),
+                        const Icon(
+                          Icons.arrow_forward_ios_rounded,
+                          color: Colors.white70,
+                          size: 16,
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
               const SizedBox(height: 20),
@@ -1511,7 +1590,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                       children: [
                         const Icon(
                           Icons.waving_hand_rounded,
-                          color: Color(0xFFF59E0B),
+                          color: Color(0xFF059669),
                           size: 24,
                         ),
                         const SizedBox(width: 10),
@@ -1916,7 +1995,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                       title: 'PENDING REQUESTS',
                       value: ' Requests',
                       icon: Icons.pending_actions_rounded,
-                      color: const Color(0xFFB45309),
+                      color: const Color(0xFF0F4C81),
                     ),
                   ),
                 ],
@@ -1998,7 +2077,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
           color: isAccepted
               ? const Color(0xFF10B981).withOpacity(0.4)
               : (isPending
-                    ? const Color(0xFFF59E0B).withOpacity(0.5)
+                    ? const Color(0xFF059669).withOpacity(0.35)
                     : const Color(0xFFE2E8F0)),
           width: 1.5,
         ),
@@ -2029,14 +2108,42 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      req.memberName?.isNotEmpty == true
-                          ? req.memberName!
-                          : 'Member @${req.memberId}',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF0F172A),
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => UserProfileScreen(
+                              username: req.memberId,
+                              isOwnProfile: false,
+                            ),
+                          ),
+                        );
+                      },
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              req.memberName?.isNotEmpty == true
+                                  ? req.memberName!
+                                  : 'Member @${req.memberId}',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF0F172A),
+                                decoration: TextDecoration.underline,
+                                decorationColor: Color(0xFFCBD5E1),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(
+                            Icons.open_in_new_rounded,
+                            size: 13,
+                            color: Color(0xFF007A87),
+                          ),
+                        ],
                       ),
                     ),
                     Text(
@@ -2060,7 +2167,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                       ? const Color(0xFFDCFCE7)
                       : (req.status == 'declined'
                             ? const Color(0xFFFEE2E2)
-                            : const Color(0xFFFEF3C7)),
+                            : const Color(0xFFDCFCE7)),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
@@ -2077,7 +2184,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                           ? const Color(0xFF166534)
                           : (req.status == 'declined'
                                 ? const Color(0xFF991B1B)
-                                : const Color(0xFF92400E)),
+                                : const Color(0xFF166534)),
                     ),
                     const SizedBox(width: 4),
                     Text(
@@ -2091,7 +2198,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                             ? const Color(0xFF166534)
                             : (req.status == 'declined'
                                   ? const Color(0xFF991B1B)
-                                  : const Color(0xFF92400E)),
+                                  : const Color(0xFF166534)),
                       ),
                     ),
                   ],
@@ -2159,12 +2266,12 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
             decoration: BoxDecoration(
               color: isAccepted
                   ? const Color(0xFFF0FDF4)
-                  : const Color(0xFFFFFBEB),
+                  : const Color(0xFFF0FDF4),
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
                 color: isAccepted
                     ? const Color(0xFFBBF7D0)
-                    : const Color(0xFFFDE68A),
+                    : const Color(0xFFBBF7D0),
               ),
             ),
             child: Row(
@@ -2174,7 +2281,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                   size: 18,
                   color: isAccepted
                       ? const Color(0xFF16A34A)
-                      : const Color(0xFFD97706),
+                      : const Color(0xFF059669),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -2187,7 +2294,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                       fontWeight: FontWeight.w600,
                       color: isAccepted
                           ? const Color(0xFF166534)
-                          : const Color(0xFF92400E),
+                          : const Color(0xFF166534),
                     ),
                   ),
                 ),
@@ -2497,8 +2604,8 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
       badgeText = const Color(0xFF991B1B);
       statusLabel = 'Declined';
     } else {
-      badgeBg = const Color(0xFFFEF3C7);
-      badgeText = const Color(0xFF92400E);
+      badgeBg = const Color(0xFFDCFCE7);
+      badgeText = const Color(0xFF166534);
       statusLabel = 'Pending Review';
     }
 
@@ -2565,7 +2672,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                                   ? const Color(0xFFDCFCE7)
                                   : (req.guarantorStatus == 'declined'
                                         ? const Color(0xFFFEE2E2)
-                                        : const Color(0xFFFEF3C7)),
+                                        : const Color(0xFFDCFCE7)),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
@@ -2581,7 +2688,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                                     ? const Color(0xFF166534)
                                     : (req.guarantorStatus == 'declined'
                                           ? const Color(0xFF991B1B)
-                                          : const Color(0xFF92400E)),
+                                          : const Color(0xFF166534)),
                               ),
                             ),
                           ),
@@ -2785,7 +2892,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                       style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w900,
-                        color: Color(0xFFD97706),
+                        color: Color(0xFF059669),
                       ),
                     ),
                   ],

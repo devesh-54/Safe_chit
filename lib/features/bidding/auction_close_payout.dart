@@ -25,7 +25,9 @@ class _AuctionClosePayoutState extends State<AuctionClosePayout> {
   bool _isReleasing = false;
 
   void _showReleaseConfirmation() {
-    final state = BiddingSessionService.instance.getOrCreateState(widget.group.id);
+    final state = BiddingSessionService.instance.getOrCreateState(
+      widget.group.id,
+    );
     final winner = state.currentHighestBidder;
     final leadingBid = state.currentHighestBid;
     final payoutAmount = widget.group.totalPoolSize - leadingBid;
@@ -34,7 +36,10 @@ class _AuctionClosePayoutState extends State<AuctionClosePayout> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Confirm Payout Release', style: TextStyle(fontWeight: FontWeight.bold)),
+          title: const Text(
+            'Confirm Payout Release',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
           content: Text(
             'Are you sure you want to release the take-home payout of ₹${payoutAmount.toStringAsFixed(0)} to $winner?\n\n'
             'This action will conclude Cycle ${widget.group.currentCycle} and write the transaction to the ledger.',
@@ -42,15 +47,23 @@ class _AuctionClosePayoutState extends State<AuctionClosePayout> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: Color(0xFF64748B)),
+              ),
             ),
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
                 _executeMockRelease(winner, payoutAmount);
               },
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F4C81)),
-              child: const Text('Release Payout', style: TextStyle(color: Colors.white)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0F4C81),
+              ),
+              child: const Text(
+                'Release Payout',
+                style: TextStyle(color: Colors.white),
+              ),
             ),
           ],
         );
@@ -92,8 +105,15 @@ class _AuctionClosePayoutState extends State<AuctionClosePayout> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          icon: const Icon(Icons.check_circle_rounded, color: Colors.green, size: 48),
-          title: const Text('Payout Released Successfully', style: TextStyle(fontWeight: FontWeight.bold)),
+          icon: const Icon(
+            Icons.check_circle_rounded,
+            color: Colors.green,
+            size: 48,
+          ),
+          title: const Text(
+            'Payout Released Successfully',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -104,16 +124,38 @@ class _AuctionClosePayoutState extends State<AuctionClosePayout> {
               ),
               const SizedBox(height: 14),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Expanded(
-                      child: Text('TXN REFERENCE', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
+                      child: Text(
+                        'TXN REFERENCE',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Color(0xFF64748B),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                     const SizedBox(width: 8),
-                    SelectableText(refNum, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
+                    SelectableText(
+                      refNum,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F4C81),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -121,14 +163,21 @@ class _AuctionClosePayoutState extends State<AuctionClosePayout> {
               const Text(
                 'TODO: Integrate with Razorpay payouts REST API or IMPS/UPI gateway in production.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 9, color: Color(0xFF94A3B8), fontStyle: FontStyle.italic),
+                style: TextStyle(
+                  fontSize: 9,
+                  color: Color(0xFF94A3B8),
+                  fontStyle: FontStyle.italic,
+                ),
               ),
             ],
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Done', style: TextStyle(fontWeight: FontWeight.bold)),
+              child: const Text(
+                'Done',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
             ),
           ],
         );
@@ -138,11 +187,15 @@ class _AuctionClosePayoutState extends State<AuctionClosePayout> {
 
   @override
   Widget build(BuildContext context) {
-    final state = BiddingSessionService.instance.getOrCreateState(widget.group.id);
+    final state = BiddingSessionService.instance.getOrCreateState(
+      widget.group.id,
+    );
     final winner = state.currentHighestBidder;
     final winningBid = state.currentHighestBid;
     final payoutAmount = widget.group.totalPoolSize - winningBid;
-    final dividend = winningBid / (widget.group.membersCount > 0 ? widget.group.membersCount : 10);
+    final dividend =
+        winningBid /
+        (widget.group.membersCount > 0 ? widget.group.membersCount : 10);
 
     final isCurrentUserWinner = winner == widget.currentUsername;
     final hasNoBids = state.bidsFeed.isEmpty || winner == 'No bids placed yet';
@@ -167,7 +220,12 @@ class _AuctionClosePayoutState extends State<AuctionClosePayout> {
                   'SESSION SUMMARY',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF64748B), letterSpacing: 0.8),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                    color: Color(0xFF64748B),
+                    letterSpacing: 0.8,
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
@@ -179,7 +237,11 @@ class _AuctionClosePayoutState extends State<AuctionClosePayout> {
                 ),
                 child: const Text(
                   'Bidding Closed',
-                  style: TextStyle(color: Color(0xFF475569), fontSize: 10, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    color: Color(0xFF475569),
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ],
@@ -192,18 +254,27 @@ class _AuctionClosePayoutState extends State<AuctionClosePayout> {
               width: double.infinity,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFFFFF7ED),
+                color: const Color(0xFFF8FAFC),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: const Color(0xFFFED7AA)),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
               ),
               child: Row(
                 children: const [
-                  Icon(Icons.info_outline_rounded, color: Color(0xFFEA580C), size: 24),
+                  Icon(
+                    Icons.info_outline_rounded,
+                    color: Color(0xFF0F4C81),
+                    size: 24,
+                  ),
                   SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       'Auction concluded with zero bids placed. No member placed a bid discount during this cycle.',
-                      style: TextStyle(color: Color(0xFF9A3412), fontSize: 13, fontWeight: FontWeight.bold, height: 1.45),
+                      style: TextStyle(
+                        color: Color(0xFF9A3412),
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        height: 1.45,
+                      ),
                     ),
                   ),
                 ],
@@ -213,27 +284,41 @@ class _AuctionClosePayoutState extends State<AuctionClosePayout> {
             if (widget.isForeman) ...[
               const Text(
                 'As the host/foreman, you can reschedule the bidding session to run at another time.',
-                style: TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.4),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF64748B),
+                  height: 1.4,
+                ),
               ),
               const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
                 height: 48,
                 child: ElevatedButton.icon(
-                  onPressed: () => BiddingSessionService.instance.cancelSchedule(widget.group.id),
+                  onPressed: () => BiddingSessionService.instance
+                      .cancelSchedule(widget.group.id),
                   icon: const Icon(Icons.replay_rounded, size: 16),
-                  label: const Text('Reschedule Bidding Session', style: TextStyle(fontWeight: FontWeight.bold)),
+                  label: const Text(
+                    'Reschedule Bidding Session',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF0F4C81),
                     foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
               ),
             ] else ...[
               const Text(
                 'The Foreman will reschedule the session. Keep an eye out for scheduling notifications.',
-                style: TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.4),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF64748B),
+                  height: 1.4,
+                ),
               ),
             ],
           ] else ...[
@@ -255,7 +340,12 @@ class _AuctionClosePayoutState extends State<AuctionClosePayout> {
                     Expanded(
                       child: Text(
                         'You won this cycle\'s payout! 🎉\nWait for Foreman to release the payout amount to your bank account.',
-                        style: TextStyle(color: Color(0xFF065F46), fontSize: 13, fontWeight: FontWeight.bold, height: 1.4),
+                        style: TextStyle(
+                          color: Color(0xFF065F46),
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          height: 1.4,
+                        ),
                       ),
                     ),
                   ],
@@ -276,7 +366,13 @@ class _AuctionClosePayoutState extends State<AuctionClosePayout> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Winning Bidder', style: TextStyle(fontSize: 13, color: Color(0xFF64748B))),
+                      const Text(
+                        'Winning Bidder',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -284,7 +380,11 @@ class _AuctionClosePayoutState extends State<AuctionClosePayout> {
                           textAlign: TextAlign.end,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1E293B),
+                          ),
                         ),
                       ),
                     ],
@@ -293,24 +393,64 @@ class _AuctionClosePayoutState extends State<AuctionClosePayout> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Bid Discount Yielded', style: TextStyle(fontSize: 13, color: Color(0xFF64748B))),
-                      Text('₹${winningBid.toStringAsFixed(0)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFFD97706))),
+                      const Text(
+                        'Bid Discount Yielded',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                      Text(
+                        '₹${winningBid.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF059669),
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 10),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Dividend Earned', style: TextStyle(fontSize: 13, color: Color(0xFF64748B))),
-                      Text('+₹${dividend.toStringAsFixed(0)}/user', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF166534))),
+                      const Text(
+                        'Dividend Earned',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                      Text(
+                        '+₹${dividend.toStringAsFixed(0)}/user',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF166534),
+                        ),
+                      ),
                     ],
                   ),
                   const Divider(height: 20),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Take-Home Payout', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
-                      Text('₹${payoutAmount.toStringAsFixed(0)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF0F4C81))),
+                      const Text(
+                        'Take-Home Payout',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1E293B),
+                        ),
+                      ),
+                      Text(
+                        '₹${payoutAmount.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF0F4C81),
+                        ),
+                      ),
                     ],
                   ),
                 ],
@@ -333,14 +473,38 @@ class _AuctionClosePayoutState extends State<AuctionClosePayout> {
                   children: [
                     Row(
                       children: const [
-                        Icon(Icons.check_circle, color: Color(0xFF2563EB), size: 18),
+                        Icon(
+                          Icons.check_circle,
+                          color: Color(0xFF2563EB),
+                          size: 18,
+                        ),
                         SizedBox(width: 8),
-                        Text('Payout Released', style: TextStyle(color: Color(0xFF1E40AF), fontSize: 13, fontWeight: FontWeight.bold)),
+                        Text(
+                          'Payout Released',
+                          style: TextStyle(
+                            color: Color(0xFF1E40AF),
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Text('Released to: $winner', style: const TextStyle(fontSize: 12, color: Color(0xFF1E3A8A))),
-                    Text('Ref: ${state.txnRef}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1E3A8A))),
+                    Text(
+                      'Released to: $winner',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF1E3A8A),
+                      ),
+                    ),
+                    Text(
+                      'Ref: ${state.txnRef}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1E3A8A),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -354,13 +518,25 @@ class _AuctionClosePayoutState extends State<AuctionClosePayout> {
                 child: ElevatedButton.icon(
                   onPressed: _isReleasing ? null : _showReleaseConfirmation,
                   icon: _isReleasing
-                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
                       : const Icon(Icons.payment_rounded, size: 16),
-                  label: Text(_isReleasing ? 'Releasing...' : 'Release Payout to Winner', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  label: Text(
+                    _isReleasing ? 'Releasing...' : 'Release Payout to Winner',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF0F4C81),
                     foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
               ),

@@ -14,6 +14,7 @@ import '../../features/bidding/live_bidding_room.dart';
 import '../../features/bidding/auction_close_payout.dart';
 import '../../widgets/youpi_payment_modal.dart';
 import '../../models/chit_payment_record.dart';
+import '../profile/user_profile_screen.dart';
 
 class GroupDetailsModal extends StatefulWidget {
   final ChitGroup group;
@@ -33,7 +34,8 @@ class GroupDetailsModal extends StatefulWidget {
   State<GroupDetailsModal> createState() => _GroupDetailsModalState();
 }
 
-class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTickerProviderStateMixin {
+class _GroupDetailsModalState extends State<GroupDetailsModal>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   List<ChitMemberRisk> _members = [];
   bool _isLoading = true;
@@ -67,8 +69,10 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _loadGroupMembers();
-    
-    _biddingStatusSub = BiddingSessionService.instance.statusStream.listen((groupId) {
+
+    _biddingStatusSub = BiddingSessionService.instance.statusStream.listen((
+      groupId,
+    ) {
       if (!mounted) return;
       if (groupId == widget.group.id) {
         setState(() {});
@@ -107,11 +111,15 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
   }
 
   void _handlePayoutReleased() {
-    final state = BiddingSessionService.instance.getOrCreateState(widget.group.id);
+    final state = BiddingSessionService.instance.getOrCreateState(
+      widget.group.id,
+    );
     final winner = state.currentHighestBidder;
     final winningBid = state.currentHighestBid;
     final payoutAmount = widget.group.totalPoolSize - winningBid;
-    final dividend = winningBid / (widget.group.membersCount > 0 ? widget.group.membersCount : 10);
+    final dividend =
+        winningBid /
+        (widget.group.membersCount > 0 ? widget.group.membersCount : 10);
     final ref = state.txnRef ?? 'TXN849102IND';
 
     setState(() {
@@ -119,8 +127,12 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
         'cycle': widget.group.currentCycle,
         'amount': payoutAmount,
         'date': DateFormat('d MMM yyyy, hh:mm a').format(DateTime.now()),
-        'foremanConfirmed': DateFormat('d MMM yyyy, hh:mm a').format(DateTime.now()),
-        'memberConfirmed': DateFormat('d MMM yyyy, hh:mm a').format(DateTime.now()),
+        'foremanConfirmed': DateFormat(
+          'd MMM yyyy, hh:mm a',
+        ).format(DateTime.now()),
+        'memberConfirmed': DateFormat(
+          'd MMM yyyy, hh:mm a',
+        ).format(DateTime.now()),
         'status': 'Payout Released • Ref: $ref',
       });
 
@@ -147,25 +159,40 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
 
   void _submitAuctionBid() {
     final bidVal = double.tryParse(_bidController.text.trim());
-    final maxCap = widget.group.totalPoolSize * 0.30; // 30% max cap per Chit Funds Act 1982
+    final maxCap =
+        widget.group.totalPoolSize *
+        0.30; // 30% max cap per Chit Funds Act 1982
 
     if (bidVal == null || bidVal <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid bid discount amount (₹).'), backgroundColor: Color(0xFFDC2626)),
+        const SnackBar(
+          content: Text('Please enter a valid bid discount amount (₹).'),
+          backgroundColor: Color(0xFFDC2626),
+        ),
       );
       return;
     }
 
     if (bidVal > maxCap) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Bid discount exceeds 30% legal cap (Max ₹${maxCap.toStringAsFixed(0)}).'), backgroundColor: const Color(0xFFDC2626)),
+        SnackBar(
+          content: Text(
+            'Bid discount exceeds 30% legal cap (Max ₹${maxCap.toStringAsFixed(0)}).',
+          ),
+          backgroundColor: const Color(0xFFDC2626),
+        ),
       );
       return;
     }
 
     if (bidVal <= _currentWinningBid) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Bid must be higher than current top discount ₹${_currentWinningBid.toStringAsFixed(0)}.'), backgroundColor: const Color(0xFFD97706)),
+        SnackBar(
+          content: Text(
+            'Bid must be higher than current top discount ₹${_currentWinningBid.toStringAsFixed(0)}.',
+          ),
+          backgroundColor: const Color(0xFF0F4C81),
+        ),
       );
       return;
     }
@@ -178,29 +205,44 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
     _bidController.clear();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('🎉 New Winning Bid: ₹${bidVal.toStringAsFixed(0)} discount by $widget.currentUsername!'),
+        content: Text(
+          '🎉 New Winning Bid: ₹${bidVal.toStringAsFixed(0)} discount by $widget.currentUsername!',
+        ),
         backgroundColor: const Color(0xFF007A87),
       ),
     );
   }
 
   void _runRandomPickingDraw() {
-    if (_members.isEmpty) {
+    final hostMember = _members.where((m) => m.isHostMember).firstOrNull;
+
+    // Requirement 4: If Cycle 2 and host member exists, skip draw and award full pot to host with 0 discount
+    if (widget.group.currentCycle == 2 && hostMember != null) {
+      _recordCycle2HostPayout(widget.group, hostMember.name);
+      return;
+    }
+
+    // In every other cycle: exclude host member from random draw eligibility
+    final eligibleMembers = _members.where((m) => !m.isHostMember).toList();
+    if (eligibleMembers.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No members available for draw.'), backgroundColor: Color(0xFFDC2626)),
+        const SnackBar(
+          content: Text('No eligible members available for draw.'),
+          backgroundColor: Color(0xFFDC2626),
+        ),
       );
       return;
     }
 
     final rand = Random();
-    final winnerIndex = rand.nextInt(_members.length);
-    final winner = _members[winnerIndex].name;
+    final winnerIndex = rand.nextInt(eligibleMembers.length);
+    final winner = eligibleMembers[winnerIndex].name;
 
     setState(() {
       _luckyDrawWinner = winner;
-      _ledgerHistory.add({
-        'cycle': widget.group.currentCycle + 1,
-        'date': 'Today (1st of month)',
+      _ledgerHistory.insert(0, {
+        'cycle': widget.group.currentCycle,
+        'date': DateFormat('d MMM yyyy, hh:mm a').format(DateTime.now()),
         'winner': winner,
         'winningDiscount': 0.0,
         'payoutAmount': widget.group.totalPoolSize,
@@ -211,8 +253,35 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('🎲 Lucky Draw Winner Selected: $winner! Payout: ₹${widget.group.totalPoolSize.toStringAsFixed(0)}'),
+        content: Text(
+          '🎲 Lucky Draw Winner Selected: $winner! Payout: ₹${widget.group.totalPoolSize.toStringAsFixed(0)}',
+        ),
         backgroundColor: const Color(0xFF007A87),
+        duration: const Duration(seconds: 4),
+      ),
+    );
+  }
+
+  void _recordCycle2HostPayout(ChitGroup g, String hostMemberName) {
+    setState(() {
+      _luckyDrawWinner = '$hostMemberName (Host)';
+      _ledgerHistory.insert(0, {
+        'cycle': 2,
+        'date': DateFormat('d MMM yyyy, hh:mm a').format(DateTime.now()),
+        'winner': '$hostMemberName (Host)',
+        'winningDiscount': 0.0,
+        'payoutAmount': g.totalPoolSize,
+        'dividendPerMember': 0.0,
+        'status': 'Host payout (self)',
+      });
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Month 2 Host Payout Recorded: ₹${g.totalPoolSize.toStringAsFixed(0)} with no discount.',
+        ),
+        backgroundColor: const Color(0xFF059669),
         duration: const Duration(seconds: 4),
       ),
     );
@@ -227,7 +296,9 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
         setState(() {});
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('🎉 Monthly installment verified and recorded in SafeChit ledger!'),
+            content: Text(
+              '🎉 Monthly installment verified and recorded in SafeChit ledger!',
+            ),
             backgroundColor: Color(0xFF16A34A),
             duration: Duration(seconds: 4),
           ),
@@ -240,7 +311,9 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
     final agreementText = DigitalAgreement.generateLegalAgreementText(
       groupName: widget.group.name,
       foremanName: widget.isForeman ? 'Rajesh Kumar (Foreman)' : 'Foreman Host',
-      memberName: widget.isForeman ? 'Subscriber Member' : widget.currentUsername,
+      memberName: widget.isForeman
+          ? 'Subscriber Member'
+          : widget.currentUsername,
       poolAmount: widget.group.totalPoolSize,
       durationMonths: widget.group.durationMonths,
       monthlyContribution: widget.group.monthlyContribution,
@@ -291,7 +364,10 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: Text(g.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        title: Text(
+          g.name,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        ),
         backgroundColor: const Color(0xFF0F4C81),
         foregroundColor: Colors.white,
         elevation: 0,
@@ -320,9 +396,45 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
           ),
           child: Text(
             'Code: ${g.inviteCode} • ${g.city} • ${g.schemeType} Scheme',
-            style: const TextStyle(fontSize: 12, color: Color(0xFF007A87), fontWeight: FontWeight.bold),
+            style: const TextStyle(
+              fontSize: 12,
+              color: Color(0xFF007A87),
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
+        if (_members.any((m) => m.isHostMember)) ...[
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0FDF4),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFBBF7D0)),
+            ),
+            child: Row(
+              children: const [
+                Icon(
+                  Icons.info_outline_rounded,
+                  size: 16,
+                  color: Color(0xFF166534),
+                ),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'The host receives the month 2 payout',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF166534),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 12),
 
         // Tab Bar: 1. Scheme Auction/Draw | 2. Member Roster | 3. Payout Ledger
@@ -334,11 +446,24 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
           indicatorWeight: 3,
           tabs: [
             Tab(
-              icon: Icon(g.schemeType == 'Bidding' ? Icons.gavel_rounded : Icons.casino_rounded, size: 18),
-              text: g.schemeType == 'Bidding' ? 'Monthly Auction' : 'Random Draw',
+              icon: Icon(
+                g.schemeType == 'Bidding'
+                    ? Icons.gavel_rounded
+                    : Icons.casino_rounded,
+                size: 18,
+              ),
+              text: g.schemeType == 'Bidding'
+                  ? 'Monthly Auction'
+                  : 'Random Draw',
             ),
-            const Tab(icon: Icon(Icons.people_alt_rounded, size: 18), text: 'Member Roster'),
-            const Tab(icon: Icon(Icons.receipt_long_rounded, size: 18), text: 'Payout Ledger'),
+            const Tab(
+              icon: Icon(Icons.people_alt_rounded, size: 18),
+              text: 'Member Roster',
+            ),
+            const Tab(
+              icon: Icon(Icons.receipt_long_rounded, size: 18),
+              text: 'Payout Ledger',
+            ),
           ],
         ),
         const SizedBox(height: 16),
@@ -374,9 +499,45 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
           ),
           child: Text(
             'Code: ${g.inviteCode} • ${g.city} • ${g.schemeType} Scheme',
-            style: const TextStyle(fontSize: 12, color: Color(0xFF007A87), fontWeight: FontWeight.bold),
+            style: const TextStyle(
+              fontSize: 12,
+              color: Color(0xFF007A87),
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
+        if (_members.any((m) => m.isHostMember)) ...[
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0FDF4),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFBBF7D0)),
+            ),
+            child: Row(
+              children: const [
+                Icon(
+                  Icons.info_outline_rounded,
+                  size: 16,
+                  color: Color(0xFF166534),
+                ),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'The host receives the month 2 payout',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF166534),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 12),
 
         // TOP SECTION — Status Card (always visible, no scroll)
@@ -398,13 +559,20 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                       'Cycle ${g.currentCycle} of ${g.durationMonths}',
                       overflow: TextOverflow.ellipsis,
                       maxLines: 1,
-                      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Flexible(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(12),
@@ -412,14 +580,22 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: const [
-                          Icon(Icons.shield_outlined, color: Colors.white, size: 10),
+                          Icon(
+                            Icons.shield_outlined,
+                            color: Colors.white,
+                            size: 10,
+                          ),
                           SizedBox(width: 4),
                           Flexible(
                             child: Text(
                               'Trusted Member',
                               overflow: TextOverflow.ellipsis,
                               maxLines: 1,
-                              style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ],
@@ -439,7 +615,12 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                       children: [
                         const Text(
                           'NEXT CONTRIBUTION',
-                          style: TextStyle(color: Color(0xFFE2E8F0), fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                          style: TextStyle(
+                            color: Color(0xFFE2E8F0),
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -448,14 +629,21 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                               : '₹${g.monthlyContribution.toStringAsFixed(0)}',
                           overflow: TextOverflow.ellipsis,
                           maxLines: 1,
-                          style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                          ),
                         ),
                         const SizedBox(height: 2),
                         const Text(
                           'Due: 10th of this Month',
                           overflow: TextOverflow.ellipsis,
                           maxLines: 1,
-                          style: TextStyle(color: Color(0xFFE2E8F0), fontSize: 10),
+                          style: TextStyle(
+                            color: Color(0xFFE2E8F0),
+                            fontSize: 10,
+                          ),
                         ),
                       ],
                     ),
@@ -469,19 +657,35 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                           payoutTurnLabel,
                           overflow: TextOverflow.ellipsis,
                           maxLines: 1,
-                          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                         const SizedBox(height: 8),
                         ElevatedButton.icon(
-                          onPressed: () => _openRazorpayCardCheckout(g.monthlyContribution),
+                          onPressed: () =>
+                              _openRazorpayCardCheckout(g.monthlyContribution),
                           icon: const Icon(Icons.credit_card_rounded, size: 14),
-                          label: const Text('Pay by Card', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                          label: const Text(
+                            'Pay by Card',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 11,
+                            ),
+                          ),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFF59E0B),
+                            backgroundColor: const Color(0xFF0F4C81),
                             foregroundColor: Colors.white,
                             elevation: 0,
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
                           ),
                         ),
                       ],
@@ -529,6 +733,52 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
   }
 
   Widget _buildMemberAuctionBidPanel(ChitGroup g) {
+    final hostMember = _members.where((m) => m.isHostMember).firstOrNull;
+    if (g.currentCycle == 2 && hostMember != null) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0FDF4),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFBBF7D0)),
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.verified_user_rounded,
+              color: Color(0xFF166534),
+              size: 24,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Month 2: Fixed Host Payout',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: Color(0xFF166534),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'The organizer (${hostMember.name}) receives the Month 2 full pot payout with 0% discount per scheme rules. No auction or lucky draw is held.',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFF15803D),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     final bidState = BiddingSessionService.instance.getOrCreateState(g.id);
 
     if (g.schemeType == 'Bidding') {
@@ -554,7 +804,9 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
             ],
           ),
         );
-      } else if (bidState.scheduledStartTime != null && !bidState.isAuctionActive && !bidState.isAuctionEnded) {
+      } else if (bidState.scheduledStartTime != null &&
+          !bidState.isAuctionActive &&
+          !bidState.isAuctionEnded) {
         return BiddingWaitingRoom(
           groupId: g.id,
           scheduledTime: bidState.scheduledStartTime!,
@@ -597,7 +849,10 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFF007A87).withOpacity(0.2), width: 1.5),
+          border: Border.all(
+            color: const Color(0xFF007A87).withOpacity(0.2),
+            width: 1.5,
+          ),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.02),
@@ -617,19 +872,27 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                     'LUCKY DRAW DRAW STATUS',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F4C81), letterSpacing: 0.5),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: Color(0xFF0F4C81),
+                      letterSpacing: 0.5,
+                    ),
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFEF3C7),
+                    color: const Color(0xFFDCFCE7),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Text(
                     'Draw Eligible',
                     style: TextStyle(
-                      color: Color(0xFFB45309),
+                      color: Color(0xFF166534),
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
                     ),
@@ -641,7 +904,10 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
             if (_luckyDrawWinner != null) ...[
               Container(
                 padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(color: const Color(0xFFDCFCE7), borderRadius: BorderRadius.circular(12)),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDCFCE7),
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 child: Row(
                   children: [
                     const Icon(Icons.stars, color: Color(0xFF166534), size: 24),
@@ -650,9 +916,23 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('LUCKY DRAW WINNER SELECTED!', style: TextStyle(color: Color(0xFF15803D), fontSize: 10, fontWeight: FontWeight.bold)),
+                          const Text(
+                            'LUCKY DRAW WINNER SELECTED!',
+                            style: TextStyle(
+                              color: Color(0xFF15803D),
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                           const SizedBox(height: 2),
-                          Text('Winner: $_luckyDrawWinner', style: const TextStyle(color: Color(0xFF166534), fontSize: 14, fontWeight: FontWeight.bold)),
+                          Text(
+                            'Winner: $_luckyDrawWinner',
+                            style: const TextStyle(
+                              color: Color(0xFF166534),
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -662,15 +942,26 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
             ] else ...[
               Container(
                 padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(12)),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 child: Row(
                   children: const [
-                    Icon(Icons.info_outline, color: Color(0xFF475569), size: 20),
+                    Icon(
+                      Icons.info_outline,
+                      color: Color(0xFF475569),
+                      size: 20,
+                    ),
                     SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         'Draw will be conducted by Foreman Rajesh Kumar at the end of the current cycle. Keep an eye on updates!',
-                        style: TextStyle(color: Color(0xFF334155), fontSize: 12, height: 1.4),
+                        style: TextStyle(
+                          color: Color(0xFF334155),
+                          fontSize: 12,
+                          height: 1.4,
+                        ),
                       ),
                     ),
                   ],
@@ -690,8 +981,10 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
       {'name': 'Meena Sharma', 'initials': 'MS'},
     ];
 
-    final collectedAmount = g.monthlyContribution * (g.membersCount > 0 ? g.membersCount - 1 : 9);
-    final targetAmount = g.monthlyContribution * (g.membersCount > 0 ? g.membersCount : 10);
+    final collectedAmount =
+        g.monthlyContribution * (g.membersCount > 0 ? g.membersCount - 1 : 9);
+    final targetAmount =
+        g.monthlyContribution * (g.membersCount > 0 ? g.membersCount : 10);
     final progressVal = collectedAmount / (targetAmount > 0 ? targetAmount : 1);
 
     return Container(
@@ -706,10 +999,18 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
         children: [
           const Text(
             'THIS CYCLE STATUS',
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF475569), letterSpacing: 0.5),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF475569),
+              letterSpacing: 0.5,
+            ),
           ),
           const SizedBox(height: 10),
-          const Text('Payout Recipients in Previous Cycles:', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+          const Text(
+            'Payout Recipients in Previous Cycles:',
+            style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+          ),
           const SizedBox(height: 8),
           Row(
             children: pastWinners.map((winner) {
@@ -725,7 +1026,11 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                         backgroundColor: const Color(0xFFE2E8F0),
                         child: Text(
                           winner['initials']!,
-                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF475569),
+                          ),
                         ),
                       ),
                       Container(
@@ -734,7 +1039,11 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                           color: Colors.green,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.check, size: 7, color: Colors.white),
+                        child: const Icon(
+                          Icons.check,
+                          size: 7,
+                          color: Colors.white,
+                        ),
                       ),
                     ],
                   ),
@@ -760,7 +1069,11 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                   '₹${collectedAmount.toStringAsFixed(0)} / ₹${targetAmount.toStringAsFixed(0)}',
                   overflow: TextOverflow.ellipsis,
                   maxLines: 1,
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81)),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0F4C81),
+                  ),
                 ),
               ),
             ],
@@ -785,12 +1098,21 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
             ),
             child: Row(
               children: [
-                const Icon(Icons.lock_clock_outlined, color: Color(0xFF059669), size: 18),
+                const Icon(
+                  Icons.lock_clock_outlined,
+                  color: Color(0xFF059669),
+                  size: 18,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'Deposit held in escrow: ₹${g.securityDeposit.toStringAsFixed(0)}\n(Refundable security amount released upon successful completion)',
-                    style: const TextStyle(color: Color(0xFF065F46), fontSize: 11, height: 1.35, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                      color: Color(0xFF065F46),
+                      fontSize: 11,
+                      height: 1.35,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ],
@@ -806,12 +1128,21 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
             ),
             child: Row(
               children: [
-                const Icon(Icons.qr_code_2_rounded, color: Color(0xFF15803D), size: 18),
+                const Icon(
+                  Icons.qr_code_2_rounded,
+                  color: Color(0xFF15803D),
+                  size: 18,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'Foreman Receiving UPI ID: ${g.foremanUpiId}\nInstallments transfer directly to this VPA.',
-                    style: const TextStyle(color: Color(0xFF166534), fontSize: 11, height: 1.35, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                      color: Color(0xFF166534),
+                      fontSize: 11,
+                      height: 1.35,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ],
@@ -835,7 +1166,12 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
         children: [
           const Text(
             'TIMELINE / LEDGER (TAP FOR DUAL CONFIRMATION DETAILS)',
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF475569), letterSpacing: 0.5),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF475569),
+              letterSpacing: 0.5,
+            ),
           ),
           const SizedBox(height: 10),
           ListView.builder(
@@ -856,7 +1192,11 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                           color: Color(0xFFDCFCE7),
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.arrow_upward_rounded, color: Color(0xFF166534), size: 14),
+                        child: const Icon(
+                          Icons.arrow_upward_rounded,
+                          color: Color(0xFF166534),
+                          size: 14,
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -865,10 +1205,20 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                           children: [
                             Text(
                               'Cycle ${tx['cycle']} installment payment',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B)),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: Color(0xFF1E293B),
+                              ),
                             ),
                             const SizedBox(height: 2),
-                            Text(tx['date'], style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                            Text(
+                              tx['date'],
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -881,20 +1231,32 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                               '₹${tx['amount'].toStringAsFixed(0)}',
                               overflow: TextOverflow.ellipsis,
                               maxLines: 1,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F4C81)),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: Color(0xFF0F4C81),
+                              ),
                             ),
                             const SizedBox(height: 2),
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: const [
-                                Icon(Icons.check, color: Colors.green, size: 10),
+                                Icon(
+                                  Icons.check,
+                                  color: Colors.green,
+                                  size: 10,
+                                ),
                                 SizedBox(width: 2),
                                 Flexible(
                                   child: Text(
                                     'Double Confirmed',
                                     overflow: TextOverflow.ellipsis,
                                     maxLines: 1,
-                                    style: TextStyle(color: Colors.green, fontSize: 9, fontWeight: FontWeight.bold),
+                                    style: TextStyle(
+                                      color: Colors.green,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -926,7 +1288,12 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
         children: [
           const Text(
             'GROUP & FOREMAN INFO',
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF475569), letterSpacing: 0.5),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF475569),
+              letterSpacing: 0.5,
+            ),
           ),
           const SizedBox(height: 10),
           Row(
@@ -934,25 +1301,44 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
               CircleAvatar(
                 radius: 18,
                 backgroundColor: const Color(0xFF0F4C81).withOpacity(0.1),
-                child: const Icon(Icons.admin_panel_settings_rounded, color: Color(0xFF0F4C81), size: 18),
+                child: const Icon(
+                  Icons.admin_panel_settings_rounded,
+                  color: Color(0xFF0F4C81),
+                  size: 18,
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Rajesh Kumar (Foreman)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+                    const Text(
+                      'Rajesh Kumar (Foreman)',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1E293B),
+                      ),
+                    ),
                     const SizedBox(height: 2),
                     Row(
                       children: const [
-                        Icon(Icons.shield_outlined, color: Color(0xFF007A87), size: 10),
+                        Icon(
+                          Icons.shield_outlined,
+                          color: Color(0xFF007A87),
+                          size: 10,
+                        ),
                         SizedBox(width: 4),
                         Flexible(
                           child: Text(
                             'Trusted Foreman (Score: 98/100)',
                             overflow: TextOverflow.ellipsis,
                             maxLines: 1,
-                            style: TextStyle(color: Color(0xFF007A87), fontSize: 10, fontWeight: FontWeight.w600),
+                            style: TextStyle(
+                              color: Color(0xFF007A87),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ],
@@ -968,12 +1354,17 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
             child: OutlinedButton.icon(
               onPressed: _openDigitalAgreement,
               icon: const Icon(Icons.menu_book_rounded, size: 15),
-              label: const Text('Digital Terms & Conditions', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              label: const Text(
+                'Digital Terms & Conditions',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+              ),
               style: OutlinedButton.styleFrom(
                 foregroundColor: const Color(0xFF0F4C81),
                 side: const BorderSide(color: Color(0xFF0F4C81)),
                 padding: const EdgeInsets.symmetric(vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
             ),
           ),
@@ -983,7 +1374,10 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
             child: TextButton.icon(
               onPressed: _flagDiscrepancy,
               icon: const Icon(Icons.flag_outlined, size: 15),
-              label: const Text('Flag a Discrepancy', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              label: const Text(
+                'Flag a Discrepancy',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+              ),
               style: TextButton.styleFrom(
                 foregroundColor: const Color(0xFFDC2626),
                 padding: const EdgeInsets.symmetric(vertical: 10),
@@ -1008,7 +1402,12 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
         children: [
           const Text(
             'MY REPUTATION',
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF475569), letterSpacing: 0.5),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF475569),
+              letterSpacing: 0.5,
+            ),
           ),
           const SizedBox(height: 10),
           Row(
@@ -1025,7 +1424,11 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                       backgroundColor: Color(0xFFF1F5F9),
                       color: Colors.green,
                     ),
-                    Icon(Icons.verified_outlined, color: Colors.green, size: 18),
+                    Icon(
+                      Icons.verified_outlined,
+                      color: Colors.green,
+                      size: 18,
+                    ),
                   ],
                 ),
               ),
@@ -1034,9 +1437,19 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: const [
-                    Text('Trusted Member', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+                    Text(
+                      'Trusted Member',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1E293B),
+                      ),
+                    ),
                     SizedBox(height: 2),
-                    Text('On-time payments: 4/4. No flags.', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                    Text(
+                      'On-time payments: 4/4. No flags.',
+                      style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                    ),
                   ],
                 ),
               ),
@@ -1047,7 +1460,11 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
           const SizedBox(height: 6),
           const Text(
             'Mechanism:\n• New/low reputation accounts are restricted to chits under ₹1,000.\n• Ask a trusted member to guarantee you for higher-value groups.',
-            style: TextStyle(fontSize: 11, color: Color(0xFF64748B), height: 1.4),
+            style: TextStyle(
+              fontSize: 11,
+              color: Color(0xFF64748B),
+              height: 1.4,
+            ),
           ),
         ],
       ),
@@ -1066,18 +1483,30 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               title: Row(
                 children: const [
                   Icon(Icons.payment, color: Color(0xFF0F4C81)),
                   SizedBox(width: 8),
-                  Text('Pay by Card (Razorpay)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  Text(
+                    'Pay by Card (Razorpay)',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
                 ],
               ),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('Amount: ₹${amount.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF0F4C81))),
+                  Text(
+                    'Amount: ₹${amount.toStringAsFixed(0)}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                      color: Color(0xFF0F4C81),
+                    ),
+                  ),
                   const SizedBox(height: 16),
                   TextField(
                     controller: cardNoController,
@@ -1116,7 +1545,10 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                     const SizedBox(height: 20),
                     const CircularProgressIndicator(color: Color(0xFF0F4C81)),
                     const SizedBox(height: 10),
-                    const Text('Processing transaction...', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                    const Text(
+                      'Processing transaction...',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                    ),
                   ],
                 ],
               ),
@@ -1126,39 +1558,49 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton(
-                  onPressed: processing ? null : () async {
-                    setDialogState(() => processing = true);
-                    await Future.delayed(const Duration(seconds: 2));
+                  onPressed: processing
+                      ? null
+                      : () async {
+                          setDialogState(() => processing = true);
+                          await Future.delayed(const Duration(seconds: 2));
 
-                    setState(() {
-                      _userPayments.add({
-                        'cycle': widget.group.currentCycle,
-                        'amount': amount,
-                        'date': 'Today, ${DateFormat('hh:mm a').format(DateTime.now())}',
-                        'foremanConfirmed': 'Today, ${DateFormat('hh:mm a').format(DateTime.now().add(const Duration(minutes: 5)))}',
-                        'memberConfirmed': 'Today, ${DateFormat('hh:mm a').format(DateTime.now())}',
-                        'status': 'Confirmed by both parties',
-                      });
-                    });
+                          setState(() {
+                            _userPayments.add({
+                              'cycle': widget.group.currentCycle,
+                              'amount': amount,
+                              'date':
+                                  'Today, ${DateFormat('hh:mm a').format(DateTime.now())}',
+                              'foremanConfirmed':
+                                  'Today, ${DateFormat('hh:mm a').format(DateTime.now().add(const Duration(minutes: 5)))}',
+                              'memberConfirmed':
+                                  'Today, ${DateFormat('hh:mm a').format(DateTime.now())}',
+                              'status': 'Confirmed by both parties',
+                            });
+                          });
 
-                    if (mounted) {
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('🎉 Payment of ₹${amount.toStringAsFixed(0)} succeeded! Two-party confirmed.'),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF59E0B), foregroundColor: Colors.white),
+                          if (mounted) {
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  '🎉 Payment of ₹${amount.toStringAsFixed(0)} succeeded! Two-party confirmed.',
+                                ),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0F4C81),
+                    foregroundColor: Colors.white,
+                  ),
                   child: const Text('Pay Now'),
                 ),
               ],
             );
-          }
+          },
         );
-      }
+      },
     );
   }
 
@@ -1167,15 +1609,29 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
       context: context,
       builder: (context) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Two-Party Confirmation', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            'Two-Party Confirmation',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Transaction: Cycle ${tx['cycle']} Contribution', style: const TextStyle(fontWeight: FontWeight.bold)),
+              Text(
+                'Transaction: Cycle ${tx['cycle']} Contribution',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 6),
-              Text('Amount: ₹${tx['amount'].toStringAsFixed(0)}', style: const TextStyle(color: Color(0xFF0F4C81), fontWeight: FontWeight.bold)),
+              Text(
+                'Amount: ₹${tx['amount'].toStringAsFixed(0)}',
+                style: const TextStyle(
+                  color: Color(0xFF0F4C81),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               const SizedBox(height: 12),
               const Divider(),
               const SizedBox(height: 6),
@@ -1183,24 +1639,42 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                 children: const [
                   Icon(Icons.check_circle, color: Colors.green, size: 16),
                   SizedBox(width: 8),
-                  Text('Foreman Approved', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  Text(
+                    'Foreman Approved',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
                 ],
               ),
               Padding(
                 padding: const EdgeInsets.only(left: 24.0, top: 2),
-                child: Text('Approved by: Rajesh Kumar (Foreman)\nAt: ${tx['foremanConfirmed']}', style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                child: Text(
+                  'Approved by: Rajesh Kumar (Foreman)\nAt: ${tx['foremanConfirmed']}',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
               ),
               const SizedBox(height: 12),
               Row(
                 children: const [
                   Icon(Icons.check_circle, color: Colors.green, size: 16),
                   SizedBox(width: 8),
-                  Text('Subscriber Confirmed', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  Text(
+                    'Subscriber Confirmed',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
                 ],
               ),
               Padding(
                 padding: const EdgeInsets.only(left: 24.0, top: 2),
-                child: Text('Approved by: You (${widget.currentUsername})\nAt: ${tx['memberConfirmed']}', style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                child: Text(
+                  'Approved by: You (${widget.currentUsername})\nAt: ${tx['memberConfirmed']}',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
               ),
             ],
           ),
@@ -1221,10 +1695,15 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
       context: context,
       builder: (context) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           title: Row(
             children: const [
-              const Icon(Icons.report_problem_outlined, color: Color(0xFFDC2626)),
+              const Icon(
+                Icons.report_problem_outlined,
+                color: Color(0xFFDC2626),
+              ),
               const SizedBox(width: 8),
               const Expanded(
                 child: Text(
@@ -1240,7 +1719,10 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Describe the discrepancy or issue you observed. The Foreman and system admin will be notified immediately.', style: TextStyle(fontSize: 12, color: Color(0xFF475569))),
+              const Text(
+                'Describe the discrepancy or issue you observed. The Foreman and system admin will be notified immediately.',
+                style: TextStyle(fontSize: 12, color: Color(0xFF475569)),
+              ),
               const SizedBox(height: 12),
               TextField(
                 controller: controller,
@@ -1264,13 +1746,18 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('🚨 Discrepancy successfully logged. Foreman notified!'),
+                      content: Text(
+                        '🚨 Discrepancy successfully logged. Foreman notified!',
+                      ),
                       backgroundColor: Color(0xFFDC2626),
                     ),
                   );
                 }
               },
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFDC2626), foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFDC2626),
+                foregroundColor: Colors.white,
+              ),
               child: const Text('Submit Flag'),
             ),
           ],
@@ -1282,6 +1769,12 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
   // --- TAB 1: AUCTION / RANDOM DRAW FUNCTIONALITY ---
   Widget _buildSchemeAuctionTab(ChitGroup g, double progressPct) {
     final bidState = BiddingSessionService.instance.getOrCreateState(g.id);
+    final hostMember = _members.where((m) => m.isHostMember).firstOrNull;
+    final bool hasHostMember = hostMember != null;
+    final bool isCycle2HostPayout = g.currentCycle == 2 && hasHostMember;
+    final bool isHostPayoutRecorded = _ledgerHistory.any(
+      (item) => item['cycle'] == 2 && item['status'] == 'Host payout (self)',
+    );
 
     return SingleChildScrollView(
       child: Column(
@@ -1302,20 +1795,39 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                     children: [
                       Row(
                         children: [
-                          Icon(g.schemeType == 'Bidding' ? Icons.gavel : Icons.casino, color: const Color(0xFFF59E0B), size: 16),
+                          Icon(
+                            g.schemeType == 'Bidding'
+                                ? Icons.gavel
+                                : Icons.casino,
+                            color: const Color(0xFF059669),
+                            size: 16,
+                          ),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
-                              g.schemeType == 'Bidding' ? 'Bidding Auction Starts' : 'Lucky Draw Date',
+                              g.schemeType == 'Bidding'
+                                  ? 'Bidding Auction Starts'
+                                  : 'Lucky Draw Date',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 4),
-                      const Text('1st of Every Month', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                      const Text(
+                        '1st of Every Month',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1327,20 +1839,35 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                     children: [
                       Row(
                         children: const [
-                          Icon(Icons.payment_rounded, color: Color(0xFF86EFAC), size: 16),
+                          Icon(
+                            Icons.payment_rounded,
+                            color: Color(0xFF86EFAC),
+                            size: 16,
+                          ),
                           SizedBox(width: 6),
                           Expanded(
                             child: Text(
                               'Subscriber Payment Due',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 4),
-                      const Text('10th of Every Month', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                      const Text(
+                        '10th of Every Month',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1349,8 +1876,134 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
           ),
           const SizedBox(height: 16),
 
-          // Host Console Bidding Session Flow
-          if (g.schemeType == 'Bidding') ...[
+          // Requirement 4: In Cycle 2, if host is member, skip auction/random draw and fix payout to host
+          if (isCycle2HostPayout) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFBBF7D0)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.02),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFDCFCE7),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.account_balance_rounded,
+                      size: 36,
+                      color: Color(0xFF166534),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Month 2: Fixed Host Payout',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Per scheme rules, the host (${hostMember.name}) receives the Month 2 full pot payout with 0% discount and 0 dividend. Auction and random draw are skipped for Cycle 2.',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF64748B),
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Full Pot Payout (No discount)',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF475569),
+                          ),
+                        ),
+                        Text(
+                          '₹${g.totalPoolSize.toStringAsFixed(0)}',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF15803D),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  if (isHostPayoutRecorded)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFDCFCE7),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Center(
+                        child: Text(
+                          'Host Payout Recorded in Ledger (Self) ✓',
+                          style: TextStyle(
+                            color: Color(0xFF166534),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    )
+                  else if (widget.isForeman)
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          _recordCycle2HostPayout(g, hostMember.name);
+                        },
+                        icon: const Icon(
+                          Icons.check_circle_outline_rounded,
+                          size: 16,
+                        ),
+                        label: const Text('Record Host Payout (Self)'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF059669),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ] else if (g.schemeType == 'Bidding') ...[
             if (bidState.scheduledStartTime == null) ...[
               // Screen A: No session scheduled -> Show Schedule button
               Container(
@@ -1363,17 +2016,29 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                 ),
                 child: Column(
                   children: [
-                    const Icon(Icons.calendar_month_rounded, size: 48, color: Color(0xFF64748B)),
+                    const Icon(
+                      Icons.calendar_month_rounded,
+                      size: 48,
+                      color: Color(0xFF64748B),
+                    ),
                     const SizedBox(height: 12),
                     const Text(
                       'No Auction Scheduled for this Cycle',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1E293B)),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color: Color(0xFF1E293B),
+                      ),
                     ),
                     const SizedBox(height: 6),
                     const Text(
                       'As the host/foreman, you must schedule a bidding session. Members will receive advance reminders.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.4),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF64748B),
+                        height: 1.4,
+                      ),
                     ),
                     const SizedBox(height: 16),
                     SizedBox(
@@ -1393,14 +2058,18 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                           backgroundColor: const Color(0xFF0F4C81),
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
                       ),
                     ),
                   ],
                 ),
               ),
-            ] else if (bidState.scheduledStartTime != null && !bidState.isAuctionActive && !bidState.isAuctionEnded) ...[
+            ] else if (bidState.scheduledStartTime != null &&
+                !bidState.isAuctionActive &&
+                !bidState.isAuctionEnded) ...[
               // Screen B: Session scheduled but not started
               Container(
                 width: double.infinity,
@@ -1412,16 +2081,28 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                 ),
                 child: Column(
                   children: [
-                    const Icon(Icons.event_available_rounded, size: 48, color: Color(0xFF0F4C81)),
+                    const Icon(
+                      Icons.event_available_rounded,
+                      size: 48,
+                      color: Color(0xFF0F4C81),
+                    ),
                     const SizedBox(height: 12),
                     const Text(
                       'Bidding Session Scheduled',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F4C81)),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: Color(0xFF0F4C81),
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'Scheduled to start: ${DateFormat('d MMM yyyy, hh:mm a').format(bidState.scheduledStartTime!)}',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E293B)),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        color: Color(0xFF1E293B),
+                      ),
                     ),
                     const SizedBox(height: 8),
                     const Text(
@@ -1433,14 +2114,20 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                       children: [
                         Expanded(
                           child: OutlinedButton(
-                            onPressed: () => BiddingSessionService.instance.cancelSchedule(g.id),
+                            onPressed: () => BiddingSessionService.instance
+                                .cancelSchedule(g.id),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: const Color(0xFFDC2626),
                               side: const BorderSide(color: Color(0xFFFCA5A5)),
                               padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
                             ),
-                            child: const Text('Cancel Schedule', style: TextStyle(fontWeight: FontWeight.bold)),
+                            child: const Text(
+                              'Cancel Schedule',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -1449,15 +2136,24 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                             onPressed: () {
                               final minBid = g.totalPoolSize * 0.05;
                               final maxCap = g.totalPoolSize * 0.30;
-                              BiddingSessionService.instance.startAuction(g.id, minBid, maxCap);
+                              BiddingSessionService.instance.startAuction(
+                                g.id,
+                                minBid,
+                                maxCap,
+                              );
                             },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF0F4C81),
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
                             ),
-                            child: const Text('Start Now', style: TextStyle(fontWeight: FontWeight.bold)),
+                            child: const Text(
+                              'Start Now',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
                           ),
                         ),
                       ],
@@ -1465,7 +2161,8 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                   ],
                 ),
               ),
-            ] else if (bidState.isAuctionActive && !bidState.isAuctionEnded) ...[
+            ] else if (bidState.isAuctionActive &&
+                !bidState.isAuctionEnded) ...[
               // Screen C: Live Bidding Room (Active)
               Container(
                 height: 480, // Constrained height for tab view
@@ -1499,7 +2196,10 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
               decoration: BoxDecoration(
                 color: const Color(0xFFF8FAFC),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF007A87).withOpacity(0.3), width: 1.5),
+                border: Border.all(
+                  color: const Color(0xFF007A87).withOpacity(0.3),
+                  width: 1.5,
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1512,13 +2212,21 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                           'RANDOM PICKING CHIT (LUCKY DRAW)',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F4C81)),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: Color(0xFF0F4C81),
+                          ),
                         ),
                       ),
                       Chip(
                         label: const Text('Draw Eligible'),
-                        backgroundColor: const Color(0xFFFEF3C7),
-                        labelStyle: const TextStyle(color: Color(0xFF92400E), fontSize: 10, fontWeight: FontWeight.bold),
+                        backgroundColor: const Color(0xFFDCFCE7),
+                        labelStyle: const TextStyle(
+                          color: Color(0xFF166534),
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ],
                   ),
@@ -1526,17 +2234,37 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                   if (_luckyDrawWinner != null) ...[
                     Container(
                       padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(color: const Color(0xFFDCFCE7), borderRadius: BorderRadius.circular(12)),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFDCFCE7),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       child: Row(
                         children: [
-                          const Icon(Icons.emoji_events_rounded, color: Color(0xFF166534), size: 28),
+                          const Icon(
+                            Icons.emoji_events_rounded,
+                            color: Color(0xFF166534),
+                            size: 28,
+                          ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Winner Picked: $_luckyDrawWinner 🎉', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF166534))),
-                                Text('Full Payout Amount: ₹${g.totalPoolSize.toStringAsFixed(0)}', style: const TextStyle(fontSize: 12, color: Color(0xFF15803D))),
+                                Text(
+                                  'Winner Picked: $_luckyDrawWinner 🎉',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                    color: Color(0xFF166534),
+                                  ),
+                                ),
+                                Text(
+                                  'Full Payout Amount: ₹${g.totalPoolSize.toStringAsFixed(0)}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF15803D),
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -1544,7 +2272,10 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                       ),
                     ),
                   ] else ...[
-                    const Text('Monthly winner is randomly picked from eligible un-prized subscribers.', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                    const Text(
+                      'Monthly winner is randomly picked from eligible un-prized subscribers.',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                    ),
                     const SizedBox(height: 14),
                     SizedBox(
                       width: double.infinity,
@@ -1556,7 +2287,9 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                           backgroundColor: const Color(0xFF007A87),
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
                       ),
                     ),
@@ -1577,20 +2310,39 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
             ),
             child: Row(
               children: [
-                const Icon(Icons.account_balance_wallet_rounded, color: Color(0xFF007A87), size: 24),
+                const Icon(
+                  Icons.account_balance_wallet_rounded,
+                  color: Color(0xFF007A87),
+                  size: 24,
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Monthly Contribution Installment: ₹${g.monthlyContribution.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                      const Text('Due date: 10th of every month', style: TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                      Text(
+                        'Monthly Contribution Installment: ₹${g.monthlyContribution.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const Text(
+                        'Due date: 10th of every month',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
                     ],
                   ),
                 ),
                 ElevatedButton(
                   onPressed: _makeMonthlyPayment,
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF007A87), foregroundColor: Colors.white),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF007A87),
+                    foregroundColor: Colors.white,
+                  ),
                   child: const Text('Pay Installment'),
                 ),
               ],
@@ -1604,11 +2356,19 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
             child: OutlinedButton.icon(
               onPressed: _openDigitalAgreement,
               icon: const Icon(Icons.gavel_rounded, color: Color(0xFF0F4C81)),
-              label: const Text('Inspect Signed Digital Agreement (Chit Funds Act 1982)', style: TextStyle(color: Color(0xFF0F4C81), fontWeight: FontWeight.bold)),
+              label: const Text(
+                'Inspect Signed Digital Agreement (Chit Funds Act 1982)',
+                style: TextStyle(
+                  color: Color(0xFF0F4C81),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               style: OutlinedButton.styleFrom(
                 side: const BorderSide(color: Color(0xFF0F4C81), width: 1.5),
                 padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
             ),
           ),
@@ -1620,16 +2380,24 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
   // --- TAB 2: MEMBER ROSTER ---
   Widget _buildMemberRosterTab() {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator(color: Color(0xFF0F4C81)));
+      return const Center(
+        child: CircularProgressIndicator(color: Color(0xFF0F4C81)),
+      );
     }
 
     if (_members.isEmpty) {
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(14)),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(14),
+        ),
         child: const Center(
-          child: Text('No members subscribed yet. Share 6-digit code to invite members.', style: TextStyle(color: Color(0xFF64748B))),
+          child: Text(
+            'No members subscribed yet. Share 6-digit code to invite members.',
+            style: TextStyle(color: Color(0xFF64748B)),
+          ),
         ),
       );
     }
@@ -1650,22 +2418,107 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
             children: [
               CircleAvatar(
                 backgroundColor: const Color(0xFF0F4C81),
-                child: Text('${index + 1}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                child: Text(
+                  '${index + 1}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(m.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                    Text('Payout: ${m.payoutPosition} • Trend: ${m.paymentTrend}', style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => UserProfileScreen(
+                              username: m.name,
+                              isOwnProfile: false,
+                            ),
+                          ),
+                        );
+                      },
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              m.name,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                                color: Color(0xFF0F172A),
+                                decoration: TextDecoration.underline,
+                                decorationColor: Color(0xFFCBD5E1),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (m.isHostMember) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFDCFCE7),
+                                borderRadius: BorderRadius.circular(6),
+                                border:
+                                    Border.all(color: const Color(0xFFBBF7D0)),
+                              ),
+                              child: const Text(
+                                'Host · Month 2',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF166534),
+                                ),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(width: 4),
+                          const Icon(
+                            Icons.open_in_new,
+                            size: 12,
+                            color: Color(0xFF007A87),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      'Payout: ${m.payoutPosition} • Trend: ${m.paymentTrend}',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
                   ],
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(color: const Color(0xFFDCFCE7), borderRadius: BorderRadius.circular(6)),
-                child: const Text('Verified Member', style: TextStyle(color: Color(0xFF166534), fontSize: 10, fontWeight: FontWeight.bold)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDCFCE7),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text(
+                  'Verified Member',
+                  style: TextStyle(
+                    color: Color(0xFF166534),
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ],
           ),
@@ -1686,7 +2539,14 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
             if (_ledgerHistory.isNotEmpty) ...[
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 8),
-                child: Text('Auction Winning Payouts & Dividends', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF64748B))),
+                child: Text(
+                  'Auction Winning Payouts & Dividends',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
               ),
               ..._ledgerHistory.map((item) {
                 return Container(
@@ -1703,24 +2563,53 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('Cycle ${item["cycle"]} Ledger Entry', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F4C81))),
+                          Text(
+                            'Cycle ${item["cycle"]} Ledger Entry',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
+                              color: Color(0xFF0F4C81),
+                            ),
+                          ),
                           Chip(
                             label: Text('${item["status"]}'),
                             backgroundColor: const Color(0xFF007A87),
-                            labelStyle: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                            labelStyle: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 8),
                       Row(
                         children: [
-                          Text('Winner: ${item["winner"]}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          Text(
+                            'Winner: ${item["winner"]}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
                           const Spacer(),
-                          Text('Payout: ₹${(item["payoutAmount"] as double).toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFFD97706))),
+                          Text(
+                            'Payout: ₹${(item["payoutAmount"] as double).toStringAsFixed(0)}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF059669),
+                            ),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 4),
-                      Text('Date: ${item["date"]} • Member Dividend: ₹${(item["dividendPerMember"] as double).toStringAsFixed(0)}/user', style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                      Text(
+                        'Date: ${item["date"]} • Member Dividend: ₹${(item["dividendPerMember"] as double).toStringAsFixed(0)}/user',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
                     ],
                   ),
                 );
@@ -1730,14 +2619,27 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
             // Section 2: Verified Member Installment Collections (YouPI & Cash)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text('Verified Subscriber Installments (YouPI & Cash)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF64748B))),
+              child: Text(
+                'Verified Subscriber Installments (YouPI & Cash)',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                  color: Color(0xFF64748B),
+                ),
+              ),
             ),
             if (payments.isEmpty)
               Container(
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12)),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 child: const Center(
-                  child: Text('No installment collections recorded yet.', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                  child: Text(
+                    'No installment collections recorded yet.',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                  ),
                 ),
               )
             else
@@ -1748,19 +2650,29 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: p.isPaid ? const Color(0xFFBBF7D0) : const Color(0xFFE2E8F0)),
+                    border: Border.all(
+                      color: p.isPaid
+                          ? const Color(0xFFBBF7D0)
+                          : const Color(0xFFE2E8F0),
+                    ),
                   ),
                   child: Row(
                     children: [
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: p.isPaid ? const Color(0xFFDCFCE7) : const Color(0xFFFEF3C7),
+                          color: p.isPaid
+                              ? const Color(0xFFDCFCE7)
+                              : const Color(0xFFF1F5F9),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
-                          p.isPaid ? Icons.check_circle_rounded : Icons.pending_rounded,
-                          color: p.isPaid ? const Color(0xFF16A34A) : const Color(0xFFD97706),
+                          p.isPaid
+                              ? Icons.check_circle_rounded
+                              : Icons.pending_rounded,
+                          color: p.isPaid
+                              ? const Color(0xFF16A34A)
+                              : const Color(0xFF64748B),
                           size: 20,
                         ),
                       ),
@@ -1769,27 +2681,57 @@ class _GroupDetailsModalState extends State<GroupDetailsModal> with SingleTicker
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(p.memberName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                            Text('UTR: ${p.utr ?? "Pending verification"} • ${p.paymentMethod}', style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                            Text(
+                              p.memberName,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                            Text(
+                              p.paymentMethod == 'HOST_SHARE'
+                                  ? 'Host Share • Auto-credited'
+                                  : 'UTR: ${p.utr ?? "Pending verification"} • ${p.paymentMethod}',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
                           ],
                         ),
                       ),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Text('₹${p.amount.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: Color(0xFF15803D))),
+                          Text(
+                            '₹${p.amount.toStringAsFixed(0)}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 14,
+                              color: Color(0xFF15803D),
+                            ),
+                          ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
-                              color: p.isPaid ? const Color(0xFFDCFCE7) : const Color(0xFFFEF3C7),
+                              color: p.isPaid
+                                  ? const Color(0xFFDCFCE7)
+                                  : const Color(0xFFF1F5F9),
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
-                              p.status,
+                              p.paymentMethod == 'HOST_SHARE'
+                                  ? 'Paid (host share)'
+                                  : p.status,
                               style: TextStyle(
                                 fontSize: 9,
                                 fontWeight: FontWeight.bold,
-                                color: p.isPaid ? const Color(0xFF166534) : const Color(0xFF92400E),
+                                color: p.isPaid
+                                    ? const Color(0xFF166534)
+                                    : const Color(0xFF475569),
                               ),
                             ),
                           ),
