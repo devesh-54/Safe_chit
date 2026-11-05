@@ -14,6 +14,9 @@ import '../../features/bidding/live_bidding_room.dart';
 import '../../features/bidding/auction_close_payout.dart';
 import '../../widgets/youpi_payment_modal.dart';
 import '../../models/chit_payment_record.dart';
+import '../../models/security_deposit.dart';
+import '../../core/config/deposit_config.dart';
+import '../../widgets/razorpay_checkout_modal.dart';
 import '../profile/user_profile_screen.dart';
 
 class GroupDetailsModal extends StatefulWidget {
@@ -38,8 +41,32 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   List<ChitMemberRisk> _members = [];
+  Map<String, SecurityDeposit> _rosterDeposits = {};
+  SecurityDeposit? _mySecurityDeposit;
+  List<ChitPaymentRecord> _groupPayments = [];
+  String _rosterFilter = 'All'; // 'All', 'Paid', 'Unpaid'
   bool _isLoading = true;
   StreamSubscription<String>? _biddingStatusSub;
+
+  double get _depositAmount {
+    if (widget.group.securityDeposit > 0) {
+      return widget.group.securityDeposit;
+    }
+    return widget.group.monthlyContribution * kDefaultDepositPercentOfInstallment;
+  }
+
+  void _openDepositCheckoutModal() {
+    RazorpayCheckoutModal.show(
+      context: context,
+      groupId: widget.group.id,
+      groupName: widget.group.name,
+      memberId: widget.currentUsername,
+      amount: _depositAmount,
+      onDepositSuccess: () {
+        _loadGroupMembers();
+      },
+    );
+  }
 
   // Bidding & Draw simulation state
   final TextEditingController _bidController = TextEditingController();
@@ -67,7 +94,7 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _loadGroupMembers();
 
     _biddingStatusSub = BiddingSessionService.instance.statusStream.listen((
@@ -151,10 +178,24 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
   void _loadGroupMembers() async {
     setState(() => _isLoading = true);
     final members = await SupabaseService.getGroupMembers(widget.group.id);
-    setState(() {
-      _members = members;
-      _isLoading = false;
-    });
+    final deposits =
+        await SupabaseService.getGroupSecurityDeposits(widget.group.id);
+    final payments =
+        await SupabaseService.getGroupPayments(widget.group.id);
+    final myDep = deposits[widget.currentUsername] ??
+        await SupabaseService.getSecurityDeposit(
+          groupId: widget.group.id,
+          memberId: widget.currentUsername,
+        );
+    if (mounted) {
+      setState(() {
+        _members = members;
+        _rosterDeposits = deposits;
+        _groupPayments = payments;
+        _mySecurityDeposit = myDep;
+        _isLoading = false;
+      });
+    }
   }
 
   void _submitAuctionBid() {
@@ -384,6 +425,9 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
   }
 
   Widget _buildForemanDashboard(ChitGroup g, double progressPct) {
+    final int pendingHandshakeCount =
+        _groupPayments.where((p) => p.isPending).length;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -437,13 +481,14 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
         ],
         const SizedBox(height: 12),
 
-        // Tab Bar: 1. Scheme Auction/Draw | 2. Member Roster | 3. Payout Ledger
+        // Tab Bar: 1. Auction/Draw | 2. Member Roster & Dues | 3. Handshakes | 4. Payout Ledger
         TabBar(
           controller: _tabController,
           labelColor: const Color(0xFF0F4C81),
           unselectedLabelColor: const Color(0xFF64748B),
           indicatorColor: const Color(0xFF0F4C81),
           indicatorWeight: 3,
+          isScrollable: true,
           tabs: [
             Tab(
               icon: Icon(
@@ -458,7 +503,41 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
             ),
             const Tab(
               icon: Icon(Icons.people_alt_rounded, size: 18),
-              text: 'Member Roster',
+              text: 'Member Roster & Dues',
+            ),
+            Tab(
+              icon: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  const Icon(Icons.handshake_outlined, size: 18),
+                  if (pendingHandshakeCount > 0)
+                    Positioned(
+                      right: -8,
+                      top: -6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 5,
+                          vertical: 1,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFDC2626),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '$pendingHandshakeCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              text: pendingHandshakeCount > 0
+                  ? 'Handshakes ($pendingHandshakeCount)'
+                  : 'Handshake Confirmations',
             ),
             const Tab(
               icon: Icon(Icons.receipt_long_rounded, size: 18),
@@ -475,6 +554,7 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
             children: [
               _buildSchemeAuctionTab(g, progressPct),
               _buildMemberRosterTab(),
+              _buildHandshakeConfirmationsTab(),
               _buildPayoutLedgerTab(g),
             ],
           ),
@@ -539,6 +619,166 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
           ),
         ],
         const SizedBox(height: 12),
+
+        // SECURITY DEPOSIT STATUS SECTION
+        Container(
+          width: double.infinity,
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: _mySecurityDeposit?.isHeld == true
+                ? const Color(0xFFF0FDF4)
+                : (_mySecurityDeposit?.isForfeited == true
+                    ? const Color(0xFFFEF2F2)
+                    : const Color(0xFFFEF3C7)),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: _mySecurityDeposit?.isHeld == true
+                  ? const Color(0xFFBBF7D0)
+                  : (_mySecurityDeposit?.isForfeited == true
+                      ? const Color(0xFFFECACA)
+                      : const Color(0xFFFDE68A)),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.shield_rounded,
+                        size: 18,
+                        color: _mySecurityDeposit?.isHeld == true
+                            ? const Color(0xFF166534)
+                            : const Color(0xFF92400E),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Security Deposit',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFFFDE68A)),
+                    ),
+                    child: const Text(
+                      'Test mode, no real money',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF92400E),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Amount: ₹${_depositAmount.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          const Text(
+                            'Status: ',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                          Text(
+                            _mySecurityDeposit?.displayStatus ?? 'Pending',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: _mySecurityDeposit?.isHeld == true
+                                  ? const Color(0xFF166534)
+                                  : (_mySecurityDeposit?.isRefunded == true
+                                      ? const Color(0xFF0284C7)
+                                      : (_mySecurityDeposit?.isForfeited == true
+                                          ? const Color(0xFFDC2626)
+                                          : const Color(0xFFD97706))),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  if (_mySecurityDeposit == null || _mySecurityDeposit!.isPending)
+                    ElevatedButton.icon(
+                      onPressed: _openDepositCheckoutModal,
+                      icon: const Icon(Icons.payment_rounded, size: 14),
+                      label: const Text('Pay security deposit'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0F4C81),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _mySecurityDeposit!.isHeld
+                            ? const Color(0xFFDCFCE7)
+                            : (_mySecurityDeposit!.isRefunded
+                                ? const Color(0xFFE0F2FE)
+                                : const Color(0xFFFEE2E2)),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        _mySecurityDeposit!.isHeld
+                            ? 'Deposit Held'
+                            : _mySecurityDeposit!.displayStatus,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: _mySecurityDeposit!.isHeld
+                              ? const Color(0xFF166534)
+                              : (_mySecurityDeposit!.isRefunded
+                                  ? const Color(0xFF0284C7)
+                                  : const Color(0xFFDC2626)),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
 
         // TOP SECTION — Status Card (always visible, no scroll)
         Container(
@@ -667,9 +907,9 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
                         ElevatedButton.icon(
                           onPressed: () =>
                               _openRazorpayCardCheckout(g.monthlyContribution),
-                          icon: const Icon(Icons.credit_card_rounded, size: 14),
+                          icon: const Icon(Icons.payment_rounded, size: 14),
                           label: const Text(
-                            'Pay by Card',
+                            'Pay with Razorpay (Test)',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 11,
@@ -1472,134 +1712,26 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
   }
 
   void _openRazorpayCardCheckout(double amount) {
-    final TextEditingController cardNoController = TextEditingController();
-    final TextEditingController expiryController = TextEditingController();
-    final TextEditingController cvvController = TextEditingController();
-
-    showDialog(
+    RazorpayCheckoutModal.show(
       context: context,
-      builder: (context) {
-        bool processing = false;
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              title: Row(
-                children: const [
-                  Icon(Icons.payment, color: Color(0xFF0F4C81)),
-                  SizedBox(width: 8),
-                  Text(
-                    'Pay by Card (Razorpay)',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                  ),
-                ],
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Amount: ₹${amount.toStringAsFixed(0)}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                      color: Color(0xFF0F4C81),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: cardNoController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      hintText: 'Card Number (16 digits)',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: expiryController,
-                          decoration: const InputDecoration(
-                            hintText: 'Expiry (MM/YY)',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: TextField(
-                          controller: cvvController,
-                          obscureText: true,
-                          decoration: const InputDecoration(
-                            hintText: 'CVV',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (processing) ...[
-                    const SizedBox(height: 20),
-                    const CircularProgressIndicator(color: Color(0xFF0F4C81)),
-                    const SizedBox(height: 10),
-                    const Text(
-                      'Processing transaction...',
-                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                    ),
-                  ],
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: processing ? null : () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: processing
-                      ? null
-                      : () async {
-                          setDialogState(() => processing = true);
-                          await Future.delayed(const Duration(seconds: 2));
-
-                          setState(() {
-                            _userPayments.add({
-                              'cycle': widget.group.currentCycle,
-                              'amount': amount,
-                              'date':
-                                  'Today, ${DateFormat('hh:mm a').format(DateTime.now())}',
-                              'foremanConfirmed':
-                                  'Today, ${DateFormat('hh:mm a').format(DateTime.now().add(const Duration(minutes: 5)))}',
-                              'memberConfirmed':
-                                  'Today, ${DateFormat('hh:mm a').format(DateTime.now())}',
-                              'status': 'Confirmed by both parties',
-                            });
-                          });
-
-                          if (mounted) {
-                            Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  '🎉 Payment of ₹${amount.toStringAsFixed(0)} succeeded! Two-party confirmed.',
-                                ),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
-                          }
-                        },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0F4C81),
-                    foregroundColor: Colors.white,
-                  ),
-                  child: const Text('Pay Now'),
-                ),
-              ],
-            );
-          },
-        );
+      groupId: widget.group.id,
+      groupName: widget.group.name,
+      memberId: widget.currentUsername,
+      amount: amount,
+      onDepositSuccess: () {
+        setState(() {
+          _userPayments.insert(0, {
+            'cycle': widget.group.currentCycle,
+            'amount': amount,
+            'date': 'Today, ${DateFormat('hh:mm a').format(DateTime.now())}',
+            'foremanConfirmed':
+                'Today, ${DateFormat('hh:mm a').format(DateTime.now().add(const Duration(minutes: 5)))}',
+            'memberConfirmed':
+                'Today, ${DateFormat('hh:mm a').format(DateTime.now())}',
+            'status': 'Confirmed by both parties',
+          });
+        });
+        _loadGroupMembers();
       },
     );
   }
@@ -1775,11 +1907,65 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
     final bool isHostPayoutRecorded = _ledgerHistory.any(
       (item) => item['cycle'] == 2 && item['status'] == 'Host payout (self)',
     );
+    final pendingInGroup = _groupPayments.where((p) => p.isPending).toList();
 
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (widget.isForeman && pendingInGroup.isNotEmpty) ...[
+            GestureDetector(
+              onTap: () => _tabController.animateTo(2),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFFDE68A)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.handshake_outlined,
+                      color: Color(0xFFB45309),
+                      size: 22,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${pendingInGroup.length} Payment${pendingInGroup.length > 1 ? "s" : ""} Awaiting Foreman Handshake',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF92400E),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          const Text(
+                            'Subscribers submitted contributions. Tap to verify & confirm receipts.',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF78350F),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(
+                      Icons.arrow_forward_ios_rounded,
+                      size: 12,
+                      color: Color(0xFFB45309),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+
           // Schedule Banner (1st & 10th of every month)
           Container(
             padding: const EdgeInsets.all(16),
@@ -2377,7 +2563,7 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
     );
   }
 
-  // --- TAB 2: MEMBER ROSTER ---
+  // --- TAB 2: MEMBER ROSTER & DUES ---
   Widget _buildMemberRosterTab() {
     if (_isLoading) {
       return const Center(
@@ -2402,121 +2588,782 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
       );
     }
 
-    return ListView.builder(
-      itemCount: _members.length,
-      itemBuilder: (context, index) {
-        final m = _members[index];
-        return Container(
-          margin: const EdgeInsets.only(bottom: 8),
+    final sessionState =
+        BiddingSessionService.instance.getOrCreateState(widget.group.id);
+    final double auctionDiscount = sessionState.currentHighestBid > 0
+        ? sessionState.currentHighestBid
+        : _currentWinningBid;
+    final int memberCount = widget.group.durationMonths > 0
+        ? widget.group.durationMonths
+        : (_members.isNotEmpty ? _members.length : 1);
+    final double dividendPerMember =
+        auctionDiscount > 0 ? (auctionDiscount / memberCount) : 0.0;
+    final double baseInstallment = widget.group.monthlyContribution;
+    final double reducedInstallment =
+        (baseInstallment - dividendPerMember).clamp(0.0, baseInstallment);
+
+    // Paid vs Unpaid breakdown for current cycle
+    final paidIdentifiers = _groupPayments
+        .where((p) => p.isPaid && p.cycle == widget.group.currentCycle)
+        .map((p) => p.memberUsername.toLowerCase())
+        .toSet();
+    final paidNames = _groupPayments
+        .where((p) => p.isPaid && p.cycle == widget.group.currentCycle)
+        .map((p) => p.memberName.toLowerCase())
+        .toSet();
+
+    final paidMembers = _members.where((m) {
+      final lower = m.name.toLowerCase();
+      return m.isHostMember ||
+          paidIdentifiers.contains(lower) ||
+          paidNames.contains(lower);
+    }).toList();
+
+    final unpaidMembers =
+        _members.where((m) => !paidMembers.contains(m)).toList();
+
+    List<ChitMemberRisk> displayMembers = _members;
+    if (_rosterFilter == 'Paid') {
+      displayMembers = paidMembers;
+    } else if (_rosterFilter == 'Unpaid') {
+      displayMembers = unpaidMembers;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 1. Upcoming Month Reduced Installment Card
+        Container(
+          width: double.infinity,
+          margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
+            color: const Color(0xFFEFF6FF),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFBFDBFE)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.trending_down_rounded,
+                        size: 18,
+                        color: Color(0xFF1D4ED8),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Upcoming Month Installment (Cycle ${widget.group.currentCycle + 1})',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1E3A8A),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFDBEAFE),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text(
+                      'Dividend Applied',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1E40AF),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Base Contribution',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                      Text(
+                        baseInstallment < 10
+                            ? '₹${baseInstallment.toStringAsFixed(2)}'
+                            : '₹${baseInstallment.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF475569),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Text(
+                    '-',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF94A3B8),
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Auction Dividend',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Color(0xFF059669),
+                        ),
+                      ),
+                      Text(
+                        dividendPerMember < 10
+                            ? '₹${dividendPerMember.toStringAsFixed(2)}'
+                            : '₹${dividendPerMember.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF059669),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Text(
+                    '=',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF94A3B8),
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      const Text(
+                        'Net Upcoming Due',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1E3A8A),
+                        ),
+                      ),
+                      Text(
+                        reducedInstallment < 10
+                            ? '₹${reducedInstallment.toStringAsFixed(2)}'
+                            : '₹${reducedInstallment.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                          color: Color(0xFF1D4ED8),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Winning discount: ₹${auctionDiscount < 10 ? auctionDiscount.toStringAsFixed(2) : auctionDiscount.toStringAsFixed(0)} ÷ $memberCount members = ₹${dividendPerMember < 10 ? dividendPerMember.toStringAsFixed(2) : dividendPerMember.toStringAsFixed(0)} savings per member.',
+                style: const TextStyle(
+                  fontSize: 10.5,
+                  color: Color(0xFF475569),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // 2. Collection Dues Summary and Filters
+        Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(10),
             border: Border.all(color: const Color(0xFFE2E8F0)),
           ),
           child: Row(
             children: [
-              CircleAvatar(
-                backgroundColor: const Color(0xFF0F4C81),
+              Expanded(
                 child: Text(
-                  '${index + 1}',
+                  'Cycle ${widget.group.currentCycle}: ${paidMembers.length}/${_members.length} Paid',
                   style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
                     fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0F172A),
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => UserProfileScreen(
-                              username: m.name,
-                              isOwnProfile: false,
-                            ),
-                          ),
-                        );
-                      },
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
+              Wrap(
+                spacing: 4,
+                children: ['All', 'Paid', 'Unpaid'].map((filter) {
+                  final isSelected = _rosterFilter == filter;
+                  final count = filter == 'All'
+                      ? _members.length
+                      : (filter == 'Paid'
+                          ? paidMembers.length
+                          : unpaidMembers.length);
+                  return ChoiceChip(
+                    label: Text('$filter ($count)'),
+                    selected: isSelected,
+                    onSelected: (_) => setState(() => _rosterFilter = filter),
+                    selectedColor: const Color(0xFF0F4C81),
+                    labelStyle: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color:
+                          isSelected ? Colors.white : const Color(0xFF475569),
+                    ),
+                    visualDensity: VisualDensity.compact,
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+        ),
+
+        // 3. Member List
+        Expanded(
+          child: displayMembers.isEmpty
+              ? Center(
+                  child: Text(
+                    _rosterFilter == 'Unpaid'
+                        ? 'All members have paid for Cycle ${widget.group.currentCycle}!'
+                        : 'No members in this filter.',
+                    style: const TextStyle(color: Color(0xFF64748B)),
+                  ),
+                )
+              : ListView.builder(
+                  itemCount: displayMembers.length,
+                  itemBuilder: (context, index) {
+                    final m = displayMembers[index];
+                    final dep = _rosterDeposits[m.name];
+                    final depStatus = dep?.displayStatus ?? 'Pending';
+                    final depAmt = dep?.amount ?? _depositAmount;
+                    final bool isMemberPaid = paidMembers.contains(m);
+
+                    Color depBadgeBg = const Color(0xFFFEF3C7);
+                    Color depBadgeText = const Color(0xFF92400E);
+                    if (dep?.isHeld == true) {
+                      depBadgeBg = const Color(0xFFDCFCE7);
+                      depBadgeText = const Color(0xFF166534);
+                    } else if (dep?.isRefunded == true) {
+                      depBadgeBg = const Color(0xFFE0F2FE);
+                      depBadgeText = const Color(0xFF0369A1);
+                    } else if (dep?.isForfeited == true) {
+                      depBadgeBg = const Color(0xFFFEE2E2);
+                      depBadgeText = const Color(0xFF991B1B);
+                    }
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isMemberPaid
+                              ? const Color(0xFFE2E8F0)
+                              : const Color(0xFFFCA5A5),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Flexible(
-                            child: Text(
-                              m.name,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                                color: Color(0xFF0F172A),
-                                decoration: TextDecoration.underline,
-                                decorationColor: Color(0xFFCBD5E1),
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          if (m.isHostMember) ...[
-                            const SizedBox(width: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFDCFCE7),
-                                borderRadius: BorderRadius.circular(6),
-                                border:
-                                    Border.all(color: const Color(0xFFBBF7D0)),
-                              ),
-                              child: const Text(
-                                'Host · Month 2',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF166534),
+                          Row(
+                            children: [
+                              CircleAvatar(
+                                backgroundColor: isMemberPaid
+                                    ? const Color(0xFF0F4C81)
+                                    : const Color(0xFFDC2626),
+                                child: Text(
+                                  '${index + 1}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
                                 ),
                               ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    GestureDetector(
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => UserProfileScreen(
+                                              username: m.name,
+                                              isOwnProfile: false,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Flexible(
+                                            child: Text(
+                                              m.name,
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 14,
+                                                color: Color(0xFF0F172A),
+                                                decoration:
+                                                    TextDecoration.underline,
+                                                decorationColor:
+                                                    Color(0xFFCBD5E1),
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          if (m.isHostMember) ...[
+                                            const SizedBox(width: 6),
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 6,
+                                                vertical: 2,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFDCFCE7),
+                                                borderRadius:
+                                                    BorderRadius.circular(6),
+                                                border: Border.all(
+                                                  color:
+                                                      const Color(0xFFBBF7D0),
+                                                ),
+                                              ),
+                                              child: const Text(
+                                                'Host · Month 2',
+                                                style: TextStyle(
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Color(0xFF166534),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                          const SizedBox(width: 4),
+                                          const Icon(
+                                            Icons.open_in_new,
+                                            size: 12,
+                                            color: Color(0xFF007A87),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    Text(
+                                      'Payout: ${m.payoutPosition} • Trend: ${m.paymentTrend}',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: Color(0xFF64748B),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 3,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: isMemberPaid
+                                          ? const Color(0xFFDCFCE7)
+                                          : const Color(0xFFFEE2E2),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      m.isHostMember
+                                          ? 'Paid (Host share)'
+                                          : (isMemberPaid
+                                              ? 'Paid (Cycle ${widget.group.currentCycle})'
+                                              : 'Due ₹${baseInstallment < 10 ? baseInstallment.toStringAsFixed(2) : baseInstallment.toStringAsFixed(0)}'),
+                                      style: TextStyle(
+                                        color: isMemberPaid
+                                            ? const Color(0xFF166534)
+                                            : const Color(0xFF991B1B),
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: depBadgeBg,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      'Deposit: $depStatus',
+                                      style: TextStyle(
+                                        color: depBadgeText,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.calendar_month_outlined,
+                                size: 12,
+                                color: Color(0xFF1D4ED8),
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  'Next Month Net Due: ₹${reducedInstallment < 10 ? reducedInstallment.toStringAsFixed(2) : reducedInstallment.toStringAsFixed(0)} (Saved ₹${dividendPerMember < 10 ? dividendPerMember.toStringAsFixed(2) : dividendPerMember.toStringAsFixed(0)} via auction dividend)',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF1E40AF),
+                                  ),
+                                ),
+                              ),
+                              if (!isMemberPaid &&
+                                  !m.isHostMember &&
+                                  widget.isForeman) ...[
+                                TextButton.icon(
+                                  onPressed: () {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          'Payment reminder sent to ${m.name} for Cycle ${widget.group.currentCycle}!',
+                                        ),
+                                        backgroundColor:
+                                            const Color(0xFF0F4C81),
+                                      ),
+                                    );
+                                  },
+                                  icon: const Icon(
+                                    Icons.notifications_active_outlined,
+                                    size: 12,
+                                  ),
+                                  label: const Text(
+                                    'Remind',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  style: TextButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    foregroundColor: const Color(0xFFDC2626),
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          if (widget.isForeman && kDevTools) ...[
+                            const SizedBox(height: 8),
+                            const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                            const SizedBox(height: 6),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                OutlinedButton.icon(
+                                  onPressed: () async {
+                                    await SupabaseService.refundDeposit(
+                                      depositId: dep?.id ?? '',
+                                      groupId: widget.group.id,
+                                      memberId: m.name,
+                                      amount: depAmt,
+                                    );
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'Deposit refunded for ${m.name} (₹${depAmt.toStringAsFixed(0)})',
+                                          ),
+                                          backgroundColor:
+                                              const Color(0xFF0284C7),
+                                        ),
+                                      );
+                                      _loadGroupMembers();
+                                    }
+                                  },
+                                  icon: const Icon(
+                                    Icons.replay_rounded,
+                                    size: 12,
+                                  ),
+                                  label: const Text(
+                                    'Test: refund deposit',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    side: const BorderSide(
+                                      color: Color(0xFF0284C7),
+                                    ),
+                                    foregroundColor: const Color(0xFF0284C7),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                OutlinedButton.icon(
+                                  onPressed: () async {
+                                    await SupabaseService.forfeitDeposit(
+                                      depositId: dep?.id ?? '',
+                                      groupId: widget.group.id,
+                                      memberId: m.name,
+                                      amount: depAmt,
+                                    );
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'Deposit forfeited for ${m.name} & applied to missed installment',
+                                          ),
+                                          backgroundColor:
+                                              const Color(0xFFDC2626),
+                                        ),
+                                      );
+                                      _loadGroupMembers();
+                                    }
+                                  },
+                                  icon: const Icon(
+                                    Icons.gavel_rounded,
+                                    size: 12,
+                                  ),
+                                  label: const Text(
+                                    'Test: forfeit deposit',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    side: const BorderSide(
+                                      color: Color(0xFFDC2626),
+                                    ),
+                                    foregroundColor: const Color(0xFFDC2626),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
-                          const SizedBox(width: 4),
-                          const Icon(
-                            Icons.open_in_new,
-                            size: 12,
-                            color: Color(0xFF007A87),
-                          ),
                         ],
                       ),
-                    ),
-                    Text(
-                      'Payout: ${m.payoutPosition} • Trend: ${m.paymentTrend}',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Color(0xFF64748B),
-                      ),
-                    ),
-                  ],
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  // --- TAB 3: HANDSHAKE CONFIRMATIONS ---
+  Widget _buildHandshakeConfirmationsTab() {
+    final pending = _groupPayments.where((p) => p.isPending).toList();
+
+    if (pending.isEmpty) {
+      return Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFDCFCE7),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.handshake_rounded,
+                  size: 48,
+                  color: Color(0xFF166534),
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
+              const SizedBox(height: 16),
+              const Text(
+                'All Handshakes Confirmed!',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF0F172A),
                 ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFDCFCE7),
-                  borderRadius: BorderRadius.circular(6),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'No pending payments awaiting foreman confirmation for ${widget.group.name}.\nMember installments will appear here for verification when submitted.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF64748B),
+                  height: 1.4,
                 ),
-                child: const Text(
-                  'Verified Member',
-                  style: TextStyle(
-                    color: Color(0xFF166534),
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      itemCount: pending.length,
+      itemBuilder: (context, index) {
+        final p = pending[index];
+        final formattedDate =
+            DateFormat('d MMM yyyy, hh:mm a').format(p.createdAt);
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFF007A87), width: 1.2),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE6F4F5),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.handshake_outlined,
+                      color: Color(0xFF007A87),
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          p.memberName.isNotEmpty
+                              ? p.memberName
+                              : p.memberUsername,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          p.amount < 10
+                              ? '₹${p.amount.toStringAsFixed(2)} via ${p.paymentMethod}'
+                              : '₹${p.amount.toStringAsFixed(0)} via ${p.paymentMethod}',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF059669),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Txn: ${p.utr ?? p.id} • $formattedDate',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF3C7),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text(
+                      'Awaiting Confirmation',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF92400E),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => _confirmPaymentWithCelebration(p),
+                  icon:
+                      const Icon(Icons.check_circle_outline_rounded, size: 16),
+                  label: const Text(
+                    'Confirm Receipt',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF007A87),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                 ),
               ),
@@ -2524,6 +3371,141 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
           ),
         );
       },
+    );
+  }
+
+  void _confirmPaymentWithCelebration(ChitPaymentRecord p) async {
+    final success = await SupabaseService.confirmPaymentHandshake(
+      paymentId: p.id,
+      foremanUsername: widget.currentUsername,
+      notes: 'Foreman verified receipt of ₹${p.amount} from ${p.memberName}',
+    );
+
+    if (!success) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to confirm payment handshake.'),
+            backgroundColor: Color(0xFFDC2626),
+          ),
+        );
+      }
+      return;
+    }
+
+    _loadGroupMembers();
+
+    if (!mounted) return;
+
+    // Pop-up celebratory notification message
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TweenAnimationBuilder<double>(
+                tween: Tween<double>(begin: 0.0, end: 1.0),
+                duration: const Duration(milliseconds: 500),
+                curve: Curves.elasticOut,
+                builder: (context, scale, child) {
+                  return Transform.scale(
+                    scale: scale,
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFDCFCE7),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.check_rounded,
+                        color: Color(0xFF166534),
+                        size: 48,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Payment Confirmed! 🤝',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Payment handshake verified for ${p.memberName.isNotEmpty ? p.memberName : p.memberUsername}.\n'
+                'Amount: ₹${p.amount < 10 ? p.amount.toStringAsFixed(2) : p.amount.toStringAsFixed(0)}\n'
+                'Cycle ${p.cycle} contribution is recorded in the group ledger.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF64748B),
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: const [
+                    Icon(
+                      Icons.notifications_active_outlined,
+                      size: 16,
+                      color: Color(0xFF007A87),
+                    ),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Notification and digital payment receipt dispatched to member.',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF334155),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF007A87),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: const Text('OK'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content:
+            Text('Payment confirmed for ${p.memberName}! Notification sent.'),
+        backgroundColor: const Color(0xFF059669),
+      ),
     );
   }
 

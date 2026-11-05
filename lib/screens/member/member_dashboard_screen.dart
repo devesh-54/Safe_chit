@@ -9,6 +9,9 @@ import '../common/group_details_modal.dart';
 import '../../widgets/youpi_payment_modal.dart';
 import '../../models/guarantee_request.dart';
 import '../../core/config/guarantor_rules.dart';
+import '../../models/security_deposit.dart';
+import '../../core/config/deposit_config.dart';
+import '../../widgets/razorpay_checkout_modal.dart';
 import '../profile/user_profile_screen.dart';
 
 class MemberDashboardScreen extends StatefulWidget {
@@ -28,6 +31,8 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
   bool _isSearching = false;
   ChitGroup? _searchedGroup;
   List<ChitJoinRequest> _myRequests = [];
+  Map<String, SecurityDeposit> _depositsMap = {};
+  Map<String, ChitGroup> _groupDetailsMap = {};
   List<ChitGroup> _publicMarketplaceGroups = [];
   List<GuaranteeRequest> _incomingGuaranteeRequests = [];
 
@@ -78,8 +83,26 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
       schemeType: _selectedFilterType,
     );
 
+    final Map<String, SecurityDeposit> depMap = {};
+    final Map<String, ChitGroup> grpMap = {};
+    for (var req in requests) {
+      final grp = await SupabaseService.getChitGroupById(req.groupId);
+      if (grp != null) grpMap[req.groupId] = grp;
+      if (req.isApproved) {
+        final dep = await SupabaseService.getSecurityDeposit(
+          groupId: req.groupId,
+          memberId: _username,
+        );
+        if (dep != null) {
+          depMap[req.groupId] = dep;
+        }
+      }
+    }
+
     setState(() {
       _myRequests = requests;
+      _depositsMap = depMap;
+      _groupDetailsMap = grpMap;
       _chitsJoinedCount =
           metrics['chitsJoined'] as int? ??
           requests.where((r) => r.status == 'approved').length;
@@ -92,28 +115,54 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
     });
   }
 
-  void _submitJoinRequest(ChitGroup group) async {
-    setState(() => _isLoading = true);
-
-    await SupabaseService.submitJoinRequest(
-      inviteCode: group.inviteCode,
-      memberUsername: _username,
+  void _openJoinChitModalWithGuarantor(ChitGroup group) async {
+    // Mutual Exclusion Check: Ensure current user is not already a guarantor in this group
+    final isAlreadyGuarantor = await SupabaseService.isUserGuarantorInGroup(
+      groupId: group.id,
+      username: _username,
     );
-    _loadMemberData();
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Request to join "${group.name}" submitted to Foreman!',
+    if (!mounted) return;
+    if (isAlreadyGuarantor) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
           ),
-          backgroundColor: const Color(0xFF007A87),
+          title: Row(
+            children: const [
+              Icon(Icons.shield_outlined, color: Color(0xFFDC2626)),
+              SizedBox(width: 8),
+              Text(
+                'Cannot Join Group',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            'You are already acting as a guarantor for a member in "${group.name}".\n\n'
+            'A guarantor cannot join the same chit group as a member to protect against dual-default risk.',
+            style: const TextStyle(
+              fontSize: 14,
+              color: Color(0xFF334155),
+              height: 1.4,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Understood'),
+            ),
+          ],
         ),
       );
+      return;
     }
-  }
 
-  void _openJoinChitModalWithGuarantor(ChitGroup group) {
     final guarantorController = TextEditingController();
     String selectedRelation = 'Friend';
     String? inlineError;
@@ -436,19 +485,46 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                                         });
                                         return;
                                       }
+
+                                      // Mutual exclusion: nominated guarantor cannot already be a member of this group
+                                      final isGuarantorMember =
+                                          await SupabaseService.isUserMemberOfGroup(
+                                            groupId: group.id,
+                                            username: guarantorText,
+                                          );
+                                      if (isGuarantorMember) {
+                                        setModalState(() {
+                                          isSubmitting = false;
+                                          inlineError =
+                                              "@$guarantorText is already a member of this chit group. A member and their guarantor cannot belong to the same chit group.";
+                                        });
+                                        return;
+                                      }
                                     }
 
                                     setModalState(() => isSubmitting = true);
-                                    await SupabaseService.submitJoinRequest(
-                                      inviteCode: group.inviteCode,
-                                      memberUsername: _username,
-                                      guarantorUsername: guarantorText.isEmpty
-                                          ? null
-                                          : guarantorText,
-                                      guarantorRelation: guarantorText.isEmpty
-                                          ? null
-                                          : selectedRelation,
-                                    );
+                                    final joinSuccess =
+                                        await SupabaseService.submitJoinRequest(
+                                          inviteCode: group.inviteCode,
+                                          memberUsername: _username,
+                                          guarantorUsername:
+                                              guarantorText.isEmpty
+                                                  ? null
+                                                  : guarantorText,
+                                          guarantorRelation:
+                                              guarantorText.isEmpty
+                                                  ? null
+                                                  : selectedRelation,
+                                        );
+
+                                    if (!joinSuccess) {
+                                      setModalState(() {
+                                        isSubmitting = false;
+                                        inlineError =
+                                            "Could not submit join request. Mutual exclusion or group restriction applies.";
+                                      });
+                                      return;
+                                    }
 
                                     if (!mounted) return;
                                     Navigator.pop(modalContext);
@@ -883,6 +959,29 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                                           Expanded(
                                             child: ElevatedButton(
                                               onPressed: () async {
+                                                // Mutual exclusion: User cannot accept guarantee if already a member of this group
+                                                final isMember =
+                                                    await SupabaseService.isUserMemberOfGroup(
+                                                      groupId: req.groupId,
+                                                      username: _username,
+                                                    );
+                                                if (!context.mounted) return;
+                                                if (isMember) {
+                                                  ScaffoldMessenger.of(
+                                                    context,
+                                                  ).showSnackBar(
+                                                    const SnackBar(
+                                                      content: Text(
+                                                        'Cannot accept: You are already a member of this chit group. A member and their guarantor cannot belong to the same chit group.',
+                                                      ),
+                                                      backgroundColor: Color(
+                                                        0xFFDC2626,
+                                                      ),
+                                                    ),
+                                                  );
+                                                  return;
+                                                }
+
                                                 final success =
                                                     await SupabaseService.respondToGuaranteeRequest(
                                                       requestId: req.id,
@@ -895,7 +994,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                                                   ).showSnackBar(
                                                     const SnackBar(
                                                       content: Text(
-                                                        'Failed to accept guarantee request. Please try again.',
+                                                        'Failed to accept guarantee request (mutual exclusion or conflict).',
                                                       ),
                                                       backgroundColor: Color(
                                                         0xFFDC2626,
@@ -2591,6 +2690,13 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
   }
 
   Widget _buildJoinedRequestCard(ChitJoinRequest req) {
+    final group = _groupDetailsMap[req.groupId];
+    final double depositAmount = (group != null && group.securityDeposit > 0)
+        ? group.securityDeposit
+        : ((group?.monthlyContribution ?? 1000.0) *
+            kDefaultDepositPercentOfInstallment);
+    final dep = _depositsMap[req.groupId];
+
     Color badgeBg;
     Color badgeText;
     String statusLabel;
@@ -2718,6 +2824,155 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
               ),
             ],
           ),
+          if (req.status == 'approved') ...[
+            const SizedBox(height: 12),
+            if (dep == null || dep.isPending) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFFDE68A)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: const [
+                            Icon(
+                              Icons.security_rounded,
+                              size: 16,
+                              color: Color(0xFF92400E),
+                            ),
+                            SizedBox(width: 6),
+                            Text(
+                              'Security Deposit',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF92400E),
+                              ),
+                            ),
+                          ],
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            'Test mode, no real money',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF92400E),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '₹${depositAmount.toStringAsFixed(0)}',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            RazorpayCheckoutModal.show(
+                              context: context,
+                              groupId: req.groupId,
+                              groupName: req.groupName,
+                              memberId: _username,
+                              amount: depositAmount,
+                              onDepositSuccess: _loadMemberData,
+                            );
+                          },
+                          icon: const Icon(Icons.payment_rounded, size: 14),
+                          label: const Text(
+                            'Pay security deposit',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0F4C81),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ] else ...[
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: dep.isHeld
+                      ? const Color(0xFFDCFCE7)
+                      : (dep.isRefunded
+                          ? const Color(0xFFE0F2FE)
+                          : const Color(0xFFFEE2E2)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      dep.isHeld
+                          ? Icons.verified_user_rounded
+                          : (dep.isRefunded
+                              ? Icons.replay_circle_filled_rounded
+                              : Icons.cancel_rounded),
+                      size: 14,
+                      color: dep.isHeld
+                          ? const Color(0xFF166534)
+                          : (dep.isRefunded
+                              ? const Color(0xFF0369A1)
+                              : const Color(0xFF991B1B)),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Deposit: ${dep.displayStatus} (₹${dep.amount.toStringAsFixed(0)})',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: dep.isHeld
+                            ? const Color(0xFF166534)
+                            : (dep.isRefunded
+                                ? const Color(0xFF0369A1)
+                                : const Color(0xFF991B1B)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
           const SizedBox(height: 14),
           Row(
             children: [

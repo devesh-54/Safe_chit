@@ -53,21 +53,10 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
 
   StreamSubscription? _guaranteeSubscription;
 
-  // Two-party handshake pending payments state
+  // Two-party handshake pending payments counts per group
+  Map<String, int> _pendingHandshakeCounts = {};
 
-  final List<Map<String, dynamic>> _pendingPayments = [
-    {
-      'id': 'pay_1',
-
-      'memberName': 'Ramesh Verma',
-
-      'amount': 10000.0,
-
-      'date': 'Today, 2:30 PM',
-
-      'txnId': 'UPI_9823746123',
-    },
-  ];
+  final List<Map<String, dynamic>> _pendingPayments = [];
 
   @override
   void initState() {
@@ -151,6 +140,8 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
 
     final pending = await SupabaseService.getPendingJoinRequests();
 
+    final handshakeCounts = await SupabaseService.getPendingHandshakeCounts();
+
     if (groups.isNotEmpty) {
       _groups = groups;
 
@@ -174,6 +165,7 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
 
     setState(() {
       _pendingRequests = pending;
+      _pendingHandshakeCounts = handshakeCounts;
 
       _isLoading = false;
     });
@@ -197,8 +189,8 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
     });
   }
 
-  void _openGroupDetails(ChitGroup group) {
-    showDialog(
+  void _openGroupDetails(ChitGroup group) async {
+    await showDialog(
       context: context,
 
       builder: (_) => GroupDetailsModal(
@@ -209,6 +201,7 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
         currentUsername: 'foreman_admin',
       ),
     );
+    _loadDashboardData();
   }
 
   void _showMemberExplainableRisk(ChitMemberRisk m) {
@@ -299,105 +292,6 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
             child: const Text('Close'),
           ),
         ],
-      ),
-    );
-  }
-
-  void _confirmPaymentHandshake(Map<String, dynamic> p) {
-    showDialog(
-      context: context,
-
-      builder: (_) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-
-            children: [
-              TweenAnimationBuilder<double>(
-                tween: Tween<double>(begin: 0.0, end: 1.0),
-
-                duration: const Duration(milliseconds: 500),
-
-                curve: Curves.elasticOut,
-
-                builder: (context, scale, child) {
-                  return Transform.scale(
-                    scale: scale,
-
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFDCFCE7),
-                        shape: BoxShape.circle,
-                      ),
-
-                      child: const Icon(
-                        Icons.check_rounded,
-                        color: Color(0xFF166534),
-                        size: 48,
-                      ),
-                    ),
-                  );
-                },
-              ),
-
-              const SizedBox(height: 16),
-
-              const Text(
-                'Payment Confirmed!',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF0F172A),
-                ),
-              ),
-
-              const SizedBox(height: 6),
-
-              Text(
-                'Handshake verified for ${p["memberName"]}\nAmount: ₹${(p["amount"] as double).toStringAsFixed(0)}',
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-              ),
-
-              const SizedBox(height: 20),
-
-              ElevatedButton(
-                onPressed: () async {
-                  await SupabaseService.confirmCashPayment(
-                    paymentId: p['id'].toString(),
-
-                    foremanUsername: 'foreman_admin',
-
-                    notes: 'Confirmed in-person cash payment by Foreman',
-                  );
-
-                  setState(() {
-                    _pendingPayments.removeWhere(
-                      (item) => item['id'] == p['id'],
-                    );
-                  });
-
-                  if (mounted) {
-                    Navigator.pop(context);
-                  }
-                },
-
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF007A87),
-                  foregroundColor: Colors.white,
-                ),
-
-                child: const Text('Done'),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -1874,86 +1768,6 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
 
         const SizedBox(height: 16),
 
-        if (_pendingPayments.isNotEmpty) ...[
-          const Text(
-            'Payments Awaiting Foreman Confirmation (Handshake)',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF0F172A),
-            ),
-          ),
-
-          const SizedBox(height: 8),
-
-          Column(
-            children: _pendingPayments
-                .map(
-                  (p) => Container(
-                    margin: const EdgeInsets.only(bottom: 10),
-
-                    padding: const EdgeInsets.all(16),
-
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFF007A87)),
-                    ),
-
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.handshake_outlined,
-                          color: Color(0xFF007A87),
-                          size: 24,
-                        ),
-
-                        const SizedBox(width: 12),
-
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-
-                            children: [
-                              Text(
-                                '${p["memberName"]} sent ₹${(p["amount"] as double).toStringAsFixed(0)}',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                ),
-                              ),
-
-                              Text(
-                                'Txn: ${p["txnId"]} • ${p["date"]}',
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: Color(0xFF64748B),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        ElevatedButton(
-                          onPressed: () => _confirmPaymentHandshake(p),
-
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF007A87),
-                            foregroundColor: Colors.white,
-                          ),
-
-                          child: const Text('Confirm Receipt'),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-                .toList(),
-          ),
-
-          const SizedBox(height: 16),
-        ],
-
         Container(
           padding: const EdgeInsets.all(16),
 
@@ -2341,10 +2155,22 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
               Expanded(
                 child: ElevatedButton(
                   onPressed: () async {
-                    await SupabaseService.respondToJoinRequest(
+                    final success = await SupabaseService.respondToJoinRequest(
                       requestId: req.id,
                       accept: true,
                     );
+
+                    if (!mounted) return;
+                    if (!success) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Cannot approve: Member or their guarantor violates mutual exclusion rules in this group.',
+                          ),
+                          backgroundColor: Color(0xFFDC2626),
+                        ),
+                      );
+                    }
 
                     _loadDashboardData();
                   },
@@ -2691,28 +2517,32 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
 
                   children: [
-                    const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
 
-                      children: [
-                        Text(
-                          'Foreman Chit Schemes & Groups',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF0F172A),
+                        children: const [
+                          Text(
+                            'Foreman Chit Schemes & Groups',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF0F172A),
+                            ),
                           ),
-                        ),
 
-                        Text(
-                          'Click any group card to view 1st-of-month bidding dates & payment schedules.',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Color(0xFF64748B),
+                          Text(
+                            'Click any group card to view 1st-of-month bidding dates & payment schedules.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF64748B),
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
+
+                    const SizedBox(width: 12),
 
                     ElevatedButton.icon(
                       onPressed: () => setState(() => _currentIndex = 3),
@@ -3023,6 +2853,43 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                 ),
               ],
             ),
+            if ((_pendingHandshakeCounts[group.id] ?? 0) > 0) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFFDE68A)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.handshake_outlined,
+                      size: 16,
+                      color: Color(0xFFB45309),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '${_pendingHandshakeCounts[group.id]} Handshake payment(s) awaiting your confirmation',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF92400E),
+                        ),
+                      ),
+                    ),
+                    const Icon(
+                      Icons.arrow_forward_ios_rounded,
+                      size: 10,
+                      color: Color(0xFFB45309),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             if (isAlreadyMember) ...[
               const SizedBox(height: 12),
               Container(
