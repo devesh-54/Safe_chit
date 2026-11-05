@@ -110,7 +110,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
               inviteCode: _generatedInviteCode,
               status: 'Active',
               currentCycle: 1,
-              membersCount: _targetMembers,
+              membersCount: 0,
               schemeType: _schemeType,
               isPublic: _isPublic,
               foremanUpiId: upiId,

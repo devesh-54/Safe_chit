@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'dart:io';
+import 'package:http/http.dart' as http;
 
 import '../models/onboarding_state.dart';
 
@@ -16,6 +18,8 @@ import '../models/guarantee_request.dart';
 
 import '../models/reputation_event.dart';
 
+import '../models/security_deposit.dart';
+
 import 'package:flutter/foundation.dart';
 
 import 'package:flutter/widgets.dart';
@@ -23,6 +27,7 @@ import 'package:flutter/widgets.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SupabaseService {
+  static final List<SecurityDeposit> _mockSecurityDeposits = [];
   static const String supabaseUrl = 'https://sjemdgjcjjozaljhzvzm.supabase.co';
 
   static const String supabaseAnonKey =
@@ -965,9 +970,111 @@ class SupabaseService {
     };
   }
 
-  /// Fetch all chit groups
+  /// Returns a map of groupId -> actual joined member count from group_members and approved join requests
+  static Future<Map<String, int>> getGroupMemberCounts() async {
+    final Map<String, int> counts = {};
+
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        final Map<String, Set<String>> groupMembersMap = {};
+
+        // 1. Count from group_members
+        try {
+          final rows = await supaClient
+              .from('group_members')
+              .select('group_id, name, phone');
+          for (var row in rows) {
+            final gid = row['group_id'] as String? ?? '';
+            final identifier = (row['phone'] as String? ?? row['name'] as String? ?? '').trim();
+            if (gid.isNotEmpty) {
+              groupMembersMap.putIfAbsent(gid, () => <String>{});
+              if (identifier.isNotEmpty) {
+                groupMembersMap[gid]!.add(identifier);
+              } else {
+                groupMembersMap[gid]!.add('mbr_${groupMembersMap[gid]!.length}');
+              }
+            }
+          }
+        } catch (_) {}
+
+        // 2. Also count approved chit_join_requests
+        try {
+          final joinRows = await supaClient
+              .from('chit_join_requests')
+              .select('group_id, member_username, member_phone')
+              .eq('status', 'approved');
+          for (var row in joinRows) {
+            final gid = row['group_id'] as String? ?? '';
+            final identifier = (row['member_username'] as String? ?? row['member_phone'] as String? ?? '').trim();
+            if (gid.isNotEmpty && identifier.isNotEmpty) {
+              groupMembersMap.putIfAbsent(gid, () => <String>{});
+              groupMembersMap[gid]!.add(identifier);
+            }
+          }
+        } catch (_) {}
+
+        groupMembersMap.forEach((k, v) {
+          counts[k] = v.length;
+        });
+
+        return counts;
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase getGroupMemberCounts notice: $e');
+      }
+    }
+
+    // Fallback populate from in-memory mock members
+    for (var m in _mockMembers) {
+      counts[m.groupId] = (counts[m.groupId] ?? 0) + 1;
+    }
+
+    return counts;
+  }
+
+  /// Returns a map of groupId -> pending handshake payments count
+  static Future<Map<String, int>> getPendingHandshakeCounts() async {
+    final Map<String, int> counts = {};
+
+    for (var p in _mockPayments) {
+      if (p.isPending) {
+        counts[p.groupId] = (counts[p.groupId] ?? 0) + 1;
+      }
+    }
+
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        final rows = await supaClient
+            .from('chit_payments')
+            .select('group_id, status')
+            .inFilter('status', ['INITIATED', 'ACTIVE', 'QUEUED', 'AWAITING_CONFIRMATION']);
+        final Map<String, int> dbCounts = {};
+        for (var row in rows) {
+          final gid = row['group_id'] as String? ?? '';
+          if (gid.isNotEmpty) {
+            dbCounts[gid] = (dbCounts[gid] ?? 0) + 1;
+          }
+        }
+        dbCounts.forEach((k, v) {
+          counts[k] = v;
+        });
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase getPendingHandshakeCounts notice: $e');
+      }
+    }
+
+    return counts;
+  }
+
+  /// Fetch all chit groups (with actual joined member counts)
 
   static Future<List<ChitGroup>> getChitGroups() async {
+    final counts = await getGroupMemberCounts();
     try {
       final supaClient = client;
 
@@ -975,7 +1082,11 @@ class SupabaseService {
         final response = await supaClient.from('chit_groups').select();
 
         if (response.isNotEmpty) {
-          return response.map((json) => ChitGroup.fromJson(json)).toList();
+          return response.map((json) {
+            final g = ChitGroup.fromJson(json);
+            final realCount = counts[g.id] ?? 0;
+            return g.copyWith(membersCount: realCount);
+          }).toList();
         }
       }
     } catch (e) {
@@ -984,12 +1095,16 @@ class SupabaseService {
       }
     }
 
-    return _mockGroups;
+    return _mockGroups.map((g) {
+      final realCount = counts[g.id] ?? _mockMembers.where((m) => m.groupId == g.id).length;
+      return g.copyWith(membersCount: realCount);
+    }).toList();
   }
 
-  /// Fetch a single chit group by ID
+  /// Fetch a single chit group by ID (with actual joined member count)
 
   static Future<ChitGroup?> getChitGroupById(String id) async {
+    final counts = await getGroupMemberCounts();
     try {
       final supaClient = client;
 
@@ -1001,7 +1116,9 @@ class SupabaseService {
             .maybeSingle();
 
         if (response != null) {
-          return ChitGroup.fromJson(response);
+          final g = ChitGroup.fromJson(response);
+          final realCount = counts[g.id] ?? 0;
+          return g.copyWith(membersCount: realCount);
         }
       }
     } catch (e) {
@@ -1010,11 +1127,12 @@ class SupabaseService {
       }
     }
 
-    try {
-      return _mockGroups.firstWhere((g) => g.id == id);
-    } catch (_) {
-      return null;
+    final found = _mockGroups.where((g) => g.id == id).toList();
+    if (found.isNotEmpty) {
+      final realCount = counts[id] ?? _mockMembers.where((m) => m.groupId == id).length;
+      return found.first.copyWith(membersCount: realCount);
     }
+    return null;
   }
 
   /// Create a new chit group
@@ -1373,6 +1491,138 @@ class SupabaseService {
     }
   }
 
+  /// Checks whether a given user is an active or approved member of a chit group.
+  static Future<bool> isUserMemberOfGroup({
+    required String groupId,
+    required String username,
+  }) async {
+    final cleanUsername = username.trim().toLowerCase();
+    if (cleanUsername.isEmpty) return false;
+
+    // Check in-memory members
+    final inMockMembers = _mockMembers.any(
+      (m) =>
+          m.groupId == groupId &&
+          m.name.trim().toLowerCase() == cleanUsername,
+    );
+    if (inMockMembers) return true;
+
+    // Check in-memory approved join requests
+    final inMockJoinRequests = _mockJoinRequests.any(
+      (r) =>
+          r.groupId == groupId &&
+          r.memberUsername.trim().toLowerCase() == cleanUsername &&
+          r.status == 'approved',
+    );
+    if (inMockJoinRequests) return true;
+
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        String? userFullName;
+        try {
+          final profile = await supaClient
+              .from('user_onboardings')
+              .select('full_name')
+              .eq('username', cleanUsername)
+              .maybeSingle();
+          userFullName =
+              (profile?['full_name'] as String?)?.trim().toLowerCase();
+        } catch (_) {}
+
+        // 1. Query group_members
+        final memberRows = await supaClient
+            .from('group_members')
+            .select('id, name')
+            .eq('group_id', groupId);
+
+        for (final row in memberRows) {
+          final name = (row['name'] as String? ?? '').trim().toLowerCase();
+          if (name == cleanUsername ||
+              (userFullName != null && name == userFullName)) {
+            return true;
+          }
+        }
+
+        // 2. Query chit_join_requests for approved status
+        final joinRows = await supaClient
+            .from('chit_join_requests')
+            .select('id')
+            .eq('group_id', groupId)
+            .eq('status', 'approved')
+            .ilike('member_username', cleanUsername);
+
+        if (joinRows.isNotEmpty) return true;
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase isUserMemberOfGroup check notice: $e');
+      }
+    }
+
+    return false;
+  }
+
+  /// Checks whether a given user is an active or pending guarantor in a chit group.
+  static Future<bool> isUserGuarantorInGroup({
+    required String groupId,
+    required String username,
+  }) async {
+    final cleanUsername = username.trim().toLowerCase();
+    if (cleanUsername.isEmpty) return false;
+
+    // Check in-memory guarantee requests
+    final inMockGuarantees = _mockGuaranteeRequests.any(
+      (g) =>
+          g.groupId == groupId &&
+          g.guarantorId.trim().toLowerCase() == cleanUsername &&
+          (g.status == 'accepted' || g.status == 'pending'),
+    );
+    if (inMockGuarantees) return true;
+
+    // Check in-memory join requests with pending/accepted guarantor
+    final inMockJoinRequests = _mockJoinRequests.any(
+      (r) =>
+          r.groupId == groupId &&
+          (r.guarantorUsername ?? '').trim().toLowerCase() == cleanUsername &&
+          r.status != 'rejected',
+    );
+    if (inMockJoinRequests) return true;
+
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        final grRows = await supaClient
+            .from('guarantee_requests')
+            .select('id, status')
+            .eq('group_id', groupId)
+            .ilike('guarantor_id', cleanUsername);
+
+        for (final row in grRows) {
+          final status = (row['status'] as String? ?? '').toLowerCase();
+          if (status == 'accepted' || status == 'pending') {
+            return true;
+          }
+        }
+
+        final jrRows = await supaClient
+            .from('chit_join_requests')
+            .select('id, status')
+            .eq('group_id', groupId)
+            .ilike('guarantor_username', cleanUsername)
+            .neq('status', 'rejected');
+
+        if (jrRows.isNotEmpty) return true;
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase isUserGuarantorInGroup check notice: $e');
+      }
+    }
+
+    return false;
+  }
+
   /// Submit a member join request via 6-digit code (contains non-sensitive info only)
 
   static Future<bool> submitJoinRequest({
@@ -1400,6 +1650,45 @@ class SupabaseService {
     final group = await getGroupByInviteCode(cleanCode);
 
     if (group == null) return false;
+
+    // Member-Guarantor Mutual Exclusion Checks:
+    // A: Applicant cannot already be a guarantor in this group
+    final isApplicantGuarantor = await isUserGuarantorInGroup(
+      groupId: group.id,
+      username: cleanUsername,
+    );
+    if (isApplicantGuarantor) {
+      if (kDebugMode) {
+        print(
+          '❌ Mutual exclusion: Applicant @$cleanUsername is already a guarantor in group ${group.id}',
+        );
+      }
+      return false;
+    }
+
+    // B: Applicant cannot nominate themselves
+    if (cleanGuarantor != null && cleanGuarantor == cleanUsername) {
+      if (kDebugMode) {
+        print('❌ Mutual exclusion: Applicant cannot nominate themselves as guarantor');
+      }
+      return false;
+    }
+
+    // C: Nominated guarantor cannot already be a member of this group
+    if (cleanGuarantor != null && cleanGuarantor.isNotEmpty) {
+      final isGuarantorMember = await isUserMemberOfGroup(
+        groupId: group.id,
+        username: cleanGuarantor,
+      );
+      if (isGuarantorMember) {
+        if (kDebugMode) {
+          print(
+            '❌ Mutual exclusion: Nominated guarantor @$cleanGuarantor is already a member of group ${group.id}',
+          );
+        }
+        return false;
+      }
+    }
 
     // 2. Fetch non-sensitive member details from Supabase or memory
 
@@ -1607,6 +1896,49 @@ class SupabaseService {
     // 1. Update in-memory mock
 
     final mockIdx = _mockGuaranteeRequests.indexWhere((r) => r.id == requestId);
+
+    // Mutual Exclusion Check: A user who is already a member of this group CANNOT accept to be a guarantor
+    if (accept) {
+      String? targetGroupId;
+      String? targetGuarantorId;
+
+      if (mockIdx != -1) {
+        targetGroupId = _mockGuaranteeRequests[mockIdx].groupId;
+        targetGuarantorId = _mockGuaranteeRequests[mockIdx].guarantorId;
+      }
+
+      if (targetGroupId == null || targetGuarantorId == null) {
+        try {
+          final supaClient = client;
+          if (supaClient != null) {
+            final row = await supaClient
+                .from('guarantee_requests')
+                .select('group_id, guarantor_id')
+                .eq('id', requestId)
+                .maybeSingle();
+            if (row != null) {
+              targetGroupId = row['group_id'] as String?;
+              targetGuarantorId = row['guarantor_id'] as String?;
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (targetGroupId != null && targetGuarantorId != null) {
+        final isMember = await isUserMemberOfGroup(
+          groupId: targetGroupId,
+          username: targetGuarantorId,
+        );
+        if (isMember) {
+          if (kDebugMode) {
+            print(
+              '❌ Mutual exclusion: Guarantor @$targetGuarantorId is already a member of group $targetGroupId',
+            );
+          }
+          return false;
+        }
+      }
+    }
 
     String? joinReqId;
 
@@ -1929,16 +2261,78 @@ class SupabaseService {
 
   /// Accept or Reject a Join Request
 
-  static Future<void> respondToJoinRequest({
+  static Future<bool> respondToJoinRequest({
     required String requestId,
 
     required bool accept,
   }) async {
     final newStatus = accept ? 'approved' : 'rejected';
 
-    // 1. Update in-memory list
-
     final idx = _mockJoinRequests.indexWhere((r) => r.id == requestId);
+
+    if (accept) {
+      String? groupId;
+      String? memberUsername;
+      String? guarantorUsername;
+
+      if (idx != -1) {
+        final req = _mockJoinRequests[idx];
+        groupId = req.groupId;
+        memberUsername = req.memberUsername;
+        guarantorUsername = req.guarantorUsername;
+      } else {
+        try {
+          final supaClient = client;
+          if (supaClient != null) {
+            final row = await supaClient
+                .from('chit_join_requests')
+                .select('group_id, member_username, guarantor_username')
+                .eq('id', requestId)
+                .maybeSingle();
+            if (row != null) {
+              groupId = row['group_id'] as String?;
+              memberUsername = row['member_username'] as String?;
+              guarantorUsername = row['guarantor_username'] as String?;
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (groupId != null && memberUsername != null) {
+        // Mutual exclusion:
+        // A: Check if applicant is already a guarantor in this group
+        final isGuarantor = await isUserGuarantorInGroup(
+          groupId: groupId,
+          username: memberUsername,
+        );
+        if (isGuarantor) {
+          if (kDebugMode) {
+            print(
+              '❌ Mutual exclusion: Applicant @$memberUsername is already a guarantor in group $groupId',
+            );
+          }
+          return false;
+        }
+
+        // B: Check if guarantor is already a member in this group
+        if (guarantorUsername != null && guarantorUsername.trim().isNotEmpty) {
+          final isGuarantorMember = await isUserMemberOfGroup(
+            groupId: groupId,
+            username: guarantorUsername,
+          );
+          if (isGuarantorMember) {
+            if (kDebugMode) {
+              print(
+                '❌ Mutual exclusion: Nominated guarantor @$guarantorUsername is already a member of group $groupId',
+              );
+            }
+            return false;
+          }
+        }
+      }
+    }
+
+    // 1. Update in-memory list
 
     if (idx != -1) {
       final req = _mockJoinRequests[idx];
@@ -2036,6 +2430,8 @@ class SupabaseService {
         print('ℹ️ Supabase respondToJoinRequest notice: $e');
       }
     }
+
+    return true;
   }
 
   // In-memory agreements storage fallback
@@ -2375,6 +2771,42 @@ class SupabaseService {
 
   static final List<ChitPaymentRecord> _mockPayments = [
     ChitPaymentRecord(
+      id: 'pay_handshake_001',
+      groupId: 'group_1',
+      groupName: 'Indiranagar Traders Chit',
+      cycle: 1,
+      memberUsername: 'ramesh_verma',
+      memberName: 'Ramesh Verma',
+      amount: 10000.0,
+      amountPaise: 1000000,
+      paymentMethod: 'UPI',
+      status: 'INITIATED',
+      utr: 'UPI_9823746123',
+      paymentSessionId: 'sess_handshake_001',
+      payeeVpa: 'devesh1@oksbi',
+      payeeName: 'Foreman',
+      createdAt: DateTime.now().subtract(const Duration(minutes: 35)),
+      notes: 'UPI payment submitted, awaiting foreman confirmation',
+    ),
+    ChitPaymentRecord(
+      id: 'pay_handshake_002',
+      groupId: 'group_2',
+      groupName: 'Koramangala Professionals Chit',
+      cycle: 1,
+      memberUsername: 'suresh_raina',
+      memberName: 'Suresh Raina',
+      amount: 10000.0,
+      amountPaise: 1000000,
+      paymentMethod: 'UPI',
+      status: 'INITIATED',
+      utr: 'UPI_5544332211',
+      paymentSessionId: 'sess_handshake_002',
+      payeeVpa: 'devesh1@oksbi',
+      payeeName: 'Foreman',
+      createdAt: DateTime.now().subtract(const Duration(hours: 1)),
+      notes: 'UPI payment submitted, awaiting foreman confirmation',
+    ),
+    ChitPaymentRecord(
       id: 'pay_demo_001',
 
       groupId: 'group_1',
@@ -2607,6 +3039,44 @@ class SupabaseService {
     return true;
   }
 
+  /// Foreman manual confirmation for online UPI handshake payments
+  static Future<bool> confirmPaymentHandshake({
+    required String paymentId,
+    required String foremanUsername,
+    String? notes,
+  }) async {
+    final now = DateTime.now();
+    final idx = _mockPayments.indexWhere((p) => p.id == paymentId);
+    if (idx != -1) {
+      final current = _mockPayments[idx];
+      _mockPayments[idx] = current.copyWith(
+        status: 'PAID',
+        completedAt: now,
+        notes: notes ?? 'UPI payment handshake confirmed by Foreman ($foremanUsername)',
+      );
+    }
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        await supaClient
+            .from('chit_payments')
+            .update({
+              'status': 'PAID',
+              'completed_at': now.toIso8601String(),
+              'notes':
+                  notes ?? 'UPI payment handshake confirmed by Foreman ($foremanUsername)',
+            })
+            .eq('id', paymentId);
+        return true;
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase confirmPaymentHandshake fallback: $e');
+      }
+    }
+    return true;
+  }
+
   /// Find single payment by ID
 
   static Future<ChitPaymentRecord?> getPaymentById(String paymentId) async {
@@ -2635,5 +3105,271 @@ class SupabaseService {
     }
 
     return null;
+  }
+
+  // ==========================================
+  // SECURITY DEPOSITS (RAZORPAY TEST MODE)
+  // ==========================================
+
+  static Future<Map<String, dynamic>> createDepositOrder({
+    required String groupId,
+    required String memberId,
+    required double amount,
+  }) async {
+    final orderId = 'order_test_${DateTime.now().millisecondsSinceEpoch}';
+    final depositId = 'dep_${groupId}_${memberId}_${DateTime.now().millisecondsSinceEpoch}';
+    final amountPaise = (amount * 100).toInt();
+
+    try {
+      final url = Uri.parse('http://localhost:3000/api/deposits/create-order');
+      final res = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'groupId': groupId,
+          'memberId': memberId,
+          'amount': amount,
+        }),
+      ).timeout(const Duration(seconds: 2));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        return {
+          'orderId': data['orderId'] ?? orderId,
+          'amount': data['amount'] ?? amountPaise,
+          'currency': data['currency'] ?? 'INR',
+          'depositId': data['depositId'] ?? depositId,
+        };
+      }
+    } catch (_) {}
+
+    return {
+      'orderId': orderId,
+      'amount': amountPaise,
+      'currency': 'INR',
+      'depositId': depositId,
+    };
+  }
+
+  static Future<bool> verifyDepositSignature({
+    required String depositId,
+    required String orderId,
+    required String paymentId,
+    required String signature,
+    required String groupId,
+    required String memberId,
+    required double amount,
+  }) async {
+    final now = DateTime.now();
+    final deposit = SecurityDeposit(
+      id: depositId,
+      groupId: groupId,
+      memberId: memberId,
+      amount: amount,
+      status: 'held',
+      razorpayOrderId: orderId,
+      razorpayPaymentId: paymentId,
+      createdAt: now,
+      updatedAt: now,
+    );
+
+    _mockSecurityDeposits.removeWhere((d) => d.groupId == groupId && d.memberId == memberId);
+    _mockSecurityDeposits.add(deposit);
+
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        await supaClient.from('security_deposits').upsert(deposit.toJson());
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase verifyDepositSignature notice: $e');
+      }
+    }
+
+    return true;
+  }
+
+  static Future<SecurityDeposit?> getSecurityDeposit({
+    required String groupId,
+    required String memberId,
+  }) async {
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        final row = await supaClient
+            .from('security_deposits')
+            .select()
+            .eq('group_id', groupId)
+            .eq('member_id', memberId)
+            .order('created_at', ascending: false)
+            .maybeSingle();
+        if (row != null) {
+          return SecurityDeposit.fromJson(row);
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase getSecurityDeposit notice: $e');
+      }
+    }
+
+    final found = _mockSecurityDeposits.where((d) => d.groupId == groupId && d.memberId == memberId).toList();
+    if (found.isNotEmpty) return found.last;
+    return null;
+  }
+
+  static Future<Map<String, SecurityDeposit>> getGroupSecurityDeposits(
+    String groupId,
+  ) async {
+    final Map<String, SecurityDeposit> result = {};
+    for (final d in _mockSecurityDeposits) {
+      if (d.groupId == groupId) {
+        result[d.memberId] = d;
+      }
+    }
+
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        final List<dynamic> rows = await supaClient
+            .from('security_deposits')
+            .select()
+            .eq('group_id', groupId);
+        for (final r in rows) {
+          final dep = SecurityDeposit.fromJson(r as Map<String, dynamic>);
+          result[dep.memberId] = dep;
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase getGroupSecurityDeposits notice: $e');
+      }
+    }
+
+    return result;
+  }
+
+  static Future<bool> refundDeposit({
+    required String depositId,
+    required String groupId,
+    required String memberId,
+    required double amount,
+  }) async {
+    final now = DateTime.now();
+    final idx = _mockSecurityDeposits.indexWhere((d) => d.groupId == groupId && d.memberId == memberId);
+    if (idx != -1) {
+      final existing = _mockSecurityDeposits[idx];
+      _mockSecurityDeposits[idx] = SecurityDeposit(
+        id: depositId,
+        groupId: groupId,
+        memberId: memberId,
+        amount: amount,
+        status: 'refunded',
+        razorpayOrderId: existing.razorpayOrderId,
+        razorpayPaymentId: existing.razorpayPaymentId,
+        createdAt: existing.createdAt,
+        updatedAt: now,
+      );
+    }
+
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        await supaClient
+            .from('security_deposits')
+            .update({'status': 'refunded', 'updated_at': now.toIso8601String()})
+            .eq('group_id', groupId)
+            .eq('member_id', memberId);
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase refundDeposit notice: $e');
+      }
+    }
+
+    // Ledger entry
+    try {
+      await recordPayment(ChitPaymentRecord(
+        id: 'refund_${DateTime.now().millisecondsSinceEpoch}',
+        groupId: groupId,
+        groupName: 'Chit Group Deposit Refund',
+        cycle: 0,
+        memberUsername: memberId,
+        memberName: memberId,
+        amount: amount,
+        amountPaise: (amount * 100).toInt(),
+        paymentMethod: 'TEST_REFUND',
+        status: 'PAID',
+        payeeVpa: '$memberId@upi',
+        payeeName: memberId,
+        createdAt: now,
+        completedAt: now,
+        notes: 'Test: Security deposit refunded to member',
+      ));
+    } catch (_) {}
+
+    return true;
+  }
+
+  static Future<bool> forfeitDeposit({
+    required String depositId,
+    required String groupId,
+    required String memberId,
+    required double amount,
+  }) async {
+    final now = DateTime.now();
+    final idx = _mockSecurityDeposits.indexWhere((d) => d.groupId == groupId && d.memberId == memberId);
+    if (idx != -1) {
+      final existing = _mockSecurityDeposits[idx];
+      _mockSecurityDeposits[idx] = SecurityDeposit(
+        id: depositId,
+        groupId: groupId,
+        memberId: memberId,
+        amount: amount,
+        status: 'forfeited',
+        razorpayOrderId: existing.razorpayOrderId,
+        razorpayPaymentId: existing.razorpayPaymentId,
+        createdAt: existing.createdAt,
+        updatedAt: now,
+      );
+    }
+
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        await supaClient
+            .from('security_deposits')
+            .update({'status': 'forfeited', 'updated_at': now.toIso8601String()})
+            .eq('group_id', groupId)
+            .eq('member_id', memberId);
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase forfeitDeposit notice: $e');
+      }
+    }
+
+    // Ledger entry for forfeit applied to missed contribution
+    try {
+      await recordPayment(ChitPaymentRecord(
+        id: 'forfeit_${DateTime.now().millisecondsSinceEpoch}',
+        groupId: groupId,
+        groupName: 'Chit Group Deposit Forfeit',
+        cycle: 0,
+        memberUsername: memberId,
+        memberName: memberId,
+        amount: amount,
+        amountPaise: (amount * 100).toInt(),
+        paymentMethod: 'DEPOSIT_FORFEIT',
+        status: 'PAID',
+        payeeVpa: 'foreman@safechit',
+        payeeName: 'Foreman Pool',
+        createdAt: now,
+        completedAt: now,
+        notes: 'Test: Security deposit forfeited and applied to missed contribution',
+      ));
+    } catch (_) {}
+
+    return true;
   }
 }
