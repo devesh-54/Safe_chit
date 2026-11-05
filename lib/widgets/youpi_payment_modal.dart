@@ -72,8 +72,9 @@ class _YoupiPaymentModalState extends State<YoupiPaymentModal> {
     super.initState();
     _amount = widget.customAmount ?? widget.group.monthlyContribution;
     final randSuffix = DateTime.now().millisecondsSinceEpoch % 10000;
-    _orderId = 'SC-${widget.group.id.toUpperCase()}-C${widget.group.currentCycle + 1}-$randSuffix';
-    
+    _orderId =
+        'SC-${widget.group.id.toUpperCase()}-C${widget.group.currentCycle + 1}-$randSuffix';
+
     // Foreman receiving VPA
     _payeeVpa = widget.group.foremanUpiId.trim().isNotEmpty
         ? widget.group.foremanUpiId.trim()
@@ -152,7 +153,8 @@ class _YoupiPaymentModalState extends State<YoupiPaymentModal> {
       }
       _startStatusPolling();
     } else if (result['error'] == 'DUPLICATE_SESSION_DETECTED') {
-      _statusMessage = 'Active session detected on another device. Resuming local session.';
+      _statusMessage =
+          'Active session detected on another device. Resuming local session.';
     }
 
     setState(() {
@@ -163,10 +165,15 @@ class _YoupiPaymentModalState extends State<YoupiPaymentModal> {
   void _startStatusPolling() {
     if (_paymentSessionId == null) return;
     _pollingTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
-      final res = await YoupiPaymentService.instance.pollPaymentStatus(_paymentSessionId!);
+      final res = await YoupiPaymentService.instance.pollPaymentStatus(
+        _paymentSessionId!,
+      );
       if (res['isPaid'] == true) {
         timer.cancel();
-        _handlePaymentSuccess(res['utr'] ?? '4291${DateTime.now().millisecondsSinceEpoch % 100000000}');
+        _handlePaymentSuccess(
+          res['utr'] ??
+              '4291${DateTime.now().millisecondsSinceEpoch % 100000000}',
+        );
       }
     });
   }
@@ -208,7 +215,9 @@ class _YoupiPaymentModalState extends State<YoupiPaymentModal> {
     if (!launched && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${app.name} is not installed or could not be opened. You can scan the QR code instead!'),
+          content: Text(
+            '${app.name} is not installed or could not be opened. You can scan the QR code instead!',
+          ),
           backgroundColor: const Color(0xFF0F4C81),
         ),
       );
@@ -220,7 +229,8 @@ class _YoupiPaymentModalState extends State<YoupiPaymentModal> {
 
   // Simulator helper for offline/demo tests
   void _simulateInstantBankCredit() {
-    final randUtr = '4291${(10000000 + (DateTime.now().millisecondsSinceEpoch % 89999999))}';
+    final randUtr =
+        '4291${(10000000 + (DateTime.now().millisecondsSinceEpoch % 89999999))}';
     _handlePaymentSuccess(randUtr);
   }
 
@@ -270,7 +280,10 @@ class _YoupiPaymentModalState extends State<YoupiPaymentModal> {
           if (_isLoading)
             const Padding(
               padding: EdgeInsets.only(bottom: 8),
-              child: LinearProgressIndicator(color: Color(0xFF0F4C81), backgroundColor: Color(0xFFE2E8F0)),
+              child: LinearProgressIndicator(
+                color: Color(0xFF0F4C81),
+                backgroundColor: Color(0xFFE2E8F0),
+              ),
             ),
 
           if (_isPaid) ...[
@@ -287,15 +300,21 @@ class _YoupiPaymentModalState extends State<YoupiPaymentModal> {
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: const Color(0xFFFEF2F2), borderRadius: BorderRadius.circular(8)),
-                  child: Text(_statusMessage!, style: const TextStyle(fontSize: 11, color: Color(0xFFDC2626))),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF2F2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    _statusMessage!,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFFDC2626),
+                    ),
+                  ),
                 ),
               ),
 
-            if (_isQueued) ...[
-              _buildQueueBanner(),
-              const SizedBox(height: 12),
-            ],
+            if (_isQueued) ...[_buildQueueBanner(), const SizedBox(height: 12)],
 
             // Mode Selector Tabs (1-Tap Apps vs Vector QR)
             Container(
@@ -315,20 +334,34 @@ class _YoupiPaymentModalState extends State<YoupiPaymentModal> {
                           color: !_isQrMode ? Colors.white : Colors.transparent,
                           borderRadius: BorderRadius.circular(10),
                           boxShadow: !_isQrMode
-                              ? [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4, offset: const Offset(0, 2))]
+                              ? [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.06),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ]
                               : null,
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.touch_app_rounded, size: 18, color: !_isQrMode ? const Color(0xFF0F4C81) : const Color(0xFF64748B)),
+                            Icon(
+                              Icons.touch_app_rounded,
+                              size: 18,
+                              color: !_isQrMode
+                                  ? const Color(0xFF0F4C81)
+                                  : const Color(0xFF64748B),
+                            ),
                             const SizedBox(width: 6),
                             Text(
                               '1-Tap UPI Apps',
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 13,
-                                color: !_isQrMode ? const Color(0xFF0F4C81) : const Color(0xFF64748B),
+                                color: !_isQrMode
+                                    ? const Color(0xFF0F4C81)
+                                    : const Color(0xFF64748B),
                               ),
                             ),
                           ],
@@ -345,20 +378,34 @@ class _YoupiPaymentModalState extends State<YoupiPaymentModal> {
                           color: _isQrMode ? Colors.white : Colors.transparent,
                           borderRadius: BorderRadius.circular(10),
                           boxShadow: _isQrMode
-                              ? [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4, offset: const Offset(0, 2))]
+                              ? [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.06),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ]
                               : null,
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.qr_code_2_rounded, size: 18, color: _isQrMode ? const Color(0xFF0F4C81) : const Color(0xFF64748B)),
+                            Icon(
+                              Icons.qr_code_2_rounded,
+                              size: 18,
+                              color: _isQrMode
+                                  ? const Color(0xFF0F4C81)
+                                  : const Color(0xFF64748B),
+                            ),
                             const SizedBox(width: 6),
                             Text(
                               'Scan QR Code',
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 13,
-                                color: _isQrMode ? const Color(0xFF0F4C81) : const Color(0xFF64748B),
+                                color: _isQrMode
+                                    ? const Color(0xFF0F4C81)
+                                    : const Color(0xFF64748B),
                               ),
                             ),
                           ],
@@ -386,14 +433,31 @@ class _YoupiPaymentModalState extends State<YoupiPaymentModal> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.verified_user_rounded, color: Color(0xFF0D9488), size: 18),
+                  const Icon(
+                    Icons.verified_user_rounded,
+                    color: Color(0xFF0D9488),
+                    size: 18,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Foreman Receiving VPA', style: TextStyle(fontSize: 10, color: Color(0xFF64748B))),
-                        Text(_payeeVpa, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF1E293B))),
+                        const Text(
+                          'Foreman Receiving VPA',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Color(0xFF64748B),
+                          ),
+                        ),
+                        Text(
+                          _payeeVpa,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                            color: Color(0xFF1E293B),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -401,12 +465,19 @@ class _YoupiPaymentModalState extends State<YoupiPaymentModal> {
                     onTap: () {
                       Clipboard.setData(ClipboardData(text: _payeeVpa));
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('UPI ID copied to clipboard!'), duration: Duration(seconds: 2)),
+                        const SnackBar(
+                          content: Text('UPI ID copied to clipboard!'),
+                          duration: Duration(seconds: 2),
+                        ),
                       );
                     },
                     child: const Padding(
                       padding: EdgeInsets.all(4),
-                      child: Icon(Icons.copy_rounded, size: 18, color: Color(0xFF0F4C81)),
+                      child: Icon(
+                        Icons.copy_rounded,
+                        size: 18,
+                        color: Color(0xFF0F4C81),
+                      ),
                     ),
                   ),
                 ],
@@ -419,27 +490,37 @@ class _YoupiPaymentModalState extends State<YoupiPaymentModal> {
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFFFFFBEB),
+                color: const Color(0xFFF0FDF4),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFFDE68A)),
+                border: Border.all(color: const Color(0xFFBBF7D0)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.science_rounded, color: Color(0xFFD97706), size: 20),
+                  const Icon(
+                    Icons.science_rounded,
+                    color: Color(0xFF059669),
+                    size: 20,
+                  ),
                   const SizedBox(width: 10),
                   const Expanded(
                     child: Text(
                       'Testing Mode: Simulate bank credit SMS observation instantly.',
-                      style: TextStyle(fontSize: 11, color: Color(0xFF92400E)),
+                      style: TextStyle(fontSize: 11, color: Color(0xFF166534)),
                     ),
                   ),
                   TextButton(
                     onPressed: _simulateInstantBankCredit,
                     style: TextButton.styleFrom(
-                      backgroundColor: const Color(0xFFD97706),
+                      backgroundColor: const Color(0xFF059669),
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      textStyle: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     child: const Text('Simulate Credit'),
                   ),
@@ -461,7 +542,11 @@ class _YoupiPaymentModalState extends State<YoupiPaymentModal> {
           children: [
             Text(
               widget.group.name,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF0F4C81)),
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: Color(0xFF0F4C81),
+              ),
             ),
             const SizedBox(height: 2),
             Text(
@@ -474,16 +559,30 @@ class _YoupiPaymentModalState extends State<YoupiPaymentModal> {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text(
-              _amount < 100 ? '₹${_amount.toStringAsFixed(2)}' : '₹${NumberFormat('#,##,###').format(_amount)}',
-              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20, color: Color(0xFF1E293B)),
+              _amount < 100
+                  ? '₹${_amount.toStringAsFixed(2)}'
+                  : '₹${NumberFormat('#,##,###').format(_amount)}',
+              style: const TextStyle(
+                fontWeight: FontWeight.w900,
+                fontSize: 20,
+                color: Color(0xFF1E293B),
+              ),
             ),
             Row(
               children: [
-                const Icon(Icons.timer_outlined, size: 12, color: Color(0xFFDC2626)),
+                const Icon(
+                  Icons.timer_outlined,
+                  size: 12,
+                  color: Color(0xFFDC2626),
+                ),
                 const SizedBox(width: 4),
                 Text(
                   _formatTimer(_secondsRemaining),
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFFDC2626)),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                    color: Color(0xFFDC2626),
+                  ),
                 ),
               ],
             ),
@@ -498,18 +597,26 @@ class _YoupiPaymentModalState extends State<YoupiPaymentModal> {
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFFEF3C7),
+        color: const Color(0xFFEFF6FF),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFFCD34D)),
+        border: Border.all(color: const Color(0xFFBFDBFE)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.hourglass_top_rounded, color: Color(0xFFD97706), size: 20),
+          const Icon(
+            Icons.hourglass_top_rounded,
+            color: Color(0xFF0F4C81),
+            size: 20,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               'Queue Position: #$_queuePosition. Another member is completing payment. Slot will open automatically.',
-              style: const TextStyle(fontSize: 11, color: Color(0xFF92400E), fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                fontSize: 11,
+                color: Color(0xFF1E40AF),
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
@@ -541,10 +648,17 @@ class _YoupiPaymentModalState extends State<YoupiPaymentModal> {
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: const Color(0xFFE2E8F0)),
                   boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 4, offset: const Offset(0, 2)),
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.03),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
                   ],
                 ),
-                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 10,
+                  horizontal: 8,
+                ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -555,7 +669,11 @@ class _YoupiPaymentModalState extends State<YoupiPaymentModal> {
                         color: Color(app.brandColor).withOpacity(0.12),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Icon(Icons.account_balance_wallet_rounded, color: Color(app.brandColor), size: 20),
+                      child: Icon(
+                        Icons.account_balance_wallet_rounded,
+                        color: Color(app.brandColor),
+                        size: 20,
+                      ),
                     ),
                     const SizedBox(height: 6),
                     Text(
@@ -563,7 +681,11 @@ class _YoupiPaymentModalState extends State<YoupiPaymentModal> {
                       textAlign: TextAlign.center,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF334155)),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF334155),
+                      ),
                     ),
                   ],
                 ),
@@ -585,7 +707,11 @@ class _YoupiPaymentModalState extends State<YoupiPaymentModal> {
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
             boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 4)),
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
             ],
           ),
           child: QrImageView(
@@ -598,7 +724,11 @@ class _YoupiPaymentModalState extends State<YoupiPaymentModal> {
         const SizedBox(height: 10),
         const Text(
           'Scan with any UPI App (GPay, PhonePe, Paytm, BHIM)',
-          style: TextStyle(fontSize: 12, color: Color(0xFF64748B), fontWeight: FontWeight.w600),
+          style: TextStyle(
+            fontSize: 12,
+            color: Color(0xFF64748B),
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ],
     );
@@ -616,17 +746,29 @@ class _YoupiPaymentModalState extends State<YoupiPaymentModal> {
               color: Color(0xFFDCFCE7),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 48),
+            child: const Icon(
+              Icons.check_circle_rounded,
+              color: Color(0xFF16A34A),
+              size: 48,
+            ),
           ),
           const SizedBox(height: 16),
           const Text(
             'Payment Verified Successfully! 🎉',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF0F4C81)),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+              color: Color(0xFF0F4C81),
+            ),
           ),
           const SizedBox(height: 6),
           Text(
             '${_amount < 100 ? "₹${_amount.toStringAsFixed(2)}" : "₹${NumberFormat('#,##,###').format(_amount)}"} credited to Foreman Escrow',
-            style: const TextStyle(fontSize: 14, color: Color(0xFF15803D), fontWeight: FontWeight.w600),
+            style: const TextStyle(
+              fontSize: 14,
+              color: Color(0xFF15803D),
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: 16),
 
@@ -642,11 +784,17 @@ class _YoupiPaymentModalState extends State<YoupiPaymentModal> {
               children: [
                 _buildReceiptRow('Order ID', _orderId),
                 const Divider(height: 16),
-                _buildReceiptRow('Bank Reference (UTR)', _verifiedUtr ?? '429182749102'),
+                _buildReceiptRow(
+                  'Bank Reference (UTR)',
+                  _verifiedUtr ?? '429182749102',
+                ),
                 const Divider(height: 16),
                 _buildReceiptRow('Payment Mode', 'P2P Instant UPI (0% Fee)'),
                 const Divider(height: 16),
-                _buildReceiptRow('Date & Time', DateFormat('d MMM yyyy, hh:mm a').format(DateTime.now())),
+                _buildReceiptRow(
+                  'Date & Time',
+                  DateFormat('d MMM yyyy, hh:mm a').format(DateTime.now()),
+                ),
               ],
             ),
           ),
@@ -660,9 +808,14 @@ class _YoupiPaymentModalState extends State<YoupiPaymentModal> {
                 backgroundColor: const Color(0xFF0F4C81),
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
-              child: const Text('Done & Return to Chit', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              child: const Text(
+                'Done & Return to Chit',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
             ),
           ),
         ],
@@ -674,8 +827,18 @@ class _YoupiPaymentModalState extends State<YoupiPaymentModal> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF1E293B))),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+        ),
+        Text(
+          value,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 12,
+            color: Color(0xFF1E293B),
+          ),
+        ),
       ],
     );
   }

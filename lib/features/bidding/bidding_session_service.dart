@@ -185,6 +185,11 @@ class BiddingSessionService {
   }) {
     final state = getOrCreateState(groupId);
 
+    // Exclude host from placing bids
+    if (username.toLowerCase().contains('foreman')) {
+      return false;
+    }
+
     // Perform validation
     if (bidAmount <= state.currentHighestBid) {
       return false;

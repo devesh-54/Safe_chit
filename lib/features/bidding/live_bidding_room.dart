@@ -24,7 +24,8 @@ class LiveBiddingRoom extends StatefulWidget {
   State<LiveBiddingRoom> createState() => _LiveBiddingRoomState();
 }
 
-class _LiveBiddingRoomState extends State<LiveBiddingRoom> with SingleTickerProviderStateMixin {
+class _LiveBiddingRoomState extends State<LiveBiddingRoom>
+    with SingleTickerProviderStateMixin {
   final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
   final List<Map<String, dynamic>> _bids = [];
   final TextEditingController _bidController = TextEditingController();
@@ -45,7 +46,9 @@ class _LiveBiddingRoomState extends State<LiveBiddingRoom> with SingleTickerProv
     _maxCap = widget.group.totalPoolSize * 0.30; // 30% cap
 
     // Initialize list with any existing bids
-    final sessionState = BiddingSessionService.instance.getOrCreateState(widget.group.id);
+    final sessionState = BiddingSessionService.instance.getOrCreateState(
+      widget.group.id,
+    );
     _bids.addAll(sessionState.bidsFeed);
 
     _updateCloseTime(sessionState);
@@ -57,15 +60,22 @@ class _LiveBiddingRoomState extends State<LiveBiddingRoom> with SingleTickerProv
         setState(() {
           // Add item at top of list
           _bids.insert(0, event);
-          _listKey.currentState?.insertItem(0, duration: const Duration(milliseconds: 300));
+          _listKey.currentState?.insertItem(
+            0,
+            duration: const Duration(milliseconds: 300),
+          );
         });
       }
     });
 
-    _statusSubscription = BiddingSessionService.instance.statusStream.listen((groupId) {
+    _statusSubscription = BiddingSessionService.instance.statusStream.listen((
+      groupId,
+    ) {
       if (!mounted) return;
       if (groupId == widget.group.id) {
-        final state = BiddingSessionService.instance.getOrCreateState(widget.group.id);
+        final state = BiddingSessionService.instance.getOrCreateState(
+          widget.group.id,
+        );
         _updateCloseTime(state);
         if (state.isAuctionEnded) {
           widget.onAuctionEnded();
@@ -86,9 +96,13 @@ class _LiveBiddingRoomState extends State<LiveBiddingRoom> with SingleTickerProv
     _closeCountdownTimer?.cancel();
     if (state.auctionCloseTime != null) {
       _timeRemaining = state.auctionCloseTime!.difference(DateTime.now());
-      _closeCountdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      _closeCountdownTimer = Timer.periodic(const Duration(seconds: 1), (
+        timer,
+      ) {
         if (!mounted) return;
-        final stateNow = BiddingSessionService.instance.getOrCreateState(widget.group.id);
+        final stateNow = BiddingSessionService.instance.getOrCreateState(
+          widget.group.id,
+        );
         if (stateNow.auctionCloseTime == null) {
           timer.cancel();
           return;
@@ -121,7 +135,9 @@ class _LiveBiddingRoomState extends State<LiveBiddingRoom> with SingleTickerProv
     if (_isDebounced) return;
 
     final bidVal = double.tryParse(_bidController.text.trim());
-    final state = BiddingSessionService.instance.getOrCreateState(widget.group.id);
+    final state = BiddingSessionService.instance.getOrCreateState(
+      widget.group.id,
+    );
 
     if (bidVal == null || bidVal <= 0) {
       setState(() {
@@ -132,14 +148,16 @@ class _LiveBiddingRoomState extends State<LiveBiddingRoom> with SingleTickerProv
 
     if (bidVal <= state.currentHighestBid) {
       setState(() {
-        _errorMessage = 'Your bid must be higher than ₹${state.currentHighestBid.toStringAsFixed(0)}';
+        _errorMessage =
+            'Your bid must be higher than ₹${state.currentHighestBid.toStringAsFixed(0)}';
       });
       return;
     }
 
     if (bidVal > _maxCap) {
       setState(() {
-        _errorMessage = 'Bid exceeds 30% legal cap (Max ₹${_maxCap.toStringAsFixed(0)})';
+        _errorMessage =
+            'Bid exceeds 30% legal cap (Max ₹${_maxCap.toStringAsFixed(0)})';
       });
       return;
     }
@@ -200,7 +218,9 @@ class _LiveBiddingRoomState extends State<LiveBiddingRoom> with SingleTickerProv
           color: isCurrentUser ? const Color(0xFFECFDF5) : Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isCurrentUser ? const Color(0xFFA7F3D0) : const Color(0xFFE2E8F0),
+            color: isCurrentUser
+                ? const Color(0xFFA7F3D0)
+                : const Color(0xFFE2E8F0),
           ),
         ),
         child: Row(
@@ -211,10 +231,16 @@ class _LiveBiddingRoomState extends State<LiveBiddingRoom> with SingleTickerProv
                 children: [
                   CircleAvatar(
                     radius: 14,
-                    backgroundColor: isCurrentUser ? const Color(0xFF059669) : const Color(0xFF94A3B8),
+                    backgroundColor: isCurrentUser
+                        ? const Color(0xFF059669)
+                        : const Color(0xFF94A3B8),
                     child: Text(
                       bidderName.substring(0, 1).toUpperCase(),
-                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -229,11 +255,19 @@ class _LiveBiddingRoomState extends State<LiveBiddingRoom> with SingleTickerProv
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
-                            color: isCurrentUser ? const Color(0xFF065F46) : const Color(0xFF1E293B),
+                            color: isCurrentUser
+                                ? const Color(0xFF065F46)
+                                : const Color(0xFF1E293B),
                           ),
                         ),
                         const SizedBox(height: 2),
-                        Text(timeStr, style: const TextStyle(fontSize: 10, color: Color(0xFF64748B))),
+                        Text(
+                          timeStr,
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: Color(0xFF64748B),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -246,7 +280,9 @@ class _LiveBiddingRoomState extends State<LiveBiddingRoom> with SingleTickerProv
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 14,
-                color: isCurrentUser ? const Color(0xFF047857) : const Color(0xFF0F4C81),
+                color: isCurrentUser
+                    ? const Color(0xFF047857)
+                    : const Color(0xFF0F4C81),
               ),
             ),
           ],
@@ -263,11 +299,15 @@ class _LiveBiddingRoomState extends State<LiveBiddingRoom> with SingleTickerProv
 
   @override
   Widget build(BuildContext context) {
-    final state = BiddingSessionService.instance.getOrCreateState(widget.group.id);
+    final state = BiddingSessionService.instance.getOrCreateState(
+      widget.group.id,
+    );
     final currentLeader = state.currentHighestBidder;
     final leadingBid = state.currentHighestBid;
     final takeHome = widget.group.totalPoolSize - leadingBid;
-    final dividend = leadingBid / (widget.group.membersCount > 0 ? widget.group.membersCount : 10);
+    final dividend =
+        leadingBid /
+        (widget.group.membersCount > 0 ? widget.group.membersCount : 10);
 
     // TODO: Wire this to your real-time broadcast implementation (Supabase Realtime channels)
     // TODO: Invoke the place-bid Supabase Edge Function to securely validate and broadcast this bid.
@@ -305,7 +345,12 @@ class _LiveBiddingRoomState extends State<LiveBiddingRoom> with SingleTickerProv
                     Expanded(
                       child: Text(
                         'LIVE • Closes in ${_formatCloseTime(_timeRemaining)}',
-                        style: const TextStyle(color: Color(0xFF991B1B), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                        style: const TextStyle(
+                          color: Color(0xFF991B1B),
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5,
+                        ),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -314,16 +359,26 @@ class _LiveBiddingRoomState extends State<LiveBiddingRoom> with SingleTickerProv
               ),
               if (widget.isForeman)
                 ElevatedButton(
-                  onPressed: () => BiddingSessionService.instance.endAuction(widget.group.id),
+                  onPressed: () => BiddingSessionService.instance.endAuction(
+                    widget.group.id,
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFDC2626),
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
-                  child: const Text('End Auction', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
+                  child: const Text(
+                    'End Auction',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
+                  ),
                 ),
             ],
           ),
@@ -348,10 +403,38 @@ class _LiveBiddingRoomState extends State<LiveBiddingRoom> with SingleTickerProv
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('CURRENT HIGH BID DISCOUNT', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Color(0xFFE2E8F0), fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                        const Text(
+                          'CURRENT HIGH BID DISCOUNT',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Color(0xFFE2E8F0),
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
                         const SizedBox(height: 4),
-                        Text('₹${leadingBid.toStringAsFixed(0)}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900)),
-                        Text('By: $currentLeader', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFFF59E0B), fontSize: 11, fontWeight: FontWeight.bold)),
+                        Text(
+                          '₹${leadingBid.toStringAsFixed(0)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        Text(
+                          'By: $currentLeader',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFF38BDF8),
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -362,10 +445,38 @@ class _LiveBiddingRoomState extends State<LiveBiddingRoom> with SingleTickerProv
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        const Text('WINNER PAYOUT', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: Color(0xFFE2E8F0), fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                        const Text(
+                          'WINNER PAYOUT',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Color(0xFFE2E8F0),
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
                         const SizedBox(height: 4),
-                        Text('₹${takeHome.toStringAsFixed(0)}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900)),
-                        Text('Dividend: +₹${dividend.toStringAsFixed(0)}/mbr', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFF86EFAC), fontSize: 11, fontWeight: FontWeight.bold)),
+                        Text(
+                          '₹${takeHome.toStringAsFixed(0)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        Text(
+                          'Dividend: +₹${dividend.toStringAsFixed(0)}/mbr',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFF86EFAC),
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -390,7 +501,10 @@ class _LiveBiddingRoomState extends State<LiveBiddingRoom> with SingleTickerProv
               if (!widget.isApproved) ...[
                 Container(
                   margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFEF2F2),
                     borderRadius: BorderRadius.circular(10),
@@ -398,12 +512,20 @@ class _LiveBiddingRoomState extends State<LiveBiddingRoom> with SingleTickerProv
                   ),
                   child: Row(
                     children: const [
-                      Icon(Icons.gavel_rounded, color: Color(0xFFDC2626), size: 18),
+                      Icon(
+                        Icons.gavel_rounded,
+                        color: Color(0xFFDC2626),
+                        size: 18,
+                      ),
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'Bidding restricted. Your membership status is Pending Review.',
-                          style: TextStyle(color: Color(0xFF991B1B), fontSize: 11, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            color: Color(0xFF991B1B),
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ],
@@ -416,16 +538,26 @@ class _LiveBiddingRoomState extends State<LiveBiddingRoom> with SingleTickerProv
                     child: TextField(
                       controller: _bidController,
                       keyboardType: TextInputType.number,
-                      enabled: widget.isApproved && !_isDebounced,
+                      enabled: widget.isApproved && !widget.isForeman && !_isDebounced,
                       decoration: InputDecoration(
-                        hintText: widget.isApproved
-                            ? 'Enter discount bid amount (₹)...'
-                            : 'Bidding disabled (Pending Review)',
+                        hintText: widget.isForeman
+                            ? 'Host is excluded from bidding'
+                            : (widget.isApproved
+                                ? 'Enter discount bid amount (₹)...'
+                                : 'Bidding disabled (Pending Review)'),
                         fillColor: const Color(0xFFF8FAFC),
                         filled: true,
                         errorText: _errorMessage,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFCBD5E1))),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFCBD5E1),
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -433,14 +565,24 @@ class _LiveBiddingRoomState extends State<LiveBiddingRoom> with SingleTickerProv
                   SizedBox(
                     height: 48,
                     child: ElevatedButton.icon(
-                      onPressed: (widget.isApproved && !_isDebounced) ? _submitBid : null,
+                      onPressed: (!widget.isForeman && widget.isApproved && !_isDebounced)
+                          ? _submitBid
+                          : null,
                       icon: const Icon(Icons.gavel_rounded, size: 16),
-                      label: const Text('Place Bid', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      label: const Text(
+                        'Place Bid',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF007A87),
                         foregroundColor: Colors.white,
                         disabledBackgroundColor: const Color(0xFFE2E8F0),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
                     ),
                   ),
@@ -459,7 +601,12 @@ class _LiveBiddingRoomState extends State<LiveBiddingRoom> with SingleTickerProv
         // Live feed label
         const Text(
           'LIVE AUCTION FEED',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF64748B), letterSpacing: 0.8),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 11,
+            color: Color(0xFF64748B),
+            letterSpacing: 0.8,
+          ),
         ),
         const SizedBox(height: 10),
 

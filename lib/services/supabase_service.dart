@@ -14,6 +14,7 @@ import '../models/chit_payment_record.dart';
 
 import '../models/guarantee_request.dart';
 
+import '../models/reputation_event.dart';
 
 import 'package:flutter/foundation.dart';
 
@@ -676,6 +677,83 @@ class SupabaseService {
     return false;
   }
 
+  static String currentUsername = 'member_demo';
+
+  static final List<ReputationEvent> _mockReputationEvents = [
+    ReputationEvent(
+      id: 'rep_1',
+      username: 'member_demo',
+      role: 'member',
+      eventType: 'on_time_payment',
+      scoreDelta: 5.0,
+      description: 'On-time installment for Bengaluru Techies Chit',
+      createdAt: DateTime.now().subtract(const Duration(days: 3)),
+    ),
+    ReputationEvent(
+      id: 'rep_2',
+      username: 'member_demo',
+      role: 'member',
+      eventType: 'group_completed',
+      scoreDelta: 10.0,
+      description: 'Completed Koramangala 5-Month Chit cycle with 0 defaults',
+      createdAt: DateTime.now().subtract(const Duration(days: 15)),
+    ),
+    ReputationEvent(
+      id: 'rep_3',
+      username: 'member_demo',
+      role: 'member',
+      eventType: 'clean_guarantee',
+      scoreDelta: 5.0,
+      description: 'Acted as guarantor for group participant with 0 defaults',
+      createdAt: DateTime.now().subtract(const Duration(days: 30)),
+    ),
+    ReputationEvent(
+      id: 'rep_4',
+      username: 'member_test2',
+      role: 'member',
+      eventType: 'on_time_payment',
+      scoreDelta: 5.0,
+      description: 'On-time installment collection verified',
+      createdAt: DateTime.now().subtract(const Duration(days: 2)),
+    ),
+    ReputationEvent(
+      id: 'rep_5',
+      username: 'member_test2',
+      role: 'member',
+      eventType: 'clean_guarantee',
+      scoreDelta: 5.0,
+      description: 'Guarantee nomination accepted & active',
+      createdAt: DateTime.now().subtract(const Duration(days: 5)),
+    ),
+    ReputationEvent(
+      id: 'rep_6',
+      username: 'foreman_admin',
+      role: 'foreman',
+      eventType: 'group_hosted',
+      scoreDelta: 15.0,
+      description: 'Successfully hosted and closed Koramangala Professional Chit',
+      createdAt: DateTime.now().subtract(const Duration(days: 10)),
+    ),
+    ReputationEvent(
+      id: 'rep_7',
+      username: 'foreman_admin',
+      role: 'foreman',
+      eventType: 'escrow_disbursed',
+      scoreDelta: 10.0,
+      description: 'Escrow payout released on schedule to winning bidder',
+      createdAt: DateTime.now().subtract(const Duration(days: 20)),
+    ),
+    ReputationEvent(
+      id: 'rep_8',
+      username: 'foreman_admin',
+      role: 'foreman',
+      eventType: 'zero_dispute',
+      scoreDelta: 5.0,
+      description: '100% on-time disbursement streak maintained',
+      createdAt: DateTime.now().subtract(const Duration(days: 40)),
+    ),
+  ];
+
   static Future<Map<String, dynamic>?> getUserProfile(String username) async {
     final cleanUsername = username.trim().toLowerCase();
 
@@ -683,13 +761,26 @@ class SupabaseService {
       final supaClient = client;
 
       if (supaClient != null) {
-        final profile = await supaClient
+        // First try exact username match
+        var profile = await supaClient
             .from('user_onboardings')
             .select(
-              'full_name, mobile_number, email, perm_city, username, role',
+              'full_name, mobile_number, email, perm_city, username, role, created_at',
             )
-            .eq('username', cleanUsername)
+            .ilike('username', cleanUsername)
             .maybeSingle();
+
+        // If not found, try searching by full_name
+        if (profile == null) {
+          final firstWord = cleanUsername.split(' ').first;
+          profile = await supaClient
+              .from('user_onboardings')
+              .select(
+                'full_name, mobile_number, email, perm_city, username, role, created_at',
+              )
+              .ilike('full_name', '%$firstWord%')
+              .maybeSingle();
+        }
 
         if (profile != null) {
           return Map<String, dynamic>.from(profile);
@@ -697,11 +788,181 @@ class SupabaseService {
       }
     } catch (e) {
       if (kDebugMode) {
-        print('ℹ️ Supabase getUserProfile notice: ');
+        print('ℹ️ Supabase getUserProfile notice: $e');
       }
     }
 
-    return null;
+    // Fallback sensible mock profile for demo accounts
+    if (cleanUsername.contains('foreman')) {
+      return {
+        'full_name': 'Rajesh Kumar (Foreman)',
+        'username': 'foreman_admin',
+        'mobile_number': '9876543210',
+        'email': 'foreman@chitguard.in',
+        'perm_city': 'Chennai',
+        'role': 'host',
+        'created_at': '2026-09-01T10:00:00Z',
+      };
+    } else if (cleanUsername.contains('member_test2')) {
+      return {
+        'full_name': 'Suresh Raina',
+        'username': 'member_test2',
+        'mobile_number': '9876599999',
+        'email': 'member2@chitguard.in',
+        'perm_city': 'Bengaluru',
+        'role': 'member',
+        'created_at': '2026-10-15T10:00:00Z',
+      };
+    } else if (cleanUsername.contains('suresh') || cleanUsername.contains('member')) {
+      return {
+        'full_name': 'Suresh Raina',
+        'username': 'member_demo',
+        'mobile_number': '9876512345',
+        'email': 'suresh.raina@chitguard.in',
+        'perm_city': 'Bengaluru',
+        'role': 'member',
+        'created_at': '2026-10-01T10:00:00Z',
+      };
+    }
+
+    return {
+      'full_name': username,
+      'username': username,
+      'mobile_number': '9876500000',
+      'email': '$cleanUsername@chitguard.in',
+      'perm_city': 'Bengaluru',
+      'role': 'member',
+      'created_at': '2026-10-01T10:00:00Z',
+    };
+  }
+
+  /// Fetch reputation events for a user and optional role
+  static Future<List<ReputationEvent>> getReputationEvents(
+    String username, {
+    String? role,
+  }) async {
+    final cleanUser = username.trim().toLowerCase();
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        var query = supaClient
+            .from('reputation_events')
+            .select()
+            .ilike('username', cleanUser);
+        if (role != null) {
+          query = query.eq('role', role.toLowerCase());
+        }
+        final response = await query.order('created_at', ascending: false);
+        if (response.isNotEmpty) {
+          return response
+              .map((json) => ReputationEvent.fromJson(json))
+              .toList();
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase getReputationEvents fallback: $e');
+      }
+    }
+
+    // Fallback to in-memory mock events
+    return _mockReputationEvents
+        .where((e) {
+          final matchesUser = e.username.toLowerCase() == cleanUser ||
+              cleanUser.contains(e.username.toLowerCase()) ||
+              e.username.toLowerCase().contains(cleanUser);
+          final matchesRole =
+              role == null || e.role.toLowerCase() == role.toLowerCase();
+          return matchesUser && matchesRole;
+        })
+        .toList();
+  }
+
+  /// Calculates dual-role performance statistics and activity for a given user
+  static Future<Map<String, dynamic>> getUserRolePerformance(
+    String username,
+  ) async {
+    final cleanUser = username.trim().toLowerCase();
+
+    // 1. Fetch user profile
+    final profile = await getUserProfile(username);
+    final userRole = profile?['role']?.toString().toLowerCase() ?? '';
+
+    // 2. Fetch Member activity
+    final memberEvents = await getReputationEvents(username, role: 'member');
+    final memberRequests = await getMemberJoinRequests(username);
+    final int memberGroupCount = memberRequests.where((r) => r.isApproved).length > 0
+        ? memberRequests.where((r) => r.isApproved).length
+        : memberRequests.length;
+
+    final bool isMemberActive = memberGroupCount > 0 || memberEvents.isNotEmpty;
+
+    double memberDeltaSum = 0;
+    for (var ev in memberEvents) {
+      memberDeltaSum += ev.scoreDelta;
+    }
+    final double memberScore = (100.0 + memberDeltaSum).clamp(0.0, 100.0);
+    String memberTier = 'Tier 1: Elite Member';
+    if (memberScore < 70) {
+      memberTier = 'Tier 4: Caution';
+    } else if (memberScore < 85) {
+      memberTier = 'Tier 3: Standard';
+    } else if (memberScore < 95) {
+      memberTier = 'Tier 2: Prime';
+    }
+
+    // 3. Fetch Foreman activity
+    final foremanEvents = await getReputationEvents(username, role: 'foreman');
+    final allGroups = await getChitGroups();
+    final bool isHostUser = userRole == 'host' || cleanUser.contains('foreman');
+    int foremanGroupCount = 0;
+    for (var g in allGroups) {
+      if (g.foremanUpiId.toLowerCase().contains(cleanUser) ||
+          (isHostUser && allGroups.isNotEmpty)) {
+        foremanGroupCount++;
+      }
+    }
+
+    final bool isForemanActive =
+        foremanGroupCount > 0 || foremanEvents.isNotEmpty;
+
+    double foremanDeltaSum = 0;
+    for (var ev in foremanEvents) {
+      foremanDeltaSum += ev.scoreDelta;
+    }
+    final double foremanScore = (100.0 + foremanDeltaSum).clamp(0.0, 100.0);
+    String foremanTier = 'Tier 1: Master Organizer';
+    if (foremanScore < 70) {
+      foremanTier = 'Tier 4: At Risk';
+    } else if (foremanScore < 85) {
+      foremanTier = 'Tier 3: Standard';
+    } else if (foremanScore < 95) {
+      foremanTier = 'Tier 2: Certified';
+    }
+
+    return {
+      'profile': profile,
+      'member': {
+        'isActive': isMemberActive,
+        'score': memberScore,
+        'tier': memberTier,
+        'completedChits': memberGroupCount,
+        'onTimeRate': 100.0,
+        'defaults': 0,
+        'events': memberEvents,
+        'activityCount': memberGroupCount + memberEvents.length,
+      },
+      'foreman': {
+        'isActive': isForemanActive,
+        'score': foremanScore,
+        'tier': foremanTier,
+        'completedChits': foremanGroupCount,
+        'onTimeRate': 100.0,
+        'defaults': 0,
+        'events': foremanEvents,
+        'activityCount': foremanGroupCount + foremanEvents.length,
+      },
+    };
   }
 
   /// Fetch all chit groups
@@ -818,6 +1079,149 @@ class SupabaseService {
     }
 
     return _mockMembers.where((m) => m.groupId == groupId).toList();
+  }
+
+  /// Allows the group foreman to join their own group as a member.
+  /// 1. Only allowed when group has not started its first cycle (currentCycle <= 1).
+  /// 2. Only allowed when a seat is free (membersCount < durationMonths).
+  /// 3. Only allowed when foreman is not already a member.
+  /// 4. Creates host installment automatically as HOST_SHARE / "Paid (host share)".
+  /// 5. TODO: Apply refundable security deposit to the foreman once the deposit flow exists.
+  static Future<bool> joinGroupAsHostMember({
+    required ChitGroup group,
+    required String foremanUsername,
+    String? foremanPhone,
+  }) async {
+    // 1. Group must not have started its first cycle
+    if (group.currentCycle > 1) {
+      return false;
+    }
+
+    // 2. A seat must be free
+    if (group.membersCount >= group.durationMonths) {
+      return false;
+    }
+
+    // 3. Foreman must not already be a member of this group
+    final currentMembers = await getGroupMembers(group.id);
+    final isAlreadyMember = currentMembers.any(
+      (m) =>
+          m.isHostMember ||
+          m.name.trim().toLowerCase() == foremanUsername.trim().toLowerCase(),
+    );
+    if (isAlreadyMember) {
+      return false;
+    }
+
+    // TODO: Apply refundable security deposit to the foreman once the deposit flow exists.
+
+    final newMemberId = 'mem_host_${DateTime.now().millisecondsSinceEpoch}';
+    final hostMember = ChitMemberRisk(
+      id: newMemberId,
+      groupId: group.id,
+      name: foremanUsername,
+      defaultRiskScore: 0.0,
+      payoutPosition: 'Host · Month 2',
+      paymentTrend: 'On-Time',
+      guarantorStatus: 'Not Required',
+      amountExposed: 0,
+      lastPaymentDate: DateTime.now(),
+      phone: foremanPhone ?? 'Host Account',
+      isHostMember: true,
+    );
+
+    _mockMembers.add(hostMember);
+
+    // Increment group membersCount in mock
+    final groupIndex = _mockGroups.indexWhere((g) => g.id == group.id);
+    if (groupIndex != -1) {
+      final g = _mockGroups[groupIndex];
+      _mockGroups[groupIndex] = ChitGroup(
+        id: g.id,
+        name: g.name,
+        totalPoolSize: g.totalPoolSize,
+        durationMonths: g.durationMonths,
+        monthlyContribution: g.monthlyContribution,
+        securityDeposit: g.securityDeposit,
+        payoutRules: g.payoutRules,
+        inviteCode: g.inviteCode,
+        status: g.status,
+        currentCycle: g.currentCycle,
+        membersCount: g.membersCount + 1,
+        schemeType: g.schemeType,
+        isPublic: g.isPublic,
+        city: g.city,
+        foremanUpiId: g.foremanUpiId,
+      );
+    }
+
+    // Requirement 3: Automatically create month's installment for the foreman as already paid,
+    // with method HOST_SHARE and label "Paid (host share)" in the ledger.
+    final hostPayment = ChitPaymentRecord(
+      id: 'pay_host_${group.id}_c${group.currentCycle}',
+      groupId: group.id,
+      groupName: group.name,
+      cycle: group.currentCycle,
+      memberUsername: foremanUsername,
+      memberName: foremanUsername,
+      amount: group.monthlyContribution,
+      amountPaise: (group.monthlyContribution * 100).toInt(),
+      paymentMethod: 'HOST_SHARE',
+      status: 'PAID',
+      payeeVpa: group.foremanUpiId,
+      payeeName: foremanUsername,
+      createdAt: DateTime.now(),
+      completedAt: DateTime.now(),
+      notes: 'Paid (host share)',
+    );
+    _mockPayments.insert(0, hostPayment);
+
+    // Persist to Supabase if connected
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        await supaClient.from('group_members').insert({
+          'group_id': group.id,
+          'name': foremanUsername,
+          'default_risk_score': 0.0,
+          'payout_position': 'Host · Month 2',
+          'payment_trend': 'On-Time',
+          'guarantor_status': 'Not Required',
+          'amount_exposed': 0,
+          'has_defaulted': false,
+          'phone': foremanPhone ?? 'Host Account',
+          'is_host_member': true,
+        });
+
+        await supaClient
+            .from('chit_groups')
+            .update({'members_count': group.membersCount + 1})
+            .eq('id', group.id);
+
+        await supaClient.from('chit_payments').insert({
+          'id': hostPayment.id,
+          'group_id': group.id,
+          'group_name': group.name,
+          'cycle': group.currentCycle,
+          'member_username': foremanUsername,
+          'member_name': foremanUsername,
+          'amount': group.monthlyContribution,
+          'amount_paise': (group.monthlyContribution * 100).toInt(),
+          'payment_method': 'HOST_SHARE',
+          'status': 'PAID',
+          'notes': 'Paid (host share)',
+          'payee_vpa': group.foremanUpiId,
+          'payee_name': foremanUsername,
+          'completed_at': DateTime.now().toIso8601String(),
+        });
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Supabase joinGroupAsHostMember fallback: $e');
+      }
+    }
+
+    return true;
   }
 
   /// Trigger forfeiture for a member in a group (Escrow Control)

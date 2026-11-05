@@ -137,6 +137,7 @@ ARTICLE I: CHIT SCHEME SPECIFICATIONS & FINANCIAL OBLIGATIONS
    - Bidding System: Auction-based discount bidding per monthly cycle.
    - Random Picking System: Transparent lucky-draw lot selection per monthly cycle.
 5. Escrow Security Deposit Held: ₹${securityDeposit.toStringAsFixed(0)}
+6. Organizer Entitlement: The host receives the month 2 payout.
 
 --------------------------------------------------------------------------------
 ARTICLE II: SUBSCRIBER COVENANTS & DEFAULT CONSEQUENCES

@@ -8,10 +8,7 @@ import '../common/digital_agreement_modal.dart';
 class CreateGroupScreen extends StatefulWidget {
   final VoidCallback? onGroupCreated;
 
-  const CreateGroupScreen({
-    super.key,
-    this.onGroupCreated,
-  });
+  const CreateGroupScreen({super.key, this.onGroupCreated});
 
   @override
   State<CreateGroupScreen> createState() => _CreateGroupScreenState();
@@ -21,7 +18,9 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _payoutRulesController = TextEditingController();
-  final _upiController = TextEditingController(text: SupabaseService.foremanUpiId);
+  final _upiController = TextEditingController(
+    text: SupabaseService.foremanUpiId,
+  );
 
   double _totalPoolSize = 5; // default ₹5 (test mode)
   int _durationMonths = 5; // default 5 months (₹1/month)
@@ -44,7 +43,8 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
   void _generateInvite() {
     if (_formKey.currentState!.validate()) {
       final rand = Random();
-      final codeNum = rand.nextInt(900000) + 100000; // 6-digit numeric code e.g. 849201
+      final codeNum =
+          rand.nextInt(900000) + 100000; // 6-digit numeric code e.g. 849201
       setState(() {
         _generatedInviteCode = '$codeNum';
         _inviteGenerated = true;
@@ -123,7 +123,9 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
 
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('🎉 "${newGroup.name}" created & Host Digital Agreement signed!'),
+                content: Text(
+                  '🎉 "${newGroup.name}" created & Host Digital Agreement signed!',
+                ),
                 backgroundColor: const Color(0xFF007A87),
               ),
             );
@@ -140,7 +142,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please generate the 6-digit Invite Code first.'),
-          backgroundColor: Color(0xFFD97706),
+          backgroundColor: Color(0xFF0F4C81),
         ),
       );
     }
@@ -151,7 +153,9 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
     final monthlyContribution = _totalPoolSize / _durationMonths;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC), // Pure Crisp Off-White & Dark Blue Theme
+      backgroundColor: const Color(
+        0xFFF8FAFC,
+      ), // Pure Crisp Off-White & Dark Blue Theme
       appBar: widget.onGroupCreated == null
           ? AppBar(
               title: const Text(
@@ -187,7 +191,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                         Text(
                           'CHIT GROUP SCHEME SETUP',
                           style: TextStyle(
-                            color: Color(0xFFF59E0B),
+                            color: Color(0xFF38BDF8),
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
                             letterSpacing: 1.2,
@@ -205,7 +209,10 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                         SizedBox(height: 4),
                         Text(
                           'Choose between Bidding or Random Picking systems and enforce digital agreements.',
-                          style: TextStyle(color: Color(0xFFE2E8F0), fontSize: 13),
+                          style: TextStyle(
+                            color: Color(0xFFE2E8F0),
+                            fontSize: 13,
+                          ),
                         ),
                       ],
                     ),
@@ -233,7 +240,11 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                         // 1. Group Name Input
                         const Text(
                           'Chit Group Name',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81)),
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0F4C81),
+                          ),
                         ),
                         const SizedBox(height: 8),
                         TextFormField(
@@ -242,7 +253,9 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                             hintText: 'e.g. Indiranagar Traders Chit A',
                             filled: true,
                             fillColor: const Color(0xFFF8FAFC),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
                           validator: (value) {
                             if (value == null || value.trim().isEmpty) {
@@ -256,18 +269,29 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                         // Foreman Receiving UPI ID (VPA)
                         const Text(
                           'Foreman Receiving UPI ID (VPA) *',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81)),
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0F4C81),
+                          ),
                         ),
                         const SizedBox(height: 8),
                         TextFormField(
                           controller: _upiController,
                           decoration: InputDecoration(
                             hintText: 'e.g. devesh1@oksbi',
-                            prefixIcon: const Icon(Icons.alternate_email_rounded, color: Color(0xFF0F4C81), size: 20),
-                            helperText: 'Subscribers will transfer monthly contributions directly to this UPI address.',
+                            prefixIcon: const Icon(
+                              Icons.alternate_email_rounded,
+                              color: Color(0xFF0F4C81),
+                              size: 20,
+                            ),
+                            helperText:
+                                'Subscribers will transfer monthly contributions directly to this UPI address.',
                             filled: true,
                             fillColor: const Color(0xFFF8FAFC),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
                           validator: (value) {
                             if (value == null || value.trim().isEmpty) {
@@ -284,31 +308,43 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                         // 2. Scheme Type Selector (Bidding vs Random Picking)
                         const Text(
                           'Chit Scheme Type (Payout Model)',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81)),
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0F4C81),
+                          ),
                         ),
                         const SizedBox(height: 8),
                         Row(
                           children: [
                             Expanded(
                               child: GestureDetector(
-                                onTap: () => setState(() => _schemeType = 'Bidding'),
+                                onTap: () =>
+                                    setState(() => _schemeType = 'Bidding'),
                                 child: Container(
                                   padding: const EdgeInsets.all(16),
                                   decoration: BoxDecoration(
-                                    color: _schemeType == 'Bidding' ? const Color(0xFF0F4C81) : const Color(0xFFF8FAFC),
+                                    color: _schemeType == 'Bidding'
+                                        ? const Color(0xFF0F4C81)
+                                        : const Color(0xFFF8FAFC),
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
-                                      color: _schemeType == 'Bidding' ? const Color(0xFF0F4C81) : const Color(0xFFCBD5E1),
+                                      color: _schemeType == 'Bidding'
+                                          ? const Color(0xFF0F4C81)
+                                          : const Color(0xFFCBD5E1),
                                     ),
                                   ),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Row(
                                         children: [
                                           Icon(
                                             Icons.gavel_rounded,
-                                            color: _schemeType == 'Bidding' ? Colors.white : const Color(0xFF0F4C81),
+                                            color: _schemeType == 'Bidding'
+                                                ? Colors.white
+                                                : const Color(0xFF0F4C81),
                                             size: 20,
                                           ),
                                           const SizedBox(width: 8),
@@ -316,7 +352,9 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                             'Bidding System',
                                             style: TextStyle(
                                               fontWeight: FontWeight.bold,
-                                              color: _schemeType == 'Bidding' ? Colors.white : const Color(0xFF0F172A),
+                                              color: _schemeType == 'Bidding'
+                                                  ? Colors.white
+                                                  : const Color(0xFF0F172A),
                                             ),
                                           ),
                                         ],
@@ -326,7 +364,9 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                         'Auctions per cycle. Lowest bidder wins monthly pool discount.',
                                         style: TextStyle(
                                           fontSize: 11,
-                                          color: _schemeType == 'Bidding' ? const Color(0xFFE2E8F0) : const Color(0xFF64748B),
+                                          color: _schemeType == 'Bidding'
+                                              ? const Color(0xFFE2E8F0)
+                                              : const Color(0xFF64748B),
                                         ),
                                       ),
                                     ],
@@ -337,24 +377,34 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                             const SizedBox(width: 12),
                             Expanded(
                               child: GestureDetector(
-                                onTap: () => setState(() => _schemeType = 'Random Picking'),
+                                onTap: () => setState(
+                                  () => _schemeType = 'Random Picking',
+                                ),
                                 child: Container(
                                   padding: const EdgeInsets.all(16),
                                   decoration: BoxDecoration(
-                                    color: _schemeType == 'Random Picking' ? const Color(0xFF0F4C81) : const Color(0xFFF8FAFC),
+                                    color: _schemeType == 'Random Picking'
+                                        ? const Color(0xFF0F4C81)
+                                        : const Color(0xFFF8FAFC),
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
-                                      color: _schemeType == 'Random Picking' ? const Color(0xFF0F4C81) : const Color(0xFFCBD5E1),
+                                      color: _schemeType == 'Random Picking'
+                                          ? const Color(0xFF0F4C81)
+                                          : const Color(0xFFCBD5E1),
                                     ),
                                   ),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Row(
                                         children: [
                                           Icon(
                                             Icons.casino_rounded,
-                                            color: _schemeType == 'Random Picking' ? Colors.white : const Color(0xFF0F4C81),
+                                            color:
+                                                _schemeType == 'Random Picking'
+                                                ? Colors.white
+                                                : const Color(0xFF0F4C81),
                                             size: 20,
                                           ),
                                           const SizedBox(width: 8),
@@ -362,7 +412,11 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                             'Random Picking',
                                             style: TextStyle(
                                               fontWeight: FontWeight.bold,
-                                              color: _schemeType == 'Random Picking' ? Colors.white : const Color(0xFF0F172A),
+                                              color:
+                                                  _schemeType ==
+                                                      'Random Picking'
+                                                  ? Colors.white
+                                                  : const Color(0xFF0F172A),
                                             ),
                                           ),
                                         ],
@@ -372,7 +426,9 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                         'Lucky draw / lot picking each cycle. Equal distribution probability.',
                                         style: TextStyle(
                                           fontSize: 11,
-                                          color: _schemeType == 'Random Picking' ? const Color(0xFFE2E8F0) : const Color(0xFF64748B),
+                                          color: _schemeType == 'Random Picking'
+                                              ? const Color(0xFFE2E8F0)
+                                              : const Color(0xFF64748B),
                                         ),
                                       ),
                                     ],
@@ -397,13 +453,29 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                             children: [
                               Row(
                                 children: const [
-                                  Icon(Icons.public_rounded, color: Color(0xFF007A87)),
+                                  Icon(
+                                    Icons.public_rounded,
+                                    color: Color(0xFF007A87),
+                                  ),
                                   SizedBox(width: 12),
                                   Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      Text('List in Public Marketplace', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                                      Text('Allow subscribers to search and discover this scheme publicly', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                                      Text(
+                                        'List in Public Marketplace',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      Text(
+                                        'Allow subscribers to search and discover this scheme publicly',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Color(0xFF64748B),
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ],
@@ -411,7 +483,8 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                               Switch(
                                 value: _isPublic,
                                 activeColor: const Color(0xFF0F4C81),
-                                onChanged: (val) => setState(() => _isPublic = val),
+                                onChanged: (val) =>
+                                    setState(() => _isPublic = val),
                               ),
                             ],
                           ),
@@ -422,12 +495,23 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text('Total Chit Pool (₹)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
+                            const Text(
+                              'Total Chit Pool (₹)',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF0F4C81),
+                              ),
+                            ),
                             Text(
                               _totalPoolSize < 10
                                   ? '₹${_totalPoolSize.toStringAsFixed(2)}'
                                   : '₹${_totalPoolSize.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}',
-                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFFD97706)),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF059669),
+                              ),
                             ),
                           ],
                         ),
@@ -437,9 +521,21 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                           runSpacing: 6,
                           children: [
                             ActionChip(
-                              avatar: const Icon(Icons.science_rounded, size: 16, color: Color(0xFFD97706)),
-                              label: const Text('🧪 Quick Test: ₹5 Pool (₹1/mo)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-                              backgroundColor: _totalPoolSize == 5 ? const Color(0xFFFEF3C7) : const Color(0xFFF1F5F9),
+                              avatar: const Icon(
+                                Icons.science_rounded,
+                                size: 16,
+                                color: Color(0xFF059669),
+                              ),
+                              label: const Text(
+                                '🧪 Quick Test: ₹5 Pool (₹1/mo)',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11,
+                                ),
+                              ),
+                              backgroundColor: _totalPoolSize == 5
+                                  ? const Color(0xFFDCFCE7)
+                                  : const Color(0xFFF1F5F9),
                               onPressed: () {
                                 setState(() {
                                   _totalPoolSize = 5;
@@ -450,12 +546,20 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                               },
                             ),
                             ActionChip(
-                              label: const Text('₹50,000 Pool', style: TextStyle(fontSize: 11)),
-                              onPressed: () => setState(() => _totalPoolSize = 50000),
+                              label: const Text(
+                                '₹50,000 Pool',
+                                style: TextStyle(fontSize: 11),
+                              ),
+                              onPressed: () =>
+                                  setState(() => _totalPoolSize = 50000),
                             ),
                             ActionChip(
-                              label: const Text('₹1,00,000 Pool', style: TextStyle(fontSize: 11)),
-                              onPressed: () => setState(() => _totalPoolSize = 100000),
+                              label: const Text(
+                                '₹1,00,000 Pool',
+                                style: TextStyle(fontSize: 11),
+                              ),
+                              onPressed: () =>
+                                  setState(() => _totalPoolSize = 100000),
                             ),
                           ],
                         ),
@@ -466,7 +570,8 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                           max: 5000000,
                           divisions: 100,
                           activeColor: const Color(0xFF007A87),
-                          onChanged: (val) => setState(() => _totalPoolSize = val),
+                          onChanged: (val) =>
+                              setState(() => _totalPoolSize = val),
                         ),
                         const SizedBox(height: 20),
 
@@ -474,8 +579,22 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text('Duration (Months)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
-                            Text('$_durationMonths Months', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFFD97706))),
+                            const Text(
+                              'Duration (Months)',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF0F4C81),
+                              ),
+                            ),
+                            Text(
+                              '$_durationMonths Months',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF0F4C81),
+                              ),
+                            ),
                           ],
                         ),
                         Slider(
@@ -484,7 +603,8 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                           max: 50,
                           divisions: 9,
                           activeColor: const Color(0xFF007A87),
-                          onChanged: (val) => setState(() => _durationMonths = val.toInt()),
+                          onChanged: (val) =>
+                              setState(() => _durationMonths = val.toInt()),
                         ),
                         const SizedBox(height: 20),
 
@@ -492,8 +612,22 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text('Number of Members (Capacity)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
-                            Text('$_targetMembers Members', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFFD97706))),
+                            const Text(
+                              'Number of Members (Capacity)',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF0F4C81),
+                              ),
+                            ),
+                            Text(
+                              '$_targetMembers Members',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF0F4C81),
+                              ),
+                            ),
                           ],
                         ),
                         Slider(
@@ -502,7 +636,8 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                           max: 50,
                           divisions: 45,
                           activeColor: const Color(0xFF007A87),
-                          onChanged: (val) => setState(() => _targetMembers = val.toInt()),
+                          onChanged: (val) =>
+                              setState(() => _targetMembers = val.toInt()),
                         ),
                         const SizedBox(height: 20),
 
@@ -510,12 +645,23 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Text('Security Deposit (₹)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
+                            const Text(
+                              'Security Deposit (₹)',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF0F4C81),
+                              ),
+                            ),
                             Text(
                               _securityDeposit < 10
                                   ? '₹${_securityDeposit.toStringAsFixed(2)}'
                                   : '₹${_securityDeposit.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}',
-                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFFD97706)),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF059669),
+                              ),
                             ),
                           ],
                         ),
@@ -525,7 +671,8 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                           max: 200000,
                           divisions: 200,
                           activeColor: const Color(0xFF007A87),
-                          onChanged: (val) => setState(() => _securityDeposit = val),
+                          onChanged: (val) =>
+                              setState(() => _securityDeposit = val),
                         ),
                         const SizedBox(height: 24),
 
@@ -539,21 +686,46 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                           child: Column(
                             children: [
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
-                                  const Text('Monthly Contribution / Member:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                  const Text(
+                                    'Monthly Contribution / Member:',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
+                                  ),
                                   Text(
                                     '₹${monthlyContribution.toStringAsFixed(0)} / mo',
-                                    style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF007A87), fontSize: 14),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF007A87),
+                                      fontSize: 14,
+                                    ),
                                   ),
                                 ],
                               ),
                               const SizedBox(height: 6),
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
-                                  const Text('Legal Framework:', style: TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-                                  const Text('Chit Funds Act 1982 (Sec 6 & 28)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
+                                  const Text(
+                                    'Legal Framework:',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Color(0xFF64748B),
+                                    ),
+                                  ),
+                                  const Text(
+                                    'Chit Funds Act 1982 (Sec 6 & 28)',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF0F4C81),
+                                    ),
+                                  ),
                                 ],
                               ),
                             ],
@@ -572,8 +744,12 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFF0F4C81),
                                 foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
                               ),
                             ),
                           )
@@ -584,15 +760,39 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                             decoration: BoxDecoration(
                               color: const Color(0xFFDCFCE7),
                               borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: const Color(0xFF86EFAC)),
+                              border: Border.all(
+                                color: const Color(0xFF86EFAC),
+                              ),
                             ),
                             child: Column(
                               children: [
-                                const Text('6-DIGIT GROUP INVITE CODE', style: TextStyle(color: Color(0xFF166534), fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                                const Text(
+                                  '6-DIGIT GROUP INVITE CODE',
+                                  style: TextStyle(
+                                    color: Color(0xFF166534),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 1.1,
+                                  ),
+                                ),
                                 const SizedBox(height: 6),
-                                Text(_generatedInviteCode, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: 6, color: Color(0xFF15803D))),
+                                Text(
+                                  _generatedInviteCode,
+                                  style: const TextStyle(
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 6,
+                                    color: Color(0xFF15803D),
+                                  ),
+                                ),
                                 const SizedBox(height: 6),
-                                Text('Scheme Type: $_schemeType • Public Marketplace: ${_isPublic ? "Yes" : "Private"}', style: const TextStyle(fontSize: 12, color: Color(0xFF166534))),
+                                Text(
+                                  'Scheme Type: $_schemeType • Public Marketplace: ${_isPublic ? "Yes" : "Private"}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF166534),
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -602,12 +802,18 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                             child: ElevatedButton.icon(
                               onPressed: _saveGroup,
                               icon: const Icon(Icons.check_circle_rounded),
-                              label: const Text('Launch Chit Group & Save to Supabase'),
+                              label: const Text(
+                                'Launch Chit Group & Save to Supabase',
+                              ),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFF007A87),
                                 foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
                               ),
                             ),
                           ),

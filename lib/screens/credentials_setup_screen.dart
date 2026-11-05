@@ -21,7 +21,8 @@ class _CredentialsSetupScreenState extends State<CredentialsSetupScreen> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _confirmPasswordController = TextEditingController();
+  final TextEditingController _confirmPasswordController =
+      TextEditingController();
 
   Timer? _debounceTimer;
 
@@ -94,7 +95,8 @@ class _CredentialsSetupScreenState extends State<CredentialsSetupScreen> {
       _isCheckingUsername = false;
       _isUsernameUnique = isUnique;
       if (!isUnique) {
-        _usernameErrorText = 'This username is already taken on Supabase. Try another.';
+        _usernameErrorText =
+            'This username is already taken on Supabase. Try another.';
       } else {
         _usernameErrorText = null;
       }
@@ -145,7 +147,12 @@ class _CredentialsSetupScreenState extends State<CredentialsSetupScreen> {
                 Icon(Icons.error_outline_rounded, color: Colors.red, size: 28),
                 SizedBox(width: 8),
                 Expanded(
-                  child: Text('Database Error', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: Text(
+                    'Database Error',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                 ),
               ],
             ),
@@ -180,7 +187,13 @@ class _CredentialsSetupScreenState extends State<CredentialsSetupScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F4C81))),
+                child: const Text(
+                  'OK',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0F4C81),
+                  ),
+                ),
               ),
             ],
           ),
@@ -192,7 +205,9 @@ class _CredentialsSetupScreenState extends State<CredentialsSetupScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Username "$username" successfully registered on Supabase!'),
+          content: Text(
+            'Username "$username" successfully registered on Supabase!',
+          ),
           backgroundColor: const Color(0xFF0F4C81),
         ),
       );
@@ -328,7 +343,10 @@ class _CredentialsSetupScreenState extends State<CredentialsSetupScreen> {
                                 SizedBox(width: 6),
                                 Text(
                                   'Checking Supabase...',
-                                  style: TextStyle(fontSize: 11, color: Color(0xFF0F4C81)),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Color(0xFF0F4C81),
+                                  ),
                                 ),
                               ],
                             ),
@@ -342,14 +360,24 @@ class _CredentialsSetupScreenState extends State<CredentialsSetupScreen> {
                         onChanged: _onUsernameChanged,
                         decoration: InputDecoration(
                           hintText: 'e.g. rajesh_host99',
-                          prefixIcon: const Icon(Icons.alternate_email, color: Color(0xFF64748B)),
+                          prefixIcon: const Icon(
+                            Icons.alternate_email,
+                            color: Color(0xFF64748B),
+                          ),
                           suffixIcon: _isCheckingUsername
                               ? null
                               : (_isUsernameUnique
-                                  ? const Icon(Icons.check_circle, color: Colors.green)
-                                  : (_usernameController.text.trim().length >= 3
-                                      ? const Icon(Icons.cancel, color: Colors.red)
-                                      : null)),
+                                    ? const Icon(
+                                        Icons.check_circle,
+                                        color: Colors.green,
+                                      )
+                                    : (_usernameController.text.trim().length >=
+                                              3
+                                          ? const Icon(
+                                              Icons.cancel,
+                                              color: Colors.red,
+                                            )
+                                          : null)),
                         ),
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
@@ -359,7 +387,8 @@ class _CredentialsSetupScreenState extends State<CredentialsSetupScreen> {
                             return 'Username must be at least 3 characters';
                           }
                           if (!_isUsernameUnique) {
-                            return _usernameErrorText ?? 'Username is already taken';
+                            return _usernameErrorText ??
+                                'Username is already taken';
                           }
                           return null;
                         },
@@ -367,17 +396,27 @@ class _CredentialsSetupScreenState extends State<CredentialsSetupScreen> {
 
                       // Username Status Feedback Banner
                       const SizedBox(height: 8),
-                      if (_isUsernameUnique && _usernameController.text.trim().length >= 3)
+                      if (_isUsernameUnique &&
+                          _usernameController.text.trim().length >= 3)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.green.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+                            border: Border.all(
+                              color: Colors.green.withValues(alpha: 0.3),
+                            ),
                           ),
                           child: Row(
                             children: const [
-                              Icon(Icons.verified, color: Colors.green, size: 16),
+                              Icon(
+                                Icons.verified,
+                                color: Colors.green,
+                                size: 16,
+                              ),
                               SizedBox(width: 8),
                               Expanded(
                                 child: Text(
@@ -395,7 +434,10 @@ class _CredentialsSetupScreenState extends State<CredentialsSetupScreen> {
                       else if (_usernameErrorText != null)
                         Text(
                           _usernameErrorText!,
-                          style: const TextStyle(color: Colors.red, fontSize: 12),
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontSize: 12,
+                          ),
                         ),
 
                       const SizedBox(height: 24),
@@ -416,7 +458,10 @@ class _CredentialsSetupScreenState extends State<CredentialsSetupScreen> {
                         onChanged: (_) => setState(() {}),
                         decoration: InputDecoration(
                           hintText: '••••••••',
-                          prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFF64748B)),
+                          prefixIcon: const Icon(
+                            Icons.lock_outline,
+                            color: Color(0xFF64748B),
+                          ),
                           suffixIcon: IconButton(
                             icon: Icon(
                               _isPasswordVisible
@@ -453,7 +498,9 @@ class _CredentialsSetupScreenState extends State<CredentialsSetupScreen> {
                                 backgroundColor: const Color(0xFFE2E8F0),
                                 color: passwordStrength < 0.4
                                     ? Colors.red
-                                    : (passwordStrength < 0.7 ? Colors.amber : Colors.green),
+                                    : (passwordStrength < 0.7
+                                          ? const Color(0xFF0284C7)
+                                          : Colors.green),
                                 minHeight: 4,
                               ),
                             ),
@@ -461,13 +508,17 @@ class _CredentialsSetupScreenState extends State<CredentialsSetupScreen> {
                             Text(
                               passwordStrength < 0.4
                                   ? 'Weak'
-                                  : (passwordStrength < 0.7 ? 'Medium' : 'Strong'),
+                                  : (passwordStrength < 0.7
+                                        ? 'Medium'
+                                        : 'Strong'),
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
                                 color: passwordStrength < 0.4
                                     ? Colors.red
-                                    : (passwordStrength < 0.7 ? Colors.amber : Colors.green),
+                                    : (passwordStrength < 0.7
+                                          ? const Color(0xFF0284C7)
+                                          : Colors.green),
                               ),
                             ),
                           ],
@@ -491,7 +542,10 @@ class _CredentialsSetupScreenState extends State<CredentialsSetupScreen> {
                         obscureText: !_isConfirmPasswordVisible,
                         decoration: InputDecoration(
                           hintText: '••••••••',
-                          prefixIcon: const Icon(Icons.lock_reset_outlined, color: Color(0xFF64748B)),
+                          prefixIcon: const Icon(
+                            Icons.lock_reset_outlined,
+                            color: Color(0xFF64748B),
+                          ),
                           suffixIcon: IconButton(
                             icon: Icon(
                               _isConfirmPasswordVisible
@@ -501,7 +555,8 @@ class _CredentialsSetupScreenState extends State<CredentialsSetupScreen> {
                             ),
                             onPressed: () {
                               setState(() {
-                                _isConfirmPasswordVisible = !_isConfirmPasswordVisible;
+                                _isConfirmPasswordVisible =
+                                    !_isConfirmPasswordVisible;
                               });
                             },
                           ),
@@ -524,7 +579,9 @@ class _CredentialsSetupScreenState extends State<CredentialsSetupScreen> {
                         width: double.infinity,
                         height: 52,
                         child: ElevatedButton(
-                          onPressed: (_isSaving || !_isUsernameUnique) ? null : _handleSaveAndContinue,
+                          onPressed: (_isSaving || !_isUsernameUnique)
+                              ? null
+                              : _handleSaveAndContinue,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF0F4C81),
                             foregroundColor: Colors.white,
