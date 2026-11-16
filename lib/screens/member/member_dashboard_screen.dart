@@ -7,6 +7,7 @@ import '../../services/supabase_service.dart';
 import '../common/digital_agreement_modal.dart';
 import '../common/group_details_modal.dart';
 import '../../widgets/youpi_payment_modal.dart';
+import '../payment/payment_checkout_screen.dart';
 import '../../models/guarantee_request.dart';
 import '../../core/config/guarantor_rules.dart';
 import '../../models/security_deposit.dart';
@@ -1887,7 +1888,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                       ElevatedButton.icon(
                         onPressed: () {
                           if (group != null && mounted) {
-                            YoupiPaymentModal.show(
+                            PaymentCheckoutScreen.open(
                               context: context,
                               group: group,
                               currentUsername: _username,
@@ -1905,8 +1906,8 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                             );
                           }
                         },
-                        icon: const Icon(Icons.flash_on_rounded, size: 16),
-                        label: const Text('Pay via UPI'),
+                        icon: const Icon(Icons.payment_rounded, size: 16),
+                        label: const Text('Pay Installment'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF16A34A),
                           foregroundColor: Colors.white,

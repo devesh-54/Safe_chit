@@ -7,6 +7,7 @@ import '../models/chit_group.dart';
 import '../models/chit_payment_record.dart';
 import '../services/supabase_service.dart';
 import '../services/youpi_payment_service.dart';
+import '../screens/payment/payment_checkout_screen.dart';
 
 class YoupiPaymentModal extends StatefulWidget {
   final ChitGroup group;
@@ -29,16 +30,13 @@ class YoupiPaymentModal extends StatefulWidget {
     double? customAmount,
     VoidCallback? onPaymentSuccess,
   }) {
-    return showModalBottomSheet(
+    // Open the new full-screen Amazon-style payment checkout
+    return PaymentCheckoutScreen.open(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => YoupiPaymentModal(
-        group: group,
-        currentUsername: currentUsername,
-        customAmount: customAmount,
-        onPaymentSuccess: onPaymentSuccess,
-      ),
+      group: group,
+      currentUsername: currentUsername,
+      customAmount: customAmount,
+      onPaymentSuccess: onPaymentSuccess,
     );
   }
 

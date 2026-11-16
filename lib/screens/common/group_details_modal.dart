@@ -13,6 +13,7 @@ import '../../features/bidding/bidding_waiting_room.dart';
 import '../../features/bidding/live_bidding_room.dart';
 import '../../features/bidding/auction_close_payout.dart';
 import '../../widgets/youpi_payment_modal.dart';
+import '../payment/payment_checkout_screen.dart';
 import '../../models/chit_payment_record.dart';
 import '../../models/security_deposit.dart';
 import '../../core/config/deposit_config.dart';
@@ -329,7 +330,7 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
   }
 
   void _makeMonthlyPayment() {
-    YoupiPaymentModal.show(
+    PaymentCheckoutScreen.open(
       context: context,
       group: widget.group,
       currentUsername: widget.currentUsername,
