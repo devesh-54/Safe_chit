@@ -385,15 +385,13 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
     );
 
     if (mounted) {
-      showDialog(
+      DigitalAgreementModal.open(
         context: context,
-        builder: (_) => DigitalAgreementModal(
-          agreement: agreement!,
-          isForeman: widget.isForeman,
-          onSigned: () {
-            _loadGroupMembers();
-          },
-        ),
+        agreement: agreement!,
+        isForeman: widget.isForeman,
+        onSigned: () {
+          _loadGroupMembers();
+        },
       );
     }
   }
@@ -413,6 +411,13 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
         backgroundColor: const Color(0xFF0F4C81),
         foregroundColor: Colors.white,
         elevation: 0,
+        actions: [
+          IconButton(
+            tooltip: 'View Signed Digital Agreement',
+            icon: const Icon(Icons.description_outlined),
+            onPressed: _openDigitalAgreement,
+          ),
+        ],
       ),
       body: SafeArea(
         child: Padding(

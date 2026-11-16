@@ -74,6 +74,52 @@ class DigitalAgreement {
     );
   }
 
+  DigitalAgreement copyWith({
+    String? id,
+    String? groupId,
+    String? groupName,
+    String? foremanUsername,
+    String? foremanName,
+    String? memberUsername,
+    String? memberName,
+    double? poolAmount,
+    int? durationMonths,
+    double? monthlyContribution,
+    String? schemeType,
+    String? agreementText,
+    bool? foremanSigned,
+    String? foremanSignatureUrl,
+    DateTime? foremanSignedAt,
+    bool? memberSigned,
+    String? memberSignatureUrl,
+    DateTime? memberSignedAt,
+    String? status,
+    DateTime? createdAt,
+  }) {
+    return DigitalAgreement(
+      id: id ?? this.id,
+      groupId: groupId ?? this.groupId,
+      groupName: groupName ?? this.groupName,
+      foremanUsername: foremanUsername ?? this.foremanUsername,
+      foremanName: foremanName ?? this.foremanName,
+      memberUsername: memberUsername ?? this.memberUsername,
+      memberName: memberName ?? this.memberName,
+      poolAmount: poolAmount ?? this.poolAmount,
+      durationMonths: durationMonths ?? this.durationMonths,
+      monthlyContribution: monthlyContribution ?? this.monthlyContribution,
+      schemeType: schemeType ?? this.schemeType,
+      agreementText: agreementText ?? this.agreementText,
+      foremanSigned: foremanSigned ?? this.foremanSigned,
+      foremanSignatureUrl: foremanSignatureUrl ?? this.foremanSignatureUrl,
+      foremanSignedAt: foremanSignedAt ?? this.foremanSignedAt,
+      memberSigned: memberSigned ?? this.memberSigned,
+      memberSignatureUrl: memberSignatureUrl ?? this.memberSignatureUrl,
+      memberSignedAt: memberSignedAt ?? this.memberSignedAt,
+      status: status ?? this.status,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'id': id,

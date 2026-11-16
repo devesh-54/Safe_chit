@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../models/onboarding_state.dart';
 import '../../models/chit_group.dart';
 import '../../models/chit_join_request.dart';
+import '../../models/chit_payment_record.dart';
 import '../../models/digital_agreement.dart';
 import '../../services/supabase_service.dart';
 import '../common/digital_agreement_modal.dart';
@@ -45,8 +47,13 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
   String _username = 'demo_member';
   String _displayName = '';
   String _selectedFilterType = 'All'; // 'All', 'Bidding', 'Random Picking'
-  int _currentIndex =
-      0; // 0: Overview, 1: Joined Schemes, 2: Guarantor Hub, 3: Discovery
+  int _currentIndex = 0; // 0: Overview, 1: Joined Schemes, 2: Discovery, 3: Notifications, 4: Profile
+
+  Map<String, bool> _signedAgreementsMap = {};
+  List<ChitPaymentRecord> _memberPayments = [];
+  String _notificationFilter = 'All'; // 'All', 'Guarantees', 'Approvals', 'Payments'
+
+  Timer? _realtimeTimer;
 
   @override
   void initState() {
@@ -56,13 +63,85 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
       _displayName = widget.state!.legalName;
     }
     _loadMemberData();
+    _startRealtimeDataStream();
   }
+
+  bool _isQuietlyRefreshing = false;
 
   @override
   void dispose() {
+    _realtimeTimer?.cancel();
     _codeController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _startRealtimeDataStream() {
+    // Background polling every 8 seconds with re-entrancy protection
+    _realtimeTimer = Timer.periodic(const Duration(seconds: 8), (_) async {
+      if (!mounted) return;
+      _loadMemberDataQuietly();
+    });
+  }
+
+  Future<void> _loadMemberDataQuietly() async {
+    if (_isQuietlyRefreshing || !mounted) return;
+    _isQuietlyRefreshing = true;
+
+    try {
+      final results = await Future.wait([
+        SupabaseService.getMemberJoinRequests(_username),
+        SupabaseService.getUserDashboardMetrics(_username),
+        SupabaseService.getGuaranteeRequestsForGuarantor(_username),
+        SupabaseService.getMemberPayments(_username),
+      ]);
+
+      final requests = results[0] as List<ChitJoinRequest>;
+      final metrics = results[1] as Map<String, dynamic>;
+      final incomingGuarantees = results[2] as List<GuaranteeRequest>;
+      final memberPayments = results[3] as List<ChitPaymentRecord>;
+
+      final Map<String, SecurityDeposit> depMap = Map.from(_depositsMap);
+      final Map<String, ChitGroup> grpMap = Map.from(_groupDetailsMap);
+      final Map<String, bool> signedMap = Map.from(_signedAgreementsMap);
+
+      // Concurrently fetch missing group or deposit details
+      await Future.wait(requests.map((req) async {
+        if (!grpMap.containsKey(req.groupId)) {
+          final grp = await SupabaseService.getChitGroupById(req.groupId);
+          if (grp != null) grpMap[req.groupId] = grp;
+        }
+
+        if (req.isApproved && !depMap.containsKey(req.groupId)) {
+          final dep = await SupabaseService.getSecurityDeposit(
+            groupId: req.groupId,
+            memberId: _username,
+          );
+          if (dep != null) {
+            depMap[req.groupId] = dep;
+          }
+        }
+      }));
+
+      if (mounted) {
+        setState(() {
+          _myRequests = requests;
+          _depositsMap = depMap;
+          _groupDetailsMap = grpMap;
+          _signedAgreementsMap = signedMap;
+          _memberPayments = memberPayments;
+          _chitsJoinedCount = metrics['chitsJoined'] as int? ??
+              requests.where((r) => r.status == 'approved').length;
+          _monthlyAmountDue =
+              (metrics['monthlyAmountDue'] as num?)?.toDouble() ?? 0.0;
+          _totalDefaultsCount = metrics['totalDefaults'] as int? ?? 0;
+          _incomingGuaranteeRequests = incomingGuarantees;
+        });
+      }
+    } catch (_) {
+    } finally {
+      _isQuietlyRefreshing = false;
+    }
   }
 
   void _loadMemberData() async {
@@ -70,50 +149,96 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
       _isLoading = true;
     });
 
-    final requests = await SupabaseService.getMemberJoinRequests(_username);
-    final metrics = await SupabaseService.getUserDashboardMetrics(_username);
-    final profile = await SupabaseService.getUserProfile(_username);
-    final incomingGuarantees =
-        await SupabaseService.getGuaranteeRequestsForGuarantor(_username);
-    final profileName = profile?['full_name'] as String?;
-    if (profileName != null && profileName.trim().isNotEmpty) {
-      _displayName = profileName.trim();
-    }
-    final publicGroups = await SupabaseService.getPublicChitGroups(
-      query: _searchController.text,
-      schemeType: _selectedFilterType,
-    );
+    try {
+      // Parallel fetch all top-level data concurrently
+      final results = await Future.wait([
+        SupabaseService.getUserProfile(_username),
+        SupabaseService.getMemberJoinRequests(_username),
+        SupabaseService.getUserDashboardMetrics(_username),
+        SupabaseService.getGuaranteeRequestsForGuarantor(_username),
+        SupabaseService.getPublicChitGroups(
+          query: _searchController.text,
+          schemeType: _selectedFilterType,
+        ),
+        SupabaseService.getMemberPayments(_username),
+      ]);
 
-    final Map<String, SecurityDeposit> depMap = {};
-    final Map<String, ChitGroup> grpMap = {};
-    for (var req in requests) {
-      final grp = await SupabaseService.getChitGroupById(req.groupId);
-      if (grp != null) grpMap[req.groupId] = grp;
-      if (req.isApproved) {
-        final dep = await SupabaseService.getSecurityDeposit(
-          groupId: req.groupId,
-          memberId: _username,
-        );
+      final profile = results[0] as Map<String, dynamic>?;
+      final requests = results[1] as List<ChitJoinRequest>;
+      final metrics = results[2] as Map<String, dynamic>;
+      final incomingGuarantees = results[3] as List<GuaranteeRequest>;
+      final publicGroups = results[4] as List<ChitGroup>;
+      final memberPayments = results[5] as List<ChitPaymentRecord>;
+
+      final profileName = profile?['full_name'] as String?;
+      if (profileName != null && profileName.trim().isNotEmpty) {
+        _displayName = profileName.trim();
+      }
+      if (profile != null && profile['username'] != null) {
+        final pUser = (profile['username'] as String).trim();
+        if (pUser.isNotEmpty && pUser.toLowerCase() != _username.toLowerCase()) {
+          _username = pUser;
+        }
+      }
+
+      final Map<String, SecurityDeposit> depMap = {};
+      final Map<String, ChitGroup> grpMap = {};
+      final Map<String, bool> signedMap = {};
+
+      // Concurrently fetch child group, agreement, and deposit details in parallel
+      await Future.wait(requests.map((req) async {
+        final childResults = await Future.wait([
+          SupabaseService.getChitGroupById(req.groupId),
+          SupabaseService.getDigitalAgreement(
+            groupId: req.groupId,
+            memberUsername: _username,
+          ),
+          req.isApproved
+              ? SupabaseService.getSecurityDeposit(
+                  groupId: req.groupId,
+                  memberId: _username,
+                )
+              : Future.value(null),
+        ]);
+
+        final grp = childResults[0] as ChitGroup?;
+        final agreement = childResults[1] as DigitalAgreement?;
+        final dep = childResults[2] as SecurityDeposit?;
+
+        if (grp != null) grpMap[req.groupId] = grp;
+        if (agreement != null && agreement.memberSigned) {
+          signedMap[req.groupId] = true;
+        }
         if (dep != null) {
           depMap[req.groupId] = dep;
         }
+      }));
+
+      if (mounted) {
+        setState(() {
+          _myRequests = requests;
+          _depositsMap = depMap;
+          _groupDetailsMap = grpMap;
+          _signedAgreementsMap = signedMap;
+          _memberPayments = memberPayments;
+          _chitsJoinedCount =
+              metrics['chitsJoined'] as int? ??
+              requests.where((r) => r.status == 'approved').length;
+          _monthlyAmountDue =
+              (metrics['monthlyAmountDue'] as num?)?.toDouble() ?? 0.0;
+          _totalDefaultsCount = metrics['totalDefaults'] as int? ?? 0;
+          _publicMarketplaceGroups = publicGroups;
+          _incomingGuaranteeRequests = incomingGuarantees;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
       }
     }
-
-    setState(() {
-      _myRequests = requests;
-      _depositsMap = depMap;
-      _groupDetailsMap = grpMap;
-      _chitsJoinedCount =
-          metrics['chitsJoined'] as int? ??
-          requests.where((r) => r.status == 'approved').length;
-      _monthlyAmountDue =
-          (metrics['monthlyAmountDue'] as num?)?.toDouble() ?? 0.0;
-      _totalDefaultsCount = metrics['totalDefaults'] as int? ?? 0;
-      _publicMarketplaceGroups = publicGroups;
-      _incomingGuaranteeRequests = incomingGuarantees;
-      _isLoading = false;
-    });
   }
 
   void _openJoinChitModalWithGuarantor(ChitGroup group) async {
@@ -503,9 +628,50 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                                       }
                                     }
 
-                                    setModalState(() => isSubmitting = true);
-                                    final joinSuccess =
-                                        await SupabaseService.submitJoinRequest(
+                                    Navigator.pop(modalContext);
+
+                                    // 1. Prepare Digital Chit Agreement under Section 6 Chit Funds Act
+                                    final agreement = DigitalAgreement(
+                                      id: 'agreement_${group.id}_${DateTime.now().millisecondsSinceEpoch}',
+                                      groupId: group.id,
+                                      groupName: group.name,
+                                      foremanUsername: 'foreman',
+                                      foremanName: 'Rajesh Kumar (Foreman)',
+                                      memberUsername: _username,
+                                      memberName: _displayName.isNotEmpty ? _displayName : 'Member $_username',
+                                      poolAmount: group.totalPoolSize,
+                                      durationMonths: group.durationMonths,
+                                      monthlyContribution: group.monthlyContribution,
+                                      schemeType: group.schemeType,
+                                      createdAt: DateTime.now(),
+                                      agreementText: DigitalAgreement.generateLegalAgreementText(
+                                        groupName: group.name,
+                                        foremanName: 'Rajesh Kumar (Foreman)',
+                                        memberName: _displayName.isNotEmpty ? _displayName : 'Member $_username',
+                                        poolAmount: group.totalPoolSize,
+                                        durationMonths: group.durationMonths,
+                                        monthlyContribution: group.monthlyContribution,
+                                        schemeType: group.schemeType,
+                                        securityDeposit: group.securityDeposit,
+                                      ),
+                                    );
+
+                                    // 2. Present Digital Agreement in Full Screen
+                                    await DigitalAgreementModal.open(
+                                      context: context,
+                                      agreement: agreement,
+                                      isForeman: false,
+                                      onSigned: () async {
+                                        await SupabaseService.saveDigitalAgreement(
+                                          agreement.copyWith(
+                                            memberSigned: true,
+                                            memberSignedAt: DateTime.now(),
+                                            status: 'member_signed',
+                                          ),
+                                        );
+
+                                        final joinSuccess =
+                                            await SupabaseService.submitJoinRequest(
                                           inviteCode: group.inviteCode,
                                           memberUsername: _username,
                                           guarantorUsername:
@@ -518,30 +684,24 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                                                   : selectedRelation,
                                         );
 
-                                    if (!joinSuccess) {
-                                      setModalState(() {
-                                        isSubmitting = false;
-                                        inlineError =
-                                            "Could not submit join request. Mutual exclusion or group restriction applies.";
-                                      });
-                                      return;
-                                    }
-
-                                    if (!mounted) return;
-                                    Navigator.pop(modalContext);
-                                    _loadMemberData();
-
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          guarantorText.isNotEmpty
-                                              ? 'Join request sent with guarantor @$guarantorText!'
-                                              : 'Join request submitted to Foreman!',
-                                        ),
-                                        backgroundColor: const Color(
-                                          0xFF0F4C81,
-                                        ),
-                                      ),
+                                        if (mounted) {
+                                          _loadMemberData();
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                joinSuccess
+                                                    ? (guarantorText.isNotEmpty
+                                                        ? 'Agreement signed & request sent with guarantor @$guarantorText!'
+                                                        : 'Agreement signed & join request submitted to Foreman!')
+                                                    : 'Join request failed due to mutual exclusion or restriction.',
+                                              ),
+                                              backgroundColor: joinSuccess
+                                                  ? const Color(0xFF0F4C81)
+                                                  : const Color(0xFFDC2626),
+                                            ),
+                                          );
+                                        }
+                                      },
                                     );
                                   },
                             style: ElevatedButton.styleFrom(
@@ -561,11 +721,18 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                                       color: Colors.white,
                                     ),
                                   )
-                                : const Text(
-                                    'Send Join Request',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                                : const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.gavel_rounded, size: 18),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        'Review Agreement & Request to Join',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                           ),
                         ),
@@ -1106,15 +1273,13 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
     );
 
     if (mounted) {
-      showDialog(
+      DigitalAgreementModal.open(
         context: context,
-        builder: (_) => DigitalAgreementModal(
-          agreement: agreement!,
-          isForeman: false,
-          onSigned: () {
-            _loadMemberData();
-          },
-        ),
+        agreement: agreement!,
+        isForeman: false,
+        onSigned: () {
+          _loadMemberData();
+        },
       );
     }
   }
@@ -1127,89 +1292,76 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
               ? widget.state!.legalName
               : _username);
 
+    final hasPendingNotifications =
+        _incomingGuaranteeRequests.any((r) => r.status == 'pending') ||
+            _myRequests.any((r) => r.isApproved);
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        leading: Container(
-          margin: const EdgeInsets.all(8),
-          decoration: const BoxDecoration(
-            color: Colors.white24,
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(Icons.shield, color: Colors.white, size: 20),
-        ),
-        title: const Text(
-          'Member Dashboard',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-        ),
-        backgroundColor: const Color(0xFF0F4C81),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.shield_outlined),
-                tooltip: 'Guarantee Requests',
-                onPressed: _showGuaranteeRequestsSheet,
+      appBar: _currentIndex == 4
+          ? null
+          : AppBar(
+              leading: Container(
+                margin: const EdgeInsets.all(8),
+                decoration: const BoxDecoration(
+                  color: Colors.white24,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.shield, color: Colors.white, size: 20),
               ),
-              if (_incomingGuaranteeRequests.any((r) => r.status == 'pending'))
-                Positioned(
-                  right: 6,
-                  top: 6,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF10B981),
-                      shape: BoxShape.circle,
+              title: const Text(
+                'Member Dashboard',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+              backgroundColor: const Color(0xFF0F4C81),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              actions: [
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.notifications_outlined),
+                      tooltip: 'Notifications',
+                      onPressed: () {
+                        setState(() => _currentIndex = 3);
+                      },
                     ),
-                    child: Text(
-                      '${_incomingGuaranteeRequests.where((r) => r.status == 'pending').length}',
-                      style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                    if (hasPendingNotifications)
+                      Positioned(
+                        right: 6,
+                        top: 6,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF10B981),
+                            shape: BoxShape.circle,
+                          ),
+                          constraints: const BoxConstraints(minWidth: 8, minHeight: 8),
+                        ),
                       ),
-                    ),
-                  ),
+                  ],
                 ),
-            ],
-          ),
-          IconButton(
-            icon: const Icon(Icons.account_circle_outlined),
-            tooltip: 'My Performance Profile',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => UserProfileScreen(
-                    username: _username,
-                    isOwnProfile: true,
-                    initialRole: 'member',
-                  ),
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  tooltip: 'Refresh',
+                  onPressed: () {
+                    _loadMemberData();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Refreshed member data!'),
+                        duration: Duration(seconds: 1),
+                      ),
+                    );
+                  },
                 ),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () {
-              _loadMemberData();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Refreshed member data!'),
-                  duration: Duration(seconds: 1),
+                IconButton(
+                  icon: const Icon(Icons.logout_rounded),
+                  tooltip: 'Log Out',
+                  onPressed: () => Navigator.pop(context),
                 ),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout_rounded),
-            onPressed: () => Navigator.pop(context),
-          ),
-        ],
-      ),
+              ],
+            ),
       body: SafeArea(
         child: _isLoading
             ? const Center(
@@ -1220,17 +1372,15 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                 children: [
                   _buildOverviewDashboard(displayName),
                   _buildJoinedChitsPage(),
-                  _buildGuarantorHubPage(),
                   _buildMarketplacePage(),
+                  _buildNotificationCenterPage(),
+                  UserProfileScreen(
+                    username: _username,
+                    isOwnProfile: true,
+                    initialRole: 'member',
+                  ),
                 ],
               ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFF0F4C81),
-        foregroundColor: Colors.white,
-        onPressed: _openJoinChitBottomSheet,
-        tooltip: 'Join Chit Group',
-        child: const Icon(Icons.add_rounded, size: 28),
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
@@ -1253,15 +1403,11 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
             label: 'Dashboard',
           ),
           BottomNavigationBarItem(
-            icon: _buildBadgeIcon(Icons.groups_rounded, _myRequests.isNotEmpty),
-            label: 'Joined Schemes',
-          ),
-          BottomNavigationBarItem(
             icon: _buildBadgeIcon(
-              Icons.verified_user_rounded,
-              _incomingGuaranteeRequests.any((r) => r.status == 'pending'),
+              Icons.groups_rounded,
+              _myRequests.any((r) => r.isApproved),
             ),
-            label: 'Guarantor',
+            label: 'Joined Schemes',
           ),
           BottomNavigationBarItem(
             icon: _buildBadgeIcon(
@@ -1269,6 +1415,17 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
               _publicMarketplaceGroups.isNotEmpty,
             ),
             label: 'Discovery',
+          ),
+          BottomNavigationBarItem(
+            icon: _buildBadgeIcon(
+              Icons.notifications_rounded,
+              hasPendingNotifications,
+            ),
+            label: 'Notifications',
+          ),
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.person_rounded),
+            label: 'Profile',
           ),
         ],
       ),
@@ -1936,6 +2093,8 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
   }
 
   Widget _buildJoinedChitsPage() {
+    final joinedGroups = _myRequests.where((r) => r.isApproved).toList();
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Center(
@@ -1959,7 +2118,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
               ),
               const SizedBox(height: 20),
 
-              if (_myRequests.isEmpty)
+              if (joinedGroups.isEmpty)
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(32),
@@ -1986,7 +2145,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                       ),
                       SizedBox(height: 4),
                       Text(
-                        'Go to "Join Chit Group" to enter a 6-digit code or browse the Public Discovery tab.',
+                        'Browse the Discovery tab to explore verified public chit schemes or search by private 6-digit code.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 12,
@@ -1998,7 +2157,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                 )
               else
                 Column(
-                  children: _myRequests
+                  children: joinedGroups
                       .map((req) => _buildJoinedRequestCard(req))
                       .toList(),
                 ),
@@ -2007,6 +2166,755 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildNotificationCenterPage() {
+    final pendingGuarantees = _incomingGuaranteeRequests
+        .where((r) => r.status == 'pending')
+        .toList();
+    final acceptedGuarantees = _incomingGuaranteeRequests
+        .where((r) => r.status == 'accepted')
+        .toList();
+
+    final totalGuarantees = _incomingGuaranteeRequests.length;
+    final totalChitApprovals = _myRequests.length;
+    final totalPayments = _memberPayments.length + _depositsMap.length;
+
+    return RefreshIndicator(
+      onRefresh: () async => _loadMemberData(),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 800),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F4C81).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Icon(
+                        Icons.notifications_active_rounded,
+                        color: Color(0xFF0F4C81),
+                        size: 28,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: const [
+                          Text(
+                            'Notifications',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'Guarantees, payments, and chit scheme approvals in one place',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Category Filter Chips
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _buildNotificationFilterChip('All', null),
+                      const SizedBox(width: 8),
+                      _buildNotificationFilterChip('Guarantees', totalGuarantees),
+                      const SizedBox(width: 8),
+                      _buildNotificationFilterChip(
+                        'Chit Approvals',
+                        totalChitApprovals,
+                      ),
+                      const SizedBox(width: 8),
+                      _buildNotificationFilterChip('Payments', totalPayments),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Active Guarantor Backing banner
+                if (acceptedGuarantees.isNotEmpty &&
+                    (_notificationFilter == 'All' ||
+                        _notificationFilter == 'Guarantees')) ...[
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0FDF4),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFBBF7D0)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.shield_rounded,
+                          color: Color(0xFF166534),
+                          size: 24,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Active Guarantor Backing (${acceptedGuarantees.length})',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF166534),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'You are actively backing: ${acceptedGuarantees.map((g) => '@${g.memberId}').join(', ')}',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFF15803D),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                // Notification Content
+                _buildNotificationItemsList(),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNotificationFilterChip(String label, int? count) {
+    final isSelected = _notificationFilter == label;
+    return ChoiceChip(
+      label: Text(count != null && count > 0 ? '$label ($count)' : label),
+      selected: isSelected,
+      onSelected: (_) => setState(() => _notificationFilter = label),
+      selectedColor: const Color(0xFF0F4C81),
+      labelStyle: TextStyle(
+        fontSize: 12,
+        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+        color: isSelected ? Colors.white : const Color(0xFF475569),
+      ),
+      backgroundColor: Colors.white,
+      side: BorderSide(
+        color: isSelected ? const Color(0xFF0F4C81) : const Color(0xFFCBD5E1),
+      ),
+    );
+  }
+
+  Widget _buildNotificationItemsList() {
+    final List<Widget> items = [];
+
+    // 1. Guarantee Requests
+    if (_notificationFilter == 'All' || _notificationFilter == 'Guarantees') {
+      final sortedGuarantees =
+          List<GuaranteeRequest>.from(_incomingGuaranteeRequests)
+            ..sort((a, b) {
+              if (a.status == 'pending' && b.status != 'pending') return -1;
+              if (b.status == 'pending' && a.status != 'pending') return 1;
+              return b.createdAt.compareTo(a.createdAt);
+            });
+
+      for (var req in sortedGuarantees) {
+        items.add(_buildGuaranteeNotificationCard(req));
+      }
+    }
+
+    // 2. Chit Approvals & Join Requests
+    if (_notificationFilter == 'All' ||
+        _notificationFilter == 'Chit Approvals') {
+      for (var req in _myRequests) {
+        items.add(_buildChitApprovalNotificationCard(req));
+      }
+    }
+
+    // 3. Payments & Deposits
+    if (_notificationFilter == 'All' || _notificationFilter == 'Payments') {
+      for (var p in _memberPayments) {
+        items.add(_buildPaymentNotificationCard(p));
+      }
+      _depositsMap.forEach((groupId, dep) {
+        items.add(_buildDepositNotificationCard(dep));
+      });
+    }
+
+    if (items.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: Column(
+          children: const [
+            Icon(
+              Icons.notifications_none_rounded,
+              size: 48,
+              color: Color(0xFF94A3B8),
+            ),
+            SizedBox(height: 12),
+            Text(
+              'No Notifications',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1E293B),
+              ),
+            ),
+            SizedBox(height: 6),
+            Text(
+              'You have no updates in this category right now.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(children: items);
+  }
+
+  Widget _buildGuaranteeNotificationCard(GuaranteeRequest req) {
+    final isPending = req.status == 'pending';
+    final isAccepted = req.status == 'accepted';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isPending
+              ? const Color(0xFFF59E0B)
+              : (isAccepted
+                  ? const Color(0xFF86EFAC)
+                  : const Color(0xFFE2E8F0)),
+          width: isPending ? 1.5 : 1.0,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: isPending
+                      ? const Color(0xFFFEF3C7)
+                      : (isAccepted
+                          ? const Color(0xFFDCFCE7)
+                          : const Color(0xFFFEE2E2)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  isAccepted
+                      ? Icons.verified_user_rounded
+                      : (isPending
+                          ? Icons.shield_outlined
+                          : Icons.cancel_rounded),
+                  color: isAccepted
+                      ? const Color(0xFF166534)
+                      : (isPending
+                          ? const Color(0xFFB45309)
+                          : const Color(0xFF991B1B)),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      req.memberName?.isNotEmpty == true
+                          ? req.memberName!
+                          : 'Member @${req.memberId}',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    Text(
+                      'Guarantor Nomination • Relation: ${req.relation}',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: isPending
+                      ? const Color(0xFFFEF3C7)
+                      : (isAccepted
+                          ? const Color(0xFFDCFCE7)
+                          : const Color(0xFFFEE2E2)),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  isPending
+                      ? 'ACTION REQUIRED'
+                      : (isAccepted ? 'ACCEPTED' : 'DECLINED'),
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: isPending
+                        ? const Color(0xFFB45309)
+                        : (isAccepted
+                            ? const Color(0xFF166534)
+                            : const Color(0xFF991B1B)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Nominated you as guarantor for chit scheme "${req.groupName}" (Pool: ₹${req.chitValue.toStringAsFixed(0)}, ${req.durationMonths} Months).',
+            style: const TextStyle(
+              fontSize: 12,
+              color: Color(0xFF334155),
+              height: 1.4,
+            ),
+          ),
+          if (isPending) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () =>
+                        _respondGuarantee(req: req, accept: false),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFFDC2626),
+                      side: const BorderSide(color: Color(0xFFDC2626)),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text(
+                      'Decline',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () =>
+                        _respondGuarantee(req: req, accept: true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0F4C81),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text(
+                      'Accept & Back',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChitApprovalNotificationCard(ChitJoinRequest req) {
+    final isApproved = req.status == 'approved';
+    final isPending = req.status == 'pending';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isApproved
+              ? const Color(0xFF86EFAC)
+              : (isPending
+                  ? const Color(0xFFFDE68A)
+                  : const Color(0xFFFECACA)),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: isApproved
+                      ? const Color(0xFFDCFCE7)
+                      : (isPending
+                          ? const Color(0xFFFEF3C7)
+                          : const Color(0xFFFEE2E2)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  isApproved
+                      ? Icons.how_to_reg_rounded
+                      : (isPending
+                          ? Icons.hourglass_top_rounded
+                          : Icons.cancel_rounded),
+                  color: isApproved
+                      ? const Color(0xFF166534)
+                      : (isPending
+                          ? const Color(0xFFB45309)
+                          : const Color(0xFF991B1B)),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      req.groupName,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const Text(
+                      'Chit Scheme Membership',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: isApproved
+                      ? const Color(0xFFDCFCE7)
+                      : (isPending
+                          ? const Color(0xFFFEF3C7)
+                          : const Color(0xFFFEE2E2)),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  isApproved
+                      ? 'APPROVED'
+                      : (isPending ? 'PENDING HOST' : 'DECLINED'),
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: isApproved
+                        ? const Color(0xFF166534)
+                        : (isPending
+                            ? const Color(0xFFB45309)
+                            : const Color(0xFF991B1B)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            isApproved
+                ? '🎉 Foreman approved your join request! You are now an active subscriber in "${req.groupName}".'
+                : (isPending
+                    ? 'Your join request for "${req.groupName}" has been submitted to the foreman for review.'
+                    : 'Your join request for "${req.groupName}" was declined by the foreman.'),
+            style: const TextStyle(fontSize: 12, color: Color(0xFF334155)),
+          ),
+          if (isApproved) ...[
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () => _openMemberDashboard(req),
+                icon: const Icon(Icons.arrow_forward_rounded, size: 14),
+                label: const Text(
+                  'Open Chit Dashboard',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                ),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF0F4C81),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaymentNotificationCard(ChitPaymentRecord p) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE0F2FE),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.receipt_long_rounded,
+              color: Color(0xFF0369A1),
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '₹${p.amount.toStringAsFixed(0)} • ${p.groupName}',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFDCFCE7),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        p.status,
+                        style: const TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF166534),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Cycle ${p.cycle} Installment via ${p.paymentMethod} • UTR: ${p.utr ?? p.id}',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDepositNotificationCard(SecurityDeposit dep) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: dep.isHeld
+                  ? const Color(0xFFDCFCE7)
+                  : const Color(0xFFFEF3C7),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              dep.isHeld ? Icons.lock_rounded : Icons.pending_actions_rounded,
+              color: dep.isHeld
+                  ? const Color(0xFF166534)
+                  : const Color(0xFFB45309),
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Security Deposit: ₹${dep.amount.toStringAsFixed(0)}',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0F172A),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  dep.isHeld
+                      ? 'Safely held in Foreman Escrow for your chit scheme.'
+                      : 'Pending deposit payment.',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: dep.isHeld
+                  ? const Color(0xFFDCFCE7)
+                  : const Color(0xFFFEF3C7),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              dep.displayStatus.toUpperCase(),
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.bold,
+                color: dep.isHeld
+                    ? const Color(0xFF166534)
+                    : const Color(0xFFB45309),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _respondGuarantee({
+    required GuaranteeRequest req,
+    required bool accept,
+  }) async {
+    if (accept) {
+      final isMember = await SupabaseService.isUserMemberOfGroup(
+        groupId: req.groupId,
+        username: _username,
+      );
+      if (!mounted) return;
+      if (isMember) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Cannot accept: You are already a member of this chit group. A member and their guarantor cannot belong to the same chit group.',
+            ),
+            backgroundColor: Color(0xFFDC2626),
+          ),
+        );
+        return;
+      }
+    }
+
+    final success = await SupabaseService.respondToGuaranteeRequest(
+      requestId: req.id,
+      accept: accept,
+    );
+    if (!mounted) return;
+    if (!success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            accept
+                ? 'Failed to accept guarantee request (mutual exclusion or conflict).'
+                : 'Failed to decline guarantee request.',
+          ),
+          backgroundColor: const Color(0xFFDC2626),
+        ),
+      );
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          accept
+              ? '🎉 You accepted the guarantee request for @${req.memberId} in ${req.groupName}!'
+              : 'Guarantee request declined.',
+        ),
+        backgroundColor:
+            accept ? const Color(0xFF166534) : const Color(0xFF64748B),
+      ),
+    );
+    _loadMemberData();
   }
 
   Widget _buildGuarantorHubPage() {
@@ -2557,6 +3465,31 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                   ),
                 ),
               ),
+              const SizedBox(height: 12),
+
+              // Quick Action: Enter 6-Digit Private Code
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _openJoinChitBottomSheet,
+                      icon: const Icon(Icons.pin_outlined, size: 16),
+                      label: const Text(
+                        'Join Private Chit with 6-Digit Code',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF0F4C81),
+                        side: const BorderSide(color: Color(0xFF0F4C81), width: 1.2),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 14),
 
               // Filter Chips
@@ -2692,347 +3625,218 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
 
   Widget _buildJoinedRequestCard(ChitJoinRequest req) {
     final group = _groupDetailsMap[req.groupId];
-    final double depositAmount = (group != null && group.securityDeposit > 0)
-        ? group.securityDeposit
-        : ((group?.monthlyContribution ?? 1000.0) *
-            kDefaultDepositPercentOfInstallment);
     final dep = _depositsMap[req.groupId];
 
-    Color badgeBg;
-    Color badgeText;
-    String statusLabel;
-
-    if (req.status == 'approved') {
-      badgeBg = const Color(0xFFDCFCE7);
-      badgeText = const Color(0xFF166534);
-      statusLabel = 'Approved & Active';
-    } else if (req.status == 'rejected') {
-      badgeBg = const Color(0xFFFEE2E2);
-      badgeText = const Color(0xFF991B1B);
-      statusLabel = 'Declined';
-    } else {
-      badgeBg = const Color(0xFFDCFCE7);
-      badgeText = const Color(0xFF166534);
-      statusLabel = 'Pending Review';
-    }
+    final poolSize = group?.totalPoolSize ?? 0.0;
+    final monthly = group?.monthlyContribution ?? 0.0;
+    final duration = group?.durationMonths ?? 0;
+    final schemeType = group?.schemeType ?? 'Bidding';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => _openMemberDashboard(req),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      req.groupName,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF0F172A),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F4C81).withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.gavel_rounded,
+                        color: Color(0xFF0F4C81),
+                        size: 24,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Code: ${req.inviteCode} • City: ${req.memberCity}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF64748B),
-                      ),
-                    ),
-                    if (req.guarantorUsername != null &&
-                        req.guarantorUsername!.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Row(
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(
-                            Icons.shield_outlined,
-                            size: 14,
-                            color: Color(0xFF0F4C81),
-                          ),
-                          const SizedBox(width: 4),
                           Text(
-                            'Guarantor: @${req.guarantorUsername} (${req.guarantorRelation ?? "Friend"})',
+                            req.groupName,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF0F172A),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Code: ${req.inviteCode}${req.memberCity.isNotEmpty ? " • ${req.memberCity}" : ""}',
                             style: const TextStyle(
                               fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF334155),
+                              color: Color(0xFF64748B),
                             ),
                           ),
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFDCFCE7),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Text(
+                        'Approved & Active',
+                        style: TextStyle(
+                          color: Color(0xFF166534),
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFFF1F5F9)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Pool Value',
+                            style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            poolSize > 0 ? '₹${poolSize.toStringAsFixed(0)}' : '₹10,00,000',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF0F172A),
                             ),
-                            decoration: BoxDecoration(
-                              color: req.guarantorStatus == 'accepted'
-                                  ? const Color(0xFFDCFCE7)
-                                  : (req.guarantorStatus == 'declined'
-                                        ? const Color(0xFFFEE2E2)
-                                        : const Color(0xFFDCFCE7)),
-                              borderRadius: BorderRadius.circular(6),
+                          ),
+                        ],
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Monthly Due',
+                            style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            monthly > 0 ? '₹${monthly.toStringAsFixed(0)}/mo' : '₹10,000/mo',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF007A87),
                             ),
-                            child: Text(
-                              req.guarantorStatus == 'accepted'
-                                  ? 'Accepted'
-                                  : (req.guarantorStatus == 'declined'
-                                        ? 'Declined'
-                                        : 'Pending'),
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: req.guarantorStatus == 'accepted'
-                                    ? const Color(0xFF166534)
-                                    : (req.guarantorStatus == 'declined'
-                                          ? const Color(0xFF991B1B)
-                                          : const Color(0xFF166534)),
-                              ),
+                          ),
+                        ],
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Duration / Type',
+                            style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            duration > 0 ? '$duration Mos ($schemeType)' : '10 Mos ($schemeType)',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF334155),
                             ),
                           ),
                         ],
                       ),
                     ],
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: badgeBg,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  statusLabel,
-                  style: TextStyle(
-                    color: badgeText,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
                   ),
                 ),
-              ),
-            ],
-          ),
-          if (req.status == 'approved') ...[
-            const SizedBox(height: 12),
-            if (dep == null || dep.isPending) ...[
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFEF3C7),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFFDE68A)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: const [
-                            Icon(
-                              Icons.security_rounded,
-                              size: 16,
-                              color: Color(0xFF92400E),
-                            ),
-                            SizedBox(width: 6),
-                            Text(
-                              'Security Deposit',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF92400E),
-                              ),
-                            ),
-                          ],
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Text(
-                            'Test mode, no real money',
-                            style: TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF92400E),
-                            ),
-                          ),
-                        ),
-                      ],
+                if (dep != null && dep.isHeld) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFDCFCE7),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
+                        const Icon(
+                          Icons.verified_user_rounded,
+                          size: 14,
+                          color: Color(0xFF166534),
+                        ),
+                        const SizedBox(width: 6),
                         Text(
-                          '₹${depositAmount.toStringAsFixed(0)}',
+                          'Deposit: Held (₹${dep.amount.toStringAsFixed(0)})',
                           style: const TextStyle(
-                            fontSize: 14,
+                            fontSize: 11,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFF0F172A),
-                          ),
-                        ),
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            RazorpayCheckoutModal.show(
-                              context: context,
-                              groupId: req.groupId,
-                              groupName: req.groupName,
-                              memberId: _username,
-                              amount: depositAmount,
-                              onDepositSuccess: _loadMemberData,
-                            );
-                          },
-                          icon: const Icon(Icons.payment_rounded, size: 14),
-                          label: const Text(
-                            'Pay security deposit',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF0F4C81),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
+                            color: Color(0xFF166534),
                           ),
                         ),
                       ],
                     ),
-                  ],
-                ),
-              ),
-            ] else ...[
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: dep.isHeld
-                      ? const Color(0xFFDCFCE7)
-                      : (dep.isRefunded
-                          ? const Color(0xFFE0F2FE)
-                          : const Color(0xFFFEE2E2)),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      dep.isHeld
-                          ? Icons.verified_user_rounded
-                          : (dep.isRefunded
-                              ? Icons.replay_circle_filled_rounded
-                              : Icons.cancel_rounded),
-                      size: 14,
-                      color: dep.isHeld
-                          ? const Color(0xFF166534)
-                          : (dep.isRefunded
-                              ? const Color(0xFF0369A1)
-                              : const Color(0xFF991B1B)),
-                    ),
-                    const SizedBox(width: 6),
+                  ),
+                ],
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: const [
                     Text(
-                      'Deposit: ${dep.displayStatus} (₹${dep.amount.toStringAsFixed(0)})',
+                      'Tap to open group dashboard',
                       style: TextStyle(
                         fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: dep.isHeld
-                            ? const Color(0xFF166534)
-                            : (dep.isRefunded
-                                ? const Color(0xFF0369A1)
-                                : const Color(0xFF991B1B)),
+                        color: Color(0xFF64748B),
+                        fontWeight: FontWeight.w500,
                       ),
+                    ),
+                    SizedBox(width: 4),
+                    Icon(
+                      Icons.arrow_forward_ios_rounded,
+                      size: 12,
+                      color: Color(0xFF64748B),
                     ),
                   ],
                 ),
-              ),
-            ],
-          ],
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => _openDigitalAgreement(req),
-                  icon: const Icon(
-                    Icons.gavel_rounded,
-                    size: 14,
-                    color: Color(0xFF0F4C81),
-                  ),
-                  label: const Text(
-                    'Digital Agreement',
-                    style: TextStyle(
-                      color: Color(0xFF0F4C81),
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Color(0xFF0F4C81)),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                ),
-              ),
-              if (req.status == 'approved') ...[
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () => _openMemberDashboard(req),
-                    icon: const Icon(
-                      Icons.dashboard_rounded,
-                      size: 14,
-                      color: Colors.white,
-                    ),
-                    label: const Text(
-                      'Open Dashboard',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0F4C81),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  ),
-                ),
               ],
-            ],
+            ),
           ),
-        ],
+        ),
       ),
     );
   }

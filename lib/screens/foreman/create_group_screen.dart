@@ -84,14 +84,12 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
         createdAt: DateTime.now(),
       );
 
-      // Trigger Digital Agreement modal for Host signature once during Group Creation
-      showDialog(
+      // Trigger Digital Agreement screen for Host signature once during Group Creation
+      DigitalAgreementModal.open(
         context: context,
-        barrierDismissible: false,
-        builder: (_) => DigitalAgreementModal(
-          agreement: agreement,
-          isForeman: true,
-          onSigned: () async {
+        agreement: agreement,
+        isForeman: true,
+        onSigned: () async {
             final upiId = _upiController.text.trim().isNotEmpty
                 ? _upiController.text.trim()
                 : SupabaseService.foremanUpiId;
@@ -136,7 +134,6 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
               Navigator.pop(context);
             }
           },
-        ),
       );
     } else if (!_inviteGenerated) {
       ScaffoldMessenger.of(context).showSnackBar(

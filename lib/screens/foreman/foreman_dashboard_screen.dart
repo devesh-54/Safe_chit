@@ -67,41 +67,44 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
     _startRealtimeDataStream();
   }
 
+  bool _isQuietlyRefreshing = false;
+
   @override
   void dispose() {
     _realtimeTimer?.cancel();
-
     _requestsSubscription?.cancel();
-
     _guaranteeSubscription?.cancel();
-
     super.dispose();
   }
 
   /// Start Real-time Data Streaming (Updates live without needing refresh)
-
   void _startRealtimeDataStream() {
-    // 1. Periodic background polling every 2 seconds for live sync
+    // 1. Periodic background polling every 8 seconds with concurrency lock
+    _realtimeTimer = Timer.periodic(const Duration(seconds: 8), (_) async {
+      if (!mounted || _isQuietlyRefreshing) return;
+      _isQuietlyRefreshing = true;
 
-    _realtimeTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
-      final pending = await SupabaseService.getPendingJoinRequests();
+      try {
+        final results = await Future.wait([
+          SupabaseService.getPendingJoinRequests(),
+          SupabaseService.getChitGroups(),
+        ]);
 
-      final groups = await SupabaseService.getChitGroups();
-
-      if (mounted) {
-        setState(() {
-          _pendingRequests = pending;
-
-          _groups = groups;
-        });
+        if (mounted) {
+          setState(() {
+            _pendingRequests = results[0] as List<ChitJoinRequest>;
+            _groups = results[1] as List<ChitGroup>;
+          });
+        }
+      } catch (_) {
+      } finally {
+        _isQuietlyRefreshing = false;
       }
     });
 
     // 2. Supabase Realtime channel stream listener
-
     try {
       final supaClient = SupabaseService.client;
-
       if (supaClient != null) {
         _requestsSubscription = supaClient
             .from('chit_join_requests')
@@ -136,39 +139,51 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
       _isLoading = true;
     });
 
-    final groups = await SupabaseService.getChitGroups();
+    try {
+      // Parallel fetch groups, pending requests, handshake counts, and all members
+      final results = await Future.wait([
+        SupabaseService.getChitGroups(),
+        SupabaseService.getPendingJoinRequests(),
+        SupabaseService.getPendingHandshakeCounts(),
+        SupabaseService.getAllGroupMembers(),
+      ]);
 
-    final pending = await SupabaseService.getPendingJoinRequests();
+      final groups = results[0] as List<ChitGroup>;
+      final pending = results[1] as List<ChitJoinRequest>;
+      final handshakeCounts = results[2] as Map<String, int>;
+      final memberMap = results[3] as Map<String, List<ChitMemberRisk>>;
 
-    final handshakeCounts = await SupabaseService.getPendingHandshakeCounts();
+      if (groups.isNotEmpty) {
+        _groups = groups;
 
-    if (groups.isNotEmpty) {
-      _groups = groups;
+        if (_selectedGroup != null && groups.contains(_selectedGroup)) {
+          _selectedGroup = groups.firstWhere((g) => g == _selectedGroup);
+        } else {
+          _selectedGroup = groups.first;
+        }
 
-      if (_selectedGroup != null && groups.contains(_selectedGroup)) {
-        _selectedGroup = groups.firstWhere((g) => g == _selectedGroup);
+        _groupMembersMap = memberMap;
+        _members = memberMap[_selectedGroup!.id] ?? [];
       } else {
-        _selectedGroup = groups.first;
+        _selectedGroup = null;
+        _groupMembersMap = {};
+        _members = [];
       }
 
-      final Map<String, List<ChitMemberRisk>> memberMap = {};
-      for (var g in groups) {
-        memberMap[g.id] = await SupabaseService.getGroupMembers(g.id);
+      if (mounted) {
+        setState(() {
+          _pendingRequests = pending;
+          _pendingHandshakeCounts = handshakeCounts;
+          _isLoading = false;
+        });
       }
-      _groupMembersMap = memberMap;
-      _members = memberMap[_selectedGroup!.id] ?? [];
-    } else {
-      _selectedGroup = null;
-      _groupMembersMap = {};
-      _members = [];
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
-
-    setState(() {
-      _pendingRequests = pending;
-      _pendingHandshakeCounts = handshakeCounts;
-
-      _isLoading = false;
-    });
   }
 
   void _changeGroup(ChitGroup? newGroup) async {

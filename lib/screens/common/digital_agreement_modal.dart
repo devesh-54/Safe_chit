@@ -14,6 +14,24 @@ class DigitalAgreementModal extends StatefulWidget {
     required this.onSigned,
   });
 
+  static Future<void> open({
+    required BuildContext context,
+    required DigitalAgreement agreement,
+    required bool isForeman,
+    required VoidCallback onSigned,
+  }) {
+    return Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DigitalAgreementModal(
+          agreement: agreement,
+          isForeman: isForeman,
+          onSigned: onSigned,
+        ),
+      ),
+    );
+  }
+
   @override
   State<DigitalAgreementModal> createState() => _DigitalAgreementModalState();
 }
@@ -425,56 +443,68 @@ class _DigitalAgreementModalState extends State<DigitalAgreementModal> {
         ? widget.agreement.foremanSigned
         : widget.agreement.memberSigned;
 
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      backgroundColor: Colors.white,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 750),
-        height: MediaQuery.of(context).size.height * 0.88,
-        child: Column(
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF0F4C81),
+        foregroundColor: Colors.white,
+        elevation: 0.5,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Header ────────────────────────────────────────────────────
+            const Text(
+              'Digital Chit Agreement',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            Text(
+              'Chit Funds Act 1982 · ${widget.agreement.groupName}',
+              style: const TextStyle(
+                fontSize: 11,
+                color: Color(0xFFBAE6FD),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          if (isAlreadySigned)
             Container(
-              padding: const EdgeInsets.fromLTRB(20, 18, 12, 14),
-              decoration: const BoxDecoration(
-                color: Color(0xFF0F4C81),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              margin: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF16A34A).withOpacity(0.2),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFF4ADE80)),
               ),
               child: Row(
-                children: [
-                  const Icon(Icons.gavel_rounded,
-                      color: Colors.white, size: 22),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Digital Chit Agreement',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        Text(
-                          'Chit Funds Act 1982 · ${widget.agreement.groupName}',
-                          style: const TextStyle(
-                              fontSize: 11, color: Color(0xFFBAE6FD)),
-                        ),
-                      ],
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.verified_rounded, size: 14, color: Color(0xFF4ADE80)),
+                  SizedBox(width: 4),
+                  Text(
+                    'Signed',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
                     ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white70),
-                    onPressed: () => Navigator.pop(context),
                   ),
                 ],
               ),
             ),
-
+        ],
+      ),
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             // ── Scrollable document body ───────────────────────────────────
             Expanded(
               child: Scrollbar(
@@ -482,8 +512,13 @@ class _DigitalAgreementModalState extends State<DigitalAgreementModal> {
                 thumbVisibility: true,
                 child: SingleChildScrollView(
                   controller: _scrollController,
-                  padding: const EdgeInsets.fromLTRB(16, 18, 16, 10),
-                  child: _buildFormattedAgreement(widget.agreement),
+                  padding: const EdgeInsets.fromLTRB(16, 18, 16, 20),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 800),
+                      child: _buildFormattedAgreement(widget.agreement),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -494,114 +529,124 @@ class _DigitalAgreementModalState extends State<DigitalAgreementModal> {
               decoration: const BoxDecoration(
                 color: Colors.white,
                 border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
-                borderRadius:
-                    BorderRadius.vertical(bottom: Radius.circular(20)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 4,
+                    offset: Offset(0, -2),
+                  ),
+                ],
               ),
-              child: isAlreadySigned
-                  ? Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFDCFCE7),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF86EFAC)),
-                      ),
-                      child: Row(
-                        children: const [
-                          Icon(Icons.verified_user_rounded,
-                              color: Color(0xFF166534), size: 22),
-                          SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              '✅ You have digitally signed this Chit Agreement.\nYour signature timestamp & legal hash are recorded.',
-                              style: TextStyle(
-                                  color: Color(0xFF166534),
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                  height: 1.4),
-                            ),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 800),
+                  child: isAlreadySigned
+                      ? Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFDCFCE7),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFF86EFAC)),
                           ),
-                        ],
-                      ),
-                    )
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Checkbox(
-                              value: _hasAcceptedTerms,
-                              activeColor: const Color(0xFF0F4C81),
-                              onChanged: (val) => setState(
-                                  () => _hasAcceptedTerms = val ?? false),
-                            ),
-                            const Expanded(
-                              child: Text(
-                                'I have read and fully accept all terms under the Chit Funds Act 1982 and BNS 2024.',
-                                style: TextStyle(
-                                    fontSize: 12, color: Color(0xFF475569)),
+                          child: Row(
+                            children: const [
+                              Icon(Icons.verified_user_rounded,
+                                  color: Color(0xFF166534), size: 22),
+                              SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  '✅ You have digitally signed this Chit Agreement.\nYour signature timestamp & legal hash are recorded.',
+                                  style: TextStyle(
+                                      color: Color(0xFF166534),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                      height: 1.4),
+                                ),
                               ),
+                            ],
+                          ),
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Checkbox(
+                                  value: _hasAcceptedTerms,
+                                  activeColor: const Color(0xFF0F4C81),
+                                  onChanged: (val) => setState(
+                                      () => _hasAcceptedTerms = val ?? false),
+                                ),
+                                const Expanded(
+                                  child: Text(
+                                    'I have read and fully accept all terms under the Chit Funds Act 1982 and BNS 2024.',
+                                    style: TextStyle(
+                                        fontSize: 12, color: Color(0xFF475569)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Expanded(
+                                  flex: 5,
+                                  child: TextField(
+                                    controller: _signatureNameController,
+                                    decoration: InputDecoration(
+                                      labelText: 'Your Legal Name',
+                                      hintText: widget.isForeman
+                                          ? 'Foreman Full Name'
+                                          : 'Subscriber Full Name',
+                                      prefixIcon: const Icon(Icons.draw_rounded,
+                                          color: Color(0xFF0F4C81)),
+                                      border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(10)),
+                                      contentPadding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 12),
+                                      filled: true,
+                                      fillColor: const Color(0xFFF8FAFC),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  flex: 6,
+                                  child: ElevatedButton.icon(
+                                    onPressed: (_isSigning || !_hasAcceptedTerms)
+                                        ? null
+                                        : _executeDigitalSignature,
+                                    icon: _isSigning
+                                        ? const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                                color: Colors.white, strokeWidth: 2))
+                                        : const Icon(Icons.verified_rounded),
+                                    label: const Text(
+                                      'Sign Agreement',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style:
+                                          TextStyle(fontWeight: FontWeight.bold),
+                                    ),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF0F4C81),
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 10, vertical: 16),
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Expanded(
-                              flex: 5,
-                              child: TextField(
-                                controller: _signatureNameController,
-                                decoration: InputDecoration(
-                                  labelText: 'Your Legal Name',
-                                  hintText: widget.isForeman
-                                      ? 'Foreman Full Name'
-                                      : 'Subscriber Full Name',
-                                  prefixIcon: const Icon(Icons.draw_rounded,
-                                      color: Color(0xFF0F4C81)),
-                                  border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(10)),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 12),
-                                  filled: true,
-                                  fillColor: const Color(0xFFF8FAFC),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              flex: 6,
-                              child: ElevatedButton.icon(
-                                onPressed: (_isSigning || !_hasAcceptedTerms)
-                                    ? null
-                                    : _executeDigitalSignature,
-                                icon: _isSigning
-                                    ? const SizedBox(
-                                        width: 16,
-                                        height: 16,
-                                        child: CircularProgressIndicator(
-                                            color: Colors.white, strokeWidth: 2))
-                                    : const Icon(Icons.verified_rounded),
-                                label: const Text(
-                                  'Sign Agreement',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style:
-                                      TextStyle(fontWeight: FontWeight.bold),
-                                ),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF0F4C81),
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 10, vertical: 16),
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10)),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                ),
+              ),
             ),
           ],
         ),
