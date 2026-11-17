@@ -1,24 +1,19 @@
-import 'dart:math';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+
 import '../../models/chit_group.dart';
 import '../../models/member_risk.dart';
-import '../../models/digital_agreement.dart';
-import '../../services/supabase_service.dart';
-import 'digital_agreement_modal.dart';
-import '../../features/bidding/bidding_session_service.dart';
-import '../../features/bidding/host_schedule_screen.dart';
-import '../../features/bidding/bidding_waiting_room.dart';
-import '../../features/bidding/live_bidding_room.dart';
-import '../../features/bidding/auction_close_payout.dart';
-import '../../widgets/youpi_payment_modal.dart';
-import '../payment/payment_checkout_screen.dart';
 import '../../models/chit_payment_record.dart';
 import '../../models/security_deposit.dart';
+import '../../models/digital_agreement.dart';
+import '../../services/supabase_service.dart';
 import '../../core/config/deposit_config.dart';
+import '../../features/bidding/bidding_session_service.dart';
+import '../../features/bidding/live_bidding_room.dart';
 import '../../widgets/razorpay_checkout_modal.dart';
-import '../profile/user_profile_screen.dart';
+import '../payment/payment_checkout_screen.dart';
+import 'digital_agreement_modal.dart';
 
 class GroupDetailsModal extends StatefulWidget {
   final ChitGroup group;
@@ -45,15 +40,120 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
   Map<String, SecurityDeposit> _rosterDeposits = {};
   SecurityDeposit? _mySecurityDeposit;
   List<ChitPaymentRecord> _groupPayments = [];
-  String _rosterFilter = 'All'; // 'All', 'Paid', 'Unpaid'
   bool _isLoading = true;
-  StreamSubscription<String>? _biddingStatusSub;
+  bool _isPaidCurrentCycle = false;
+  Timer? _countdownTimer;
+  int _countdownSeconds = 22 * 60 + 15; // 22 mins, 15 secs simulation
+  int _countdownHours = 14;
+  int _countdownDays = 2;
+
+  // Design Tokens (Calm Financial Trust palette)
+  static const Color _kSurface = Color(0xFFF8F9FF);
+  static const Color _kPrimary = Color(0xFF000E2B);
+  static const Color _kPrimaryContainer = Color(0xFF0D234A);
+  static const Color _kSecondary = Color(0xFF006A61);
+  static const Color _kSecondaryAccent = Color(0xFF0D9488);
+  static const Color _kSecondaryContainer = Color(0xFFCCFBF1);
+  static const Color _kOnSurface = Color(0xFF0B1C30);
+  static const Color _kOnSurfaceVariant = Color(0xFF44474E);
+  static const Color _kSurfaceContainerLow = Color(0xFFEFF4FF);
+  static const Color _kSurfaceContainer = Color(0xFFE5EEFF);
+  static const Color _kSurfaceContainerHighest = Color(0xFFD3E4FE);
+  static const Color _kBorder = Color(0xFFE2E8F0);
+  static const Color _kAmberBg = Color(0xFFFEF3C7);
+  static const Color _kAmberText = Color(0xFF92400E);
+
+  String get _foremanName => 'Rajesh Kumar (Foreman)';
 
   double get _depositAmount {
     if (widget.group.securityDeposit > 0) {
       return widget.group.securityDeposit;
     }
     return widget.group.monthlyContribution * kDefaultDepositPercentOfInstallment;
+  }
+
+  int _getUserPayoutMonth() {
+    final idx = _members.indexWhere(
+      (m) => m.name.toLowerCase() == widget.currentUsername.toLowerCase(),
+    );
+    if (idx != -1) {
+      return (idx + 1).clamp(1, widget.group.durationMonths);
+    }
+    return (widget.group.durationMonths - 1).clamp(1, widget.group.durationMonths);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+    _loadGroupMembers();
+    _startCountdown();
+  }
+
+  void _startCountdown() {
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() {
+        if (_countdownSeconds > 0) {
+          _countdownSeconds--;
+        } else {
+          _countdownSeconds = 59;
+          if (_countdownHours > 0) {
+            _countdownHours--;
+          } else {
+            _countdownHours = 23;
+            if (_countdownDays > 0) _countdownDays--;
+          }
+        }
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadGroupMembers() async {
+    setState(() => _isLoading = true);
+    try {
+      final results = await Future.wait([
+        SupabaseService.getGroupMembers(widget.group.id),
+        SupabaseService.getGroupSecurityDeposits(widget.group.id),
+        SupabaseService.getGroupPayments(widget.group.id),
+        SupabaseService.getSecurityDeposit(
+          groupId: widget.group.id,
+          memberId: widget.currentUsername,
+        ),
+      ]);
+
+      final members = results[0] as List<ChitMemberRisk>;
+      final deposits = results[1] as Map<String, SecurityDeposit>;
+      final payments = results[2] as List<ChitPaymentRecord>;
+      final myDep = deposits[widget.currentUsername] ?? results[3] as SecurityDeposit?;
+
+      final paid = payments.any(
+        (p) =>
+            p.memberUsername.toLowerCase() == widget.currentUsername.toLowerCase() &&
+            (p.cycle == widget.group.currentCycle || p.cycle == widget.group.currentCycle + 1) &&
+            (p.status == 'PAID' || p.status == 'CONFIRMED'),
+      );
+
+      if (mounted) {
+        setState(() {
+          _members = members;
+          _rosterDeposits = deposits;
+          _groupPayments = payments;
+          _mySecurityDeposit = myDep;
+          _isPaidCurrentCycle = paid;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   void _openDepositCheckoutModal() {
@@ -65,3673 +165,2815 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
       amount: _depositAmount,
       onDepositSuccess: () {
         _loadGroupMembers();
-      },
-    );
-  }
-
-  // Bidding & Draw simulation state
-  final TextEditingController _bidController = TextEditingController();
-  double _currentWinningBid = 50000.0; // default ₹50k discount
-  String _currentWinningBidder = 'Ramesh Verma';
-  bool _isBiddingActive = true;
-  String? _luckyDrawWinner;
-
-  // User ledger payments list (Member Dashboard view)
-  List<Map<String, dynamic>> _userPayments = [];
-
-  // Ledger history mock state
-  final List<Map<String, dynamic>> _ledgerHistory = [
-    {
-      'cycle': 1,
-      'date': '01 Aug 2026',
-      'winner': 'Ramesh Verma',
-      'winningDiscount': 50000.0,
-      'payoutAmount': 950000.0,
-      'dividendPerMember': 5000.0,
-      'status': 'Paid & Distributed',
-    },
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 4, vsync: this);
-    _loadGroupMembers();
-
-    _biddingStatusSub = BiddingSessionService.instance.statusStream.listen((
-      groupId,
-    ) {
-      if (!mounted) return;
-      if (groupId == widget.group.id) {
-        setState(() {});
-      }
-    });
-
-    BiddingSessionService.instance.startSync(widget.group.id);
-
-    _userPayments = [
-      {
-        'cycle': 1,
-        'amount': widget.group.monthlyContribution,
-        'date': '10 Aug 2026, 02:30 PM',
-        'foremanConfirmed': '10 Aug 2026, 03:00 PM',
-        'memberConfirmed': '10 Aug 2026, 02:35 PM',
-        'status': 'Confirmed by both parties',
-      },
-      {
-        'cycle': 2,
-        'amount': widget.group.monthlyContribution,
-        'date': '10 Sep 2026, 11:15 AM',
-        'foremanConfirmed': '10 Sep 2026, 11:45 AM',
-        'memberConfirmed': '10 Sep 2026, 11:20 AM',
-        'status': 'Confirmed by both parties',
-      },
-    ];
-  }
-
-  @override
-  void dispose() {
-    _biddingStatusSub?.cancel();
-    BiddingSessionService.instance.stopSync(widget.group.id);
-    _tabController.dispose();
-    _bidController.dispose();
-    super.dispose();
-  }
-
-  void _handlePayoutReleased() {
-    final state = BiddingSessionService.instance.getOrCreateState(
-      widget.group.id,
-    );
-    final winner = state.currentHighestBidder;
-    final winningBid = state.currentHighestBid;
-    final payoutAmount = widget.group.totalPoolSize - winningBid;
-    final dividend =
-        winningBid /
-        (widget.group.membersCount > 0 ? widget.group.membersCount : 10);
-    final ref = state.txnRef ?? 'TXN849102IND';
-
-    setState(() {
-      _userPayments.insert(0, {
-        'cycle': widget.group.currentCycle,
-        'amount': payoutAmount,
-        'date': DateFormat('d MMM yyyy, hh:mm a').format(DateTime.now()),
-        'foremanConfirmed': DateFormat(
-          'd MMM yyyy, hh:mm a',
-        ).format(DateTime.now()),
-        'memberConfirmed': DateFormat(
-          'd MMM yyyy, hh:mm a',
-        ).format(DateTime.now()),
-        'status': 'Payout Released • Ref: $ref',
-      });
-
-      _ledgerHistory.insert(0, {
-        'cycle': widget.group.currentCycle,
-        'date': DateFormat('d MMM yyyy').format(DateTime.now()),
-        'winner': winner,
-        'winningDiscount': winningBid,
-        'payoutAmount': payoutAmount,
-        'dividendPerMember': dividend,
-        'status': 'Payout Released',
-      });
-    });
-  }
-
-  void _loadGroupMembers() async {
-    setState(() => _isLoading = true);
-    final members = await SupabaseService.getGroupMembers(widget.group.id);
-    final deposits =
-        await SupabaseService.getGroupSecurityDeposits(widget.group.id);
-    final payments =
-        await SupabaseService.getGroupPayments(widget.group.id);
-    final myDep = deposits[widget.currentUsername] ??
-        await SupabaseService.getSecurityDeposit(
-          groupId: widget.group.id,
-          memberId: widget.currentUsername,
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Security deposit verified and held in escrow!'),
+            backgroundColor: Color(0xFF0D9488),
+          ),
         );
-    if (mounted) {
-      setState(() {
-        _members = members;
-        _rosterDeposits = deposits;
-        _groupPayments = payments;
-        _mySecurityDeposit = myDep;
-        _isLoading = false;
-      });
-    }
-  }
-
-  void _submitAuctionBid() {
-    final bidVal = double.tryParse(_bidController.text.trim());
-    final maxCap =
-        widget.group.totalPoolSize *
-        0.30; // 30% max cap per Chit Funds Act 1982
-
-    if (bidVal == null || bidVal <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter a valid bid discount amount (₹).'),
-          backgroundColor: Color(0xFFDC2626),
-        ),
-      );
-      return;
-    }
-
-    if (bidVal > maxCap) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Bid discount exceeds 30% legal cap (Max ₹${maxCap.toStringAsFixed(0)}).',
-          ),
-          backgroundColor: const Color(0xFFDC2626),
-        ),
-      );
-      return;
-    }
-
-    if (bidVal <= _currentWinningBid) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Bid must be higher than current top discount ₹${_currentWinningBid.toStringAsFixed(0)}.',
-          ),
-          backgroundColor: const Color(0xFF0F4C81),
-        ),
-      );
-      return;
-    }
-
-    setState(() {
-      _currentWinningBid = bidVal;
-      _currentWinningBidder = widget.currentUsername;
-    });
-
-    _bidController.clear();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '🎉 New Winning Bid: ₹${bidVal.toStringAsFixed(0)} discount by $widget.currentUsername!',
-        ),
-        backgroundColor: const Color(0xFF007A87),
-      ),
+      },
     );
   }
 
-  void _runRandomPickingDraw() {
-    final hostMember = _members.where((m) => m.isHostMember).firstOrNull;
-
-    // Requirement 4: If Cycle 2 and host member exists, skip draw and award full pot to host with 0 discount
-    if (widget.group.currentCycle == 2 && hostMember != null) {
-      _recordCycle2HostPayout(widget.group, hostMember.name);
-      return;
-    }
-
-    // In every other cycle: exclude host member from random draw eligibility
-    final eligibleMembers = _members.where((m) => !m.isHostMember).toList();
-    if (eligibleMembers.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No eligible members available for draw.'),
-          backgroundColor: Color(0xFFDC2626),
-        ),
-      );
-      return;
-    }
-
-    final rand = Random();
-    final winnerIndex = rand.nextInt(eligibleMembers.length);
-    final winner = eligibleMembers[winnerIndex].name;
-
-    setState(() {
-      _luckyDrawWinner = winner;
-      _ledgerHistory.insert(0, {
-        'cycle': widget.group.currentCycle,
-        'date': DateFormat('d MMM yyyy, hh:mm a').format(DateTime.now()),
-        'winner': winner,
-        'winningDiscount': 0.0,
-        'payoutAmount': widget.group.totalPoolSize,
-        'dividendPerMember': 0.0,
-        'status': 'Random Pick Winner',
-      });
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '🎲 Lucky Draw Winner Selected: $winner! Payout: ₹${widget.group.totalPoolSize.toStringAsFixed(0)}',
-        ),
-        backgroundColor: const Color(0xFF007A87),
-        duration: const Duration(seconds: 4),
-      ),
-    );
-  }
-
-  void _recordCycle2HostPayout(ChitGroup g, String hostMemberName) {
-    setState(() {
-      _luckyDrawWinner = '$hostMemberName (Host)';
-      _ledgerHistory.insert(0, {
-        'cycle': 2,
-        'date': DateFormat('d MMM yyyy, hh:mm a').format(DateTime.now()),
-        'winner': '$hostMemberName (Host)',
-        'winningDiscount': 0.0,
-        'payoutAmount': g.totalPoolSize,
-        'dividendPerMember': 0.0,
-        'status': 'Host payout (self)',
-      });
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Month 2 Host Payout Recorded: ₹${g.totalPoolSize.toStringAsFixed(0)} with no discount.',
-        ),
-        backgroundColor: const Color(0xFF059669),
-        duration: const Duration(seconds: 4),
-      ),
-    );
-  }
-
-  void _makeMonthlyPayment() {
-    PaymentCheckoutScreen.open(
+  void _openInstallmentCheckout() async {
+    await PaymentCheckoutScreen.open(
       context: context,
       group: widget.group,
       currentUsername: widget.currentUsername,
       onPaymentSuccess: () {
-        setState(() {});
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              '🎉 Monthly installment verified and recorded in SafeChit ledger!',
-            ),
-            backgroundColor: Color(0xFF16A34A),
-            duration: Duration(seconds: 4),
-          ),
-        );
+        if (mounted) {
+          setState(() {
+            _isPaidCurrentCycle = true;
+          });
+        }
       },
     );
+    if (mounted) {
+      _loadGroupMembers();
+    }
   }
 
-  void _openDigitalAgreement() async {
-    final agreementText = DigitalAgreement.generateLegalAgreementText(
-      groupName: widget.group.name,
-      foremanName: widget.isForeman ? 'Rajesh Kumar (Foreman)' : 'Foreman Host',
-      memberName: widget.isForeman
-          ? 'Subscriber Member'
-          : widget.currentUsername,
-      poolAmount: widget.group.totalPoolSize,
-      durationMonths: widget.group.durationMonths,
-      monthlyContribution: widget.group.monthlyContribution,
-      schemeType: widget.group.schemeType,
-      securityDeposit: widget.group.securityDeposit,
-    );
-
-    var agreement = await SupabaseService.getDigitalAgreement(
-      groupId: widget.group.id,
-      memberUsername: widget.currentUsername,
-    );
-
-    agreement ??= DigitalAgreement(
-      id: 'agreement_${widget.group.id}',
+  void _openDigitalAgreement() {
+    final agreement = DigitalAgreement(
+      id: 'AGR-${widget.group.id}-${widget.currentUsername}',
       groupId: widget.group.id,
       groupName: widget.group.name,
-      foremanUsername: 'foreman_admin',
-      foremanName: 'Rajesh Kumar (Foreman)',
+      foremanUsername: 'foreman',
+      foremanName: _foremanName,
       memberUsername: widget.currentUsername,
       memberName: widget.currentUsername,
       poolAmount: widget.group.totalPoolSize,
       durationMonths: widget.group.durationMonths,
       monthlyContribution: widget.group.monthlyContribution,
       schemeType: widget.group.schemeType,
-      agreementText: agreementText,
+      agreementText: 'Standard Chit Agreement compliant with Chit Funds Act 1982.',
+      memberSigned: true,
+      foremanSigned: true,
+      status: 'fully_executed',
       createdAt: DateTime.now(),
     );
-
-    if (mounted) {
-      DigitalAgreementModal.open(
-        context: context,
-        agreement: agreement!,
-        isForeman: widget.isForeman,
-        onSigned: () {
-          _loadGroupMembers();
-        },
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final g = widget.group;
-    final progressPct = (g.currentCycle / g.durationMonths).clamp(0.0, 1.0);
-
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        title: Text(
-          g.name,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-        ),
-        backgroundColor: const Color(0xFF0F4C81),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          IconButton(
-            tooltip: 'View Signed Digital Agreement',
-            icon: const Icon(Icons.description_outlined),
-            onPressed: _openDigitalAgreement,
+    DigitalAgreementModal.open(
+      context: context,
+      agreement: agreement,
+      isForeman: widget.isForeman,
+      onSigned: () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Digital agreement timestamped and recorded.'),
+            backgroundColor: Color(0xFF0D9488),
           ),
-        ],
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: widget.isForeman
-              ? _buildForemanDashboard(g, progressPct)
-              : _buildMemberDashboard(g),
-        ),
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildForemanDashboard(ChitGroup g, double progressPct) {
-    final int pendingHandshakeCount =
-        _groupPayments.where((p) => p.isPending).length;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF1F5F9),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Text(
-            'Code: ${g.inviteCode} • ${g.city} • ${g.schemeType} Scheme',
-            style: const TextStyle(
-              fontSize: 12,
-              color: Color(0xFF007A87),
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+  void _openGroupInfoSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
-        if (_members.any((m) => m.isHostMember)) ...[
-          const SizedBox(height: 8),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF0FDF4),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFFBBF7D0)),
-            ),
-            child: Row(
-              children: const [
-                Icon(
-                  Icons.info_outline_rounded,
-                  size: 16,
-                  color: Color(0xFF166534),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFCBD5E1),
+                  borderRadius: BorderRadius.circular(2),
                 ),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'The host receives the month 2 payout',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF166534),
-                    ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              widget.group.name,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: _kOnSurface,
+              ),
+            ),
+            Text(
+              'Chit Funds Act 1982 • Licensed Group',
+              style: TextStyle(fontSize: 12, color: _kOnSurfaceVariant),
+            ),
+            const SizedBox(height: 16),
+            _buildDetailRow('Chit ID Code', '#${widget.group.inviteCode}'),
+            _buildDetailRow(
+              'Total Pool Amount',
+              '₹${NumberFormat('#,##,###').format(widget.group.totalPoolSize.toInt())}',
+            ),
+            _buildDetailRow('Scheme Duration', '${widget.group.durationMonths} Months'),
+            _buildDetailRow(
+              'Monthly Contribution',
+              '₹${NumberFormat('#,##,###').format(widget.group.monthlyContribution.toInt())}',
+            ),
+            _buildDetailRow('Host / Foreman', _foremanName),
+            _buildDetailRow('Receiving UPI', widget.group.foremanUpiId.isNotEmpty ? widget.group.foremanUpiId : 'devesh1@oksbi'),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _kPrimaryContainer,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-              ],
-            ),
-          ),
-        ],
-        const SizedBox(height: 12),
-
-        // Tab Bar: 1. Auction/Draw | 2. Member Roster & Dues | 3. Handshakes | 4. Payout Ledger
-        TabBar(
-          controller: _tabController,
-          labelColor: const Color(0xFF0F4C81),
-          unselectedLabelColor: const Color(0xFF64748B),
-          indicatorColor: const Color(0xFF0F4C81),
-          indicatorWeight: 3,
-          isScrollable: true,
-          tabs: [
-            Tab(
-              icon: Icon(
-                g.schemeType == 'Bidding'
-                    ? Icons.gavel_rounded
-                    : Icons.casino_rounded,
-                size: 18,
+                child: const Text('Close Group Details'),
               ),
-              text: g.schemeType == 'Bidding'
-                  ? 'Monthly Auction'
-                  : 'Random Draw',
-            ),
-            const Tab(
-              icon: Icon(Icons.people_alt_rounded, size: 18),
-              text: 'Member Roster & Dues',
-            ),
-            Tab(
-              icon: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  const Icon(Icons.handshake_outlined, size: 18),
-                  if (pendingHandshakeCount > 0)
-                    Positioned(
-                      right: -8,
-                      top: -6,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 5,
-                          vertical: 1,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFDC2626),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          '$pendingHandshakeCount',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              text: pendingHandshakeCount > 0
-                  ? 'Handshakes ($pendingHandshakeCount)'
-                  : 'Handshake Confirmations',
-            ),
-            const Tab(
-              icon: Icon(Icons.receipt_long_rounded, size: 18),
-              text: 'Payout Ledger',
             ),
           ],
         ),
-        const SizedBox(height: 16),
-
-        // Tab Views Content
-        Expanded(
-          child: TabBarView(
-            controller: _tabController,
-            children: [
-              _buildSchemeAuctionTab(g, progressPct),
-              _buildMemberRosterTab(),
-              _buildHandshakeConfirmationsTab(),
-              _buildPayoutLedgerTab(g),
-            ],
-          ),
-        ),
-      ],
+      ),
     );
   }
 
-  // --- MEMBER PERSPECTIVE: 5-SECTION DASHBOARD ---
-  Widget _buildMemberDashboard(ChitGroup g) {
-    final String payoutTurnLabel = "Your turn: Month 9";
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF1F5F9),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Text(
-            'Code: ${g.inviteCode} • ${g.city} • ${g.schemeType} Scheme',
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: _kOnSurfaceVariant, fontSize: 13)),
+          Text(
+            value,
             style: const TextStyle(
-              fontSize: 12,
-              color: Color(0xFF007A87),
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        if (_members.any((m) => m.isHostMember)) ...[
-          const SizedBox(height: 8),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF0FDF4),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFFBBF7D0)),
-            ),
-            child: Row(
-              children: const [
-                Icon(
-                  Icons.info_outline_rounded,
-                  size: 16,
-                  color: Color(0xFF166534),
-                ),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'The host receives the month 2 payout',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF166534),
-                    ),
-                  ),
-                ),
-              ],
+              fontWeight: FontWeight.w600,
+              color: _kOnSurface,
+              fontSize: 13,
             ),
           ),
         ],
-        const SizedBox(height: 12),
+      ),
+    );
+  }
 
-        // SECURITY DEPOSIT STATUS SECTION
-        Container(
-          width: double.infinity,
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: _mySecurityDeposit?.isHeld == true
-                ? const Color(0xFFF0FDF4)
-                : (_mySecurityDeposit?.isForfeited == true
-                    ? const Color(0xFFFEF2F2)
-                    : const Color(0xFFFEF3C7)),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: _mySecurityDeposit?.isHeld == true
-                  ? const Color(0xFFBBF7D0)
-                  : (_mySecurityDeposit?.isForfeited == true
-                      ? const Color(0xFFFECACA)
-                      : const Color(0xFFFDE68A)),
-            ),
+  void _openReportProblemModal() {
+    int selectedReason = 0;
+    final reasons = [
+      'Discrepancy in installment amount or dividend',
+      'Host did not acknowledge payment',
+      'Auction rules or timing issue',
+      'Other question or assistance',
+    ];
+    final noteCtrl = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFCBD5E1),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Report an issue with this group',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: _kOnSurface,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: _kSecondaryContainer.withOpacity(0.4),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Icon(
+                          Icons.verified_user_rounded,
+                          size: 20,
+                          color: _kSecondary,
+                        ),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Our dispute resolution team reviews all logs and host confirmations. Your funds remain secured in SafeChit escrow.',
+                            style: TextStyle(fontSize: 12, color: _kOnSurface),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  ...List.generate(reasons.length, (i) {
+                    final isSel = selectedReason == i;
+                    return InkWell(
+                      onTap: () => setModalState(() => selectedReason = i),
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isSel ? _kSurfaceContainerLow : Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isSel ? _kSecondaryAccent : _kBorder,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              isSel
+                                  ? Icons.radio_button_checked
+                                  : Icons.radio_button_off,
+                              color: isSel ? _kSecondaryAccent : const Color(0xFF94A3B8),
+                              size: 18,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                reasons[i],
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: _kOnSurface,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Add details (optional)',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: _kOnSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: noteCtrl,
+                    maxLines: 3,
+                    style: const TextStyle(fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText:
+                          'Explain what happened so our mediator can resolve this smoothly...',
+                      hintStyle: TextStyle(
+                        fontSize: 12,
+                        color: _kOnSurfaceVariant.withOpacity(0.6),
+                      ),
+                      filled: true,
+                      fillColor: _kSurfaceContainerLow,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: _kBorder),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: _kBorder),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
                   Row(
                     children: [
-                      Icon(
-                        Icons.shield_rounded,
-                        size: 18,
-                        color: _mySecurityDeposit?.isHeld == true
-                            ? const Color(0xFF166534)
-                            : const Color(0xFF92400E),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size.fromHeight(48),
+                            side: const BorderSide(color: _kBorder),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text('Cancel'),
+                        ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Report submitted. SafeChit team will review within 2 hours.',
+                                ),
+                                backgroundColor: Color(0xFF0F4C81),
+                              ),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _kPrimaryContainer,
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size.fromHeight(48),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text('Submit report'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openReceiptDrawer(String type) {
+    String title = 'Installment #${widget.group.currentCycle}';
+    String amount =
+        '₹${NumberFormat('#,##,###').format(widget.group.monthlyContribution.toInt())}';
+    String badge = 'Confirmed';
+    bool isConfirmed = true;
+
+    if (type == 'preview-due' || type == 'm3-pending') {
+      badge = 'Due in 3 days';
+      isConfirmed = false;
+    } else if (type == 'sec-dep') {
+      title = 'Initial Security Deposit';
+      amount = '₹${NumberFormat('#,##,###').format(_depositAmount.toInt())}';
+      badge = 'Escrow Held';
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(22),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFCBD5E1),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Transaction Receipt',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: _kOnSurface,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: _kSurfaceContainerLow,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       const Text(
-                        'Security Deposit',
+                        'VERIFIED ESCROW VOUCHER',
                         style: TextStyle(
-                          fontSize: 13,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: _kOnSurfaceVariant,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        amount,
+                        style: const TextStyle(
+                          fontSize: 24,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFF0F172A),
+                          color: _kOnSurface,
                         ),
                       ),
                     ],
                   ),
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: const Color(0xFFFDE68A)),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
                     ),
-                    child: const Text(
-                      'Test mode, no real money',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF92400E),
-                      ),
+                    decoration: BoxDecoration(
+                      color: isConfirmed
+                          ? _kSecondaryContainer
+                          : _kAmberBg,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          isConfirmed
+                              ? Icons.done_all_rounded
+                              : Icons.schedule_rounded,
+                          size: 14,
+                          color: isConfirmed ? _kSecondary : _kAmberText,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          badge,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: isConfirmed ? _kSecondary : _kAmberText,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildDetailRow('Purpose', title),
+            _buildDetailRow('Digital Escrow UTR', 'SC${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}'),
+            _buildDetailRow(
+              'Host Confirmation',
+              'Verified by $_foremanName (Auto-Escrow)',
+            ),
+            _buildDetailRow('Payment Mode', 'UPI Instant Settlement'),
+            _buildDetailRow(
+              'Timestamp',
+              DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now()),
+            ),
+            const SizedBox(height: 14),
+            Center(
+              child: TextButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _openReportProblemModal();
+                },
+                child: const Text(
+                  'Report a problem with this entry',
+                  style: TextStyle(fontSize: 12, color: _kOnSurfaceVariant),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openMemberListModal() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.80,
+        maxChildSize: 0.95,
+        minChildSize: 0.5,
+        builder: (_, scrollController) => Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFCBD5E1),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Chit Members (${_members.length}/${widget.group.durationMonths})',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: _kOnSurface,
+                        ),
+                      ),
+                      Text(
+                        '${widget.group.name} • ${widget.group.durationMonths} Months',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: _kOnSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ListView.builder(
+                  controller: scrollController,
+                  itemCount: widget.group.durationMonths,
+                  itemBuilder: (context, i) {
+                    if (i < _members.length) {
+                      final m = _members[i];
+                      final isHost = m.isHostMember ||
+                          m.name.toLowerCase().contains('foreman') ||
+                          m.name.toLowerCase() == _foremanName.toLowerCase();
+                      final isYou =
+                          m.name.toLowerCase() == widget.currentUsername.toLowerCase();
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isYou
+                              ? _kSecondaryContainer.withOpacity(0.35)
+                              : _kSurfaceContainerLow,
+                          borderRadius: BorderRadius.circular(12),
+                          border: isYou
+                              ? Border.all(color: _kSecondaryAccent.withOpacity(0.5))
+                              : null,
+                        ),
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 18,
+                              backgroundColor: isHost
+                                  ? _kPrimaryContainer
+                                  : isYou
+                                      ? _kSecondary
+                                      : _kSurfaceContainerHighest,
+                              foregroundColor: (isHost || isYou)
+                                  ? Colors.white
+                                  : _kOnSurface,
+                              child: Text(
+                                m.name.isNotEmpty
+                                    ? m.name.substring(0, 1).toUpperCase()
+                                    : 'M',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        m.name,
+                                        style: TextStyle(
+                                          fontWeight: isYou
+                                              ? FontWeight.bold
+                                              : FontWeight.w600,
+                                          fontSize: 14,
+                                          color: _kOnSurface,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      if (isHost)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 2,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: _kPrimaryContainer,
+                                            borderRadius:
+                                                BorderRadius.circular(4),
+                                          ),
+                                          child: const Text(
+                                            'HOST',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      if (isYou)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 2,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: _kSecondary,
+                                            borderRadius:
+                                                BorderRadius.circular(4),
+                                          ),
+                                          child: const Text(
+                                            'YOU',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  Text(
+                                    isHost
+                                        ? 'Gold Tier Host • Payout Month 2'
+                                        : 'Payout: Month ${i + 1}',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: isYou ? _kSecondary : _kOnSurfaceVariant,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (i < widget.group.currentCycle - 1)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _kSecondaryContainer,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Text(
+                                  'Prized',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: _kSecondary,
+                                  ),
+                                ),
+                              )
+                            else if (i == widget.group.currentCycle - 1)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _kAmberBg,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Text(
+                                  'Upcoming',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: _kAmberText,
+                                  ),
+                                ),
+                              )
+                            else
+                              const Text(
+                                'Active',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: _kOnSurfaceVariant,
+                                ),
+                              ),
+                          ],
+                        ),
+                      );
+                    } else {
+                      // Open Slot
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _kSurfaceContainer.withOpacity(0.5),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: _kBorder,
+                            style: BorderStyle.solid,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 18,
+                              backgroundColor: _kSurfaceContainer,
+                              child: const Icon(
+                                Icons.person_add_rounded,
+                                size: 18,
+                                color: _kOnSurfaceVariant,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Slot #${i + 1}: Invite Pending',
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      color: _kOnSurfaceVariant,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Share 6-digit code: ${widget.group.inviteCode}',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: _kOnSurfaceVariant.withOpacity(0.8),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _kSurfaceContainer,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Text(
+                                'Open',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: _kOnSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                  },
+                ),
               ),
               const SizedBox(height: 10),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Amount: ₹${_depositAmount.toStringAsFixed(0)}',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF0F172A),
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Row(
-                        children: [
-                          const Text(
-                            'Status: ',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Color(0xFF64748B),
-                            ),
-                          ),
-                          Text(
-                            _mySecurityDeposit?.displayStatus ?? 'Pending',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: _mySecurityDeposit?.isHeld == true
-                                  ? const Color(0xFF166534)
-                                  : (_mySecurityDeposit?.isRefunded == true
-                                      ? const Color(0xFF0284C7)
-                                      : (_mySecurityDeposit?.isForfeited == true
-                                          ? const Color(0xFFDC2626)
-                                          : const Color(0xFFD97706))),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                  const Text(
+                    'Privacy protected: Personal risk ratings are private',
+                    style: TextStyle(fontSize: 11, color: _kOnSurfaceVariant),
                   ),
-                  if (_mySecurityDeposit == null || _mySecurityDeposit!.isPending)
-                    ElevatedButton.icon(
-                      onPressed: _openDepositCheckoutModal,
-                      icon: const Icon(Icons.payment_rounded, size: 14),
-                      label: const Text('Pay security deposit'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0F4C81),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    )
-                  else
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _mySecurityDeposit!.isHeld
-                            ? const Color(0xFFDCFCE7)
-                            : (_mySecurityDeposit!.isRefunded
-                                ? const Color(0xFFE0F2FE)
-                                : const Color(0xFFFEE2E2)),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _kPrimaryContainer,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Text(
-                        _mySecurityDeposit!.isHeld
-                            ? 'Deposit Held'
-                            : _mySecurityDeposit!.displayStatus,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: _mySecurityDeposit!.isHeld
-                              ? const Color(0xFF166534)
-                              : (_mySecurityDeposit!.isRefunded
-                                  ? const Color(0xFF0284C7)
-                                  : const Color(0xFFDC2626)),
-                        ),
-                      ),
                     ),
-                ],
-              ),
-            ],
-          ),
-        ),
-
-        // TOP SECTION — Status Card (always visible, no scroll)
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: const Color(0xFF0F4C81),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Cycle ${g.currentCycle} of ${g.durationMonths}',
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Icon(
-                            Icons.shield_outlined,
-                            color: Colors.white,
-                            size: 10,
-                          ),
-                          SizedBox(width: 4),
-                          Flexible(
-                            child: Text(
-                              'Trusted Member',
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 1,
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'NEXT CONTRIBUTION',
-                          style: TextStyle(
-                            color: Color(0xFFE2E8F0),
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          g.monthlyContribution < 10
-                              ? '₹${g.monthlyContribution.toStringAsFixed(2)}'
-                              : '₹${g.monthlyContribution.toStringAsFixed(0)}',
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        const Text(
-                          'Due: 10th of this Month',
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                          style: TextStyle(
-                            color: Color(0xFFE2E8F0),
-                            fontSize: 10,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          payoutTurnLabel,
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        ElevatedButton.icon(
-                          onPressed: () =>
-                              _openRazorpayCardCheckout(g.monthlyContribution),
-                          icon: const Icon(Icons.payment_rounded, size: 14),
-                          label: const Text(
-                            'Pay with Razorpay (Test)',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 11,
-                            ),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF0F4C81),
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                    child: const Text('Done'),
                   ),
                 ],
               ),
             ],
           ),
         ),
-        const SizedBox(height: 14),
-
-        // SCROLLABLE BODY
-        Expanded(
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ACTIVE BIDDING / DRAW INTERACTIVE TERMINAL
-                _buildMemberAuctionBidPanel(g),
-                const SizedBox(height: 14),
-
-                // SECOND SECTION — This Cycle
-                _buildMemberCycleProgress(g),
-                const SizedBox(height: 14),
-
-                // THIRD SECTION — Timeline / Ledger
-                _buildMemberLedgerTimeline(g),
-                const SizedBox(height: 14),
-
-                // FOURTH SECTION — Group & Foreman Info
-                _buildMemberForemanInfo(g),
-                const SizedBox(height: 14),
-
-                // FIFTH SECTION — My Reputation
-                _buildMemberReputationDetails(g),
-                const SizedBox(height: 8),
-              ],
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 
-  Widget _buildMemberAuctionBidPanel(ChitGroup g) {
-    final hostMember = _members.where((m) => m.isHostMember).firstOrNull;
-    if (g.currentCycle == 2 && hostMember != null) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF0FDF4),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFBBF7D0)),
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: _kSurface,
+        appBar: AppBar(
+          backgroundColor: _kSurface,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded, color: _kOnSurface),
+            onPressed: () => Navigator.pop(context),
+          ),
         ),
-        child: Row(
-          children: [
-            const Icon(
-              Icons.verified_user_rounded,
-              color: Color(0xFF166534),
-              size: 24,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Month 2: Fixed Host Payout',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: Color(0xFF166534),
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'The organizer (${hostMember.name}) receives the Month 2 full pot payout with 0% discount per scheme rules. No auction or lucky draw is held.',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: Color(0xFF15803D),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+        body: const Center(
+          child: CircularProgressIndicator(color: _kSecondaryAccent),
         ),
       );
     }
 
-    final bidState = BiddingSessionService.instance.getOrCreateState(g.id);
+    final double installmentAmount = widget.group.monthlyContribution;
+    final int openSlots =
+        (widget.group.durationMonths - _members.length).clamp(0, widget.group.durationMonths);
 
-    if (g.schemeType == 'Bidding') {
-      if (bidState.scheduledStartTime == null) {
-        return Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
-          ),
-          child: Row(
-            children: const [
-              Icon(Icons.info_outline, color: Color(0xFF0F4C81), size: 20),
-              SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'No bidding session has been scheduled by the Foreman for this cycle yet.',
-                  style: TextStyle(color: Color(0xFF475569), fontSize: 12),
-                ),
-              ),
-            ],
-          ),
-        );
-      } else if (bidState.scheduledStartTime != null &&
-          !bidState.isAuctionActive &&
-          !bidState.isAuctionEnded) {
-        return BiddingWaitingRoom(
-          groupId: g.id,
-          scheduledTime: bidState.scheduledStartTime!,
-          onTimerExpired: () {
-            setState(() {});
-          },
-        );
-      } else if (bidState.isAuctionActive && !bidState.isAuctionEnded) {
-        return Container(
-          height: 380, // Bound height inside details column
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
-          ),
-          child: LiveBiddingRoom(
-            group: g,
-            currentUsername: widget.currentUsername,
-            isForeman: false,
-            isApproved: widget.isApproved,
-            onAuctionEnded: () {
-              setState(() {});
-            },
-          ),
-        );
-      } else {
-        // Auction Concluded
-        return AuctionClosePayout(
-          group: g,
-          currentUsername: widget.currentUsername,
-          isForeman: false,
-          onPayoutReleased: _handlePayoutReleased,
-        );
-      }
-    } else {
-      // Random Draw System
-      return Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: const Color(0xFF007A87).withOpacity(0.2),
-            width: 1.5,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.02),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
+    return Scaffold(
+      backgroundColor: _kSurface,
+      appBar: AppBar(
+        backgroundColor: _kSurface,
+        elevation: 0,
+        scrolledUnderElevation: 1,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded, color: _kOnSurface),
+          onPressed: () => Navigator.pop(context),
         ),
-        child: Column(
+        title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Expanded(
-                  child: Text(
-                    'LUCKY DRAW DRAW STATUS',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                      color: Color(0xFF0F4C81),
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFDCFCE7),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Text(
-                    'Draw Eligible',
-                    style: TextStyle(
-                      color: Color(0xFF166534),
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
+            Text(
+              widget.group.name,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: _kOnSurface,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 14),
-            if (_luckyDrawWinner != null) ...[
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFDCFCE7),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.stars, color: Color(0xFF166534), size: 24),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'LUCKY DRAW WINNER SELECTED!',
-                            style: TextStyle(
-                              color: Color(0xFF15803D),
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Winner: $_luckyDrawWinner',
-                            style: const TextStyle(
-                              color: Color(0xFF166534),
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+            Text(
+              '${widget.group.name} • Verified Escrow',
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: _kSecondary,
               ),
-            ] else ...[
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: const [
-                    Icon(
-                      Icons.info_outline,
-                      color: Color(0xFF475569),
-                      size: 20,
-                    ),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Draw will be conducted by Foreman Rajesh Kumar at the end of the current cycle. Keep an eye on updates!',
-                        style: TextStyle(
-                          color: Color(0xFF334155),
-                          fontSize: 12,
-                          height: 1.4,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+            ),
           ],
         ),
-      );
-    }
-  }
-
-  Widget _buildMemberCycleProgress(ChitGroup g) {
-    final pastWinners = [
-      {'name': 'Ramesh Verma', 'initials': 'RV'},
-      {'name': 'Suresh Kumar', 'initials': 'SK'},
-      {'name': 'Meena Sharma', 'initials': 'MS'},
-    ];
-
-    final collectedAmount =
-        g.monthlyContribution * (g.membersCount > 0 ? g.membersCount - 1 : 9);
-    final targetAmount =
-        g.monthlyContribution * (g.membersCount > 0 ? g.membersCount : 10);
-    final progressVal = collectedAmount / (targetAmount > 0 ? targetAmount : 1);
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'THIS CYCLE STATUS',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF475569),
-              letterSpacing: 0.5,
-            ),
-          ),
-          const SizedBox(height: 10),
-          const Text(
-            'Payout Recipients in Previous Cycles:',
-            style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: pastWinners.map((winner) {
-              return Tooltip(
-                message: winner['name']!,
-                child: Container(
-                  margin: const EdgeInsets.only(right: 10),
-                  child: Stack(
-                    alignment: Alignment.bottomRight,
-                    children: [
-                      CircleAvatar(
-                        radius: 16,
-                        backgroundColor: const Color(0xFFE2E8F0),
-                        child: Text(
-                          winner['initials']!,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF475569),
-                          ),
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.all(1.5),
-                        decoration: const BoxDecoration(
-                          color: Colors.green,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.check,
-                          size: 7,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 14),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Expanded(
-                child: Text(
-                  'Monthly Collection:',
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                  style: TextStyle(fontSize: 12, color: Color(0xFF334155)),
+        actions: [
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert_rounded, color: _kOnSurfaceVariant),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            onSelected: (val) {
+              if (val == 'terms') {
+                _openDigitalAgreement();
+              } else if (val == 'info') {
+                _openGroupInfoSheet();
+              } else if (val == 'report') {
+                _openReportProblemModal();
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'terms',
+                child: Row(
+                  children: [
+                    Icon(Icons.description_outlined, size: 18, color: _kOnSurfaceVariant),
+                    SizedBox(width: 10),
+                    Text('My terms (Agreement)', style: TextStyle(fontSize: 13)),
+                  ],
                 ),
               ),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  '₹${collectedAmount.toStringAsFixed(0)} / ₹${targetAmount.toStringAsFixed(0)}',
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF0F4C81),
-                  ),
+              const PopupMenuItem(
+                value: 'info',
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, size: 18, color: _kOnSurfaceVariant),
+                    SizedBox(width: 10),
+                    Text('Group info', style: TextStyle(fontSize: 13)),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'report',
+                child: Row(
+                  children: [
+                    Icon(Icons.report_problem_outlined, size: 18, color: Color(0xFFDC2626)),
+                    SizedBox(width: 10),
+                    Text(
+                      'Report a problem',
+                      style: TextStyle(fontSize: 13, color: Color(0xFFDC2626)),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 6),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: LinearProgressIndicator(
-              value: progressVal,
-              minHeight: 8,
-              backgroundColor: const Color(0xFFF1F5F9),
-              color: const Color(0xFF007A87),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFECFDF5),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFFA7F3D0)),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.lock_clock_outlined,
-                  color: Color(0xFF059669),
-                  size: 18,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Deposit held in escrow: ₹${g.securityDeposit.toStringAsFixed(0)}\n(Refundable security amount released upon successful completion)',
-                    style: const TextStyle(
-                      color: Color(0xFF065F46),
-                      fontSize: 11,
-                      height: 1.35,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF0FDF4),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFFBBF7D0)),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.qr_code_2_rounded,
-                  color: Color(0xFF15803D),
-                  size: 18,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Foreman Receiving UPI ID: ${g.foremanUpiId}\nInstallments transfer directly to this VPA.',
-                    style: const TextStyle(
-                      color: Color(0xFF166534),
-                      fontSize: 11,
-                      height: 1.35,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
+          Padding(
+            padding: const EdgeInsets.only(right: 14),
+            child: CircleAvatar(
+              radius: 16,
+              backgroundColor: _kSecondaryContainer,
+              foregroundColor: _kSecondary,
+              child: Text(
+                widget.currentUsername.isNotEmpty
+                    ? widget.currentUsername.substring(0, 1).toUpperCase()
+                    : 'U',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
             ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildMemberLedgerTimeline(ChitGroup g) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      body: Stack(
+        fit: StackFit.expand,
         children: [
-          const Text(
-            'TIMELINE / LEDGER (TAP FOR DUAL CONFIRMATION DETAILS)',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF475569),
-              letterSpacing: 0.5,
-            ),
-          ),
-          const SizedBox(height: 10),
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _userPayments.length,
-            itemBuilder: (context, index) {
-              final tx = _userPayments[index];
-              return InkWell(
-                onTap: () => _showTransactionDetails(tx),
+          Positioned.fill(
+            child: NestedScrollView(
+            headerSliverBuilder: (context, innerBoxIsScrolled) => [
+              SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8.0),
-                  child: Row(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFDCFCE7),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.arrow_upward_rounded,
-                          color: Color(0xFF166534),
-                          size: 14,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                      // Context Tag
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4, bottom: 8),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              'Cycle ${tx['cycle']} installment payment',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                                color: Color(0xFF1E293B),
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              tx['date'],
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: Color(0xFF64748B),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              '₹${tx['amount'].toStringAsFixed(0)}',
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 1,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                                color: Color(0xFF0F4C81),
-                              ),
-                            ),
-                            const SizedBox(height: 2),
                             Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: const [
-                                Icon(
-                                  Icons.check,
-                                  color: Colors.green,
-                                  size: 10,
+                              children: [
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: const BoxDecoration(
+                                    color: _kSecondaryAccent,
+                                    shape: BoxShape.circle,
+                                  ),
                                 ),
-                                SizedBox(width: 2),
-                                Flexible(
-                                  child: Text(
-                                    'Double Confirmed',
-                                    overflow: TextOverflow.ellipsis,
-                                    maxLines: 1,
-                                    style: TextStyle(
-                                      color: Colors.green,
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'ACTIVE CHIT GROUP • MONTH ${widget.group.currentCycle}',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: _kSecondary,
+                                    letterSpacing: 0.4,
                                   ),
                                 ),
                               ],
                             ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _kSurfaceContainer,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                'Chit ID: #${widget.group.inviteCode.isNotEmpty ? widget.group.inviteCode : widget.group.id.substring(0, 6).toUpperCase()}',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: _kOnSurfaceVariant,
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                       ),
+                      // 3-Second Instant Clarity Hero Status Card
+                      _buildHeroStatusCard(installmentAmount),
+                      const SizedBox(height: 12),
                     ],
                   ),
                 ),
-              );
-            },
+              ),
+              // Sticky Tab Navigation
+              SliverAppBar(
+                pinned: true,
+                floating: false,
+                primary: false,
+                automaticallyImplyLeading: false,
+                backgroundColor: _kSurface,
+                elevation: 0,
+                toolbarHeight: 0,
+                bottom: TabBar(
+                  controller: _tabController,
+                  indicatorColor: _kPrimaryContainer,
+                  indicatorWeight: 3,
+                  labelColor: _kPrimaryContainer,
+                  unselectedLabelColor: _kOnSurfaceVariant,
+                  labelStyle: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                  unselectedLabelStyle: const TextStyle(
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                  ),
+                  tabs: const [
+                    Tab(
+                      icon: Icon(Icons.dashboard_rounded, size: 18),
+                      text: 'Overview',
+                    ),
+                    Tab(
+                      icon: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.gavel_rounded, size: 18),
+                          SizedBox(width: 4),
+                          CircleAvatar(radius: 3, backgroundColor: _kSecondaryAccent),
+                        ],
+                      ),
+                      text: 'Auction',
+                    ),
+                    Tab(
+                      icon: Icon(Icons.menu_book_rounded, size: 18),
+                      text: 'Ledger',
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            body: TabBarView(
+              controller: _tabController,
+              children: [
+                _buildOverviewTab(openSlots),
+                _buildAuctionTab(),
+                _buildLedgerTab(),
+              ],
+            ),
           ),
+        ),
+          // Persistent Floating Bottom Bar
+          if (!_isPaidCurrentCycle)
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: _buildPersistentBottomBar(installmentAmount),
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildMemberForemanInfo(ChitGroup g) {
+  // ==================== HERO STATUS CARD ====================
+  Widget _buildHeroStatusCard(double installmentAmount) {
+    final int currentStep = widget.group.currentCycle;
+    final int totalSteps = widget.group.durationMonths;
+    final int percentComplete = ((currentStep / totalSteps) * 100).toInt();
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: _kBorder),
+        boxShadow: [
+          BoxShadow(
+            color: _kPrimaryContainer.withOpacity(0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'GROUP & FOREMAN INFO',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF475569),
-              letterSpacing: 0.5,
-            ),
-          ),
-          const SizedBox(height: 10),
+          // Stepper: Cycle X of Y
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: const Color(0xFF0F4C81).withOpacity(0.1),
-                child: const Icon(
-                  Icons.admin_panel_settings_rounded,
-                  color: Color(0xFF0F4C81),
-                  size: 18,
+              Row(
+                children: [
+                  const Icon(Icons.timelapse_rounded, size: 16, color: _kSecondaryAccent),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Cycle $currentStep of $totalSteps',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: _kOnSurface,
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: _kSecondaryContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '$percentComplete% Complete',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: _kSecondary,
+                  ),
                 ),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
+            ],
+          ),
+          const SizedBox(height: 8),
+          // 10 Step Progress Bar
+          Row(
+            children: List.generate(totalSteps, (index) {
+              final stepNum = index + 1;
+              final bool isCompleted = stepNum < currentStep;
+              final bool isActive = stepNum == currentStep;
+
+              return Expanded(
+                child: Container(
+                  height: 7,
+                  margin: EdgeInsets.only(right: index == totalSteps - 1 ? 0 : 3),
+                  decoration: BoxDecoration(
+                    color: isCompleted
+                        ? _kSecondaryAccent
+                        : isActive
+                            ? _kSecondary
+                            : _kSurfaceContainer,
+                    borderRadius: BorderRadius.circular(4),
+                    border: isActive
+                        ? Border.all(color: _kSecondaryAccent, width: 1.5)
+                        : null,
+                  ),
+                ),
+              );
+            }),
+          ),
+          const SizedBox(height: 14),
+          // Financials Box
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: _kSurfaceContainerLow,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Rajesh Kumar (Foreman)',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1E293B),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Row(
-                      children: const [
-                        Icon(
-                          Icons.shield_outlined,
-                          color: Color(0xFF007A87),
-                          size: 10,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Current Installment Due',
+                          style: TextStyle(fontSize: 12, color: _kOnSurfaceVariant),
                         ),
-                        SizedBox(width: 4),
-                        Flexible(
-                          child: Text(
-                            'Trusted Foreman (Score: 98/100)',
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 1,
-                            style: TextStyle(
-                              color: Color(0xFF007A87),
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
+                        const SizedBox(height: 2),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: [
+                            Text(
+                              '₹${NumberFormat('#,##,###').format(installmentAmount.toInt())}',
+                              style: const TextStyle(
+                                fontSize: 26,
+                                fontWeight: FontWeight.bold,
+                                color: _kOnSurface,
+                                letterSpacing: -0.5,
+                              ),
                             ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _isPaidCurrentCycle
+                                    ? _kSecondaryContainer
+                                    : _kAmberBg,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                _isPaidCurrentCycle ? 'Paid' : '3 days left',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: _isPaidCurrentCycle
+                                      ? _kSecondary
+                                      : _kAmberText,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Due by 10th of this month',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: _kOnSurfaceVariant.withOpacity(0.8),
                           ),
                         ),
                       ],
                     ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: _openDigitalAgreement,
-              icon: const Icon(Icons.menu_book_rounded, size: 15),
-              label: const Text(
-                'Digital Terms & Conditions',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-              ),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF0F4C81),
-                side: const BorderSide(color: Color(0xFF0F4C81)),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          SizedBox(
-            width: double.infinity,
-            child: TextButton.icon(
-              onPressed: _flagDiscrepancy,
-              icon: const Icon(Icons.flag_outlined, size: 15),
-              label: const Text(
-                'Flag a Discrepancy',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-              ),
-              style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFFDC2626),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMemberReputationDetails(ChitGroup g) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'MY REPUTATION',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF475569),
-              letterSpacing: 0.5,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              SizedBox(
-                width: 38,
-                height: 38,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: const [
-                    CircularProgressIndicator(
-                      value: 1.0,
-                      strokeWidth: 3,
-                      backgroundColor: Color(0xFFF1F5F9),
-                      color: Colors.green,
-                    ),
-                    Icon(
-                      Icons.verified_outlined,
-                      color: Colors.green,
-                      size: 18,
+                    IconButton(
+                      icon: const Icon(Icons.receipt_long_rounded, size: 20),
+                      color: _kOnSurfaceVariant,
+                      onPressed: () => _openReceiptDrawer('preview-due'),
+                      tooltip: 'View breakdown',
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text(
-                      'Trusted Member',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1E293B),
-                      ),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      'On-time payments: 4/4. No flags.',
-                      style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          const Divider(),
-          const SizedBox(height: 6),
-          const Text(
-            'Mechanism:\n• New/low reputation accounts are restricted to chits under ₹1,000.\n• Ask a trusted member to guarantee you for higher-value groups.',
-            style: TextStyle(
-              fontSize: 11,
-              color: Color(0xFF64748B),
-              height: 1.4,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _openRazorpayCardCheckout(double amount) {
-    RazorpayCheckoutModal.show(
-      context: context,
-      groupId: widget.group.id,
-      groupName: widget.group.name,
-      memberId: widget.currentUsername,
-      amount: amount,
-      onDepositSuccess: () {
-        setState(() {
-          _userPayments.insert(0, {
-            'cycle': widget.group.currentCycle,
-            'amount': amount,
-            'date': 'Today, ${DateFormat('hh:mm a').format(DateTime.now())}',
-            'foremanConfirmed':
-                'Today, ${DateFormat('hh:mm a').format(DateTime.now().add(const Duration(minutes: 5)))}',
-            'memberConfirmed':
-                'Today, ${DateFormat('hh:mm a').format(DateTime.now())}',
-            'status': 'Confirmed by both parties',
-          });
-        });
-        _loadGroupMembers();
-      },
-    );
-  }
-
-  void _showTransactionDetails(Map<String, dynamic> tx) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: const Text(
-            'Two-Party Confirmation',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Transaction: Cycle ${tx['cycle']} Contribution',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Amount: ₹${tx['amount'].toStringAsFixed(0)}',
-                style: const TextStyle(
-                  color: Color(0xFF0F4C81),
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Divider(),
-              const SizedBox(height: 6),
-              Row(
-                children: const [
-                  Icon(Icons.check_circle, color: Colors.green, size: 16),
-                  SizedBox(width: 8),
-                  Text(
-                    'Foreman Approved',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                  ),
-                ],
-              ),
-              Padding(
-                padding: const EdgeInsets.only(left: 24.0, top: 2),
-                child: Text(
-                  'Approved by: Rajesh Kumar (Foreman)\nAt: ${tx['foremanConfirmed']}',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: Color(0xFF64748B),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: const [
-                  Icon(Icons.check_circle, color: Colors.green, size: 16),
-                  SizedBox(width: 8),
-                  Text(
-                    'Subscriber Confirmed',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                  ),
-                ],
-              ),
-              Padding(
-                padding: const EdgeInsets.only(left: 24.0, top: 2),
-                child: Text(
-                  'Approved by: You (${widget.currentUsername})\nAt: ${tx['memberConfirmed']}',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: Color(0xFF64748B),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _flagDiscrepancy() {
-    final TextEditingController controller = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: Row(
-            children: const [
-              const Icon(
-                Icons.report_problem_outlined,
-                color: Color(0xFFDC2626),
-              ),
-              const SizedBox(width: 8),
-              const Expanded(
-                child: Text(
-                  'Flag a Discrepancy',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-              ),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Describe the discrepancy or issue you observed. The Foreman and system admin will be notified immediately.',
-                style: TextStyle(fontSize: 12, color: Color(0xFF475569)),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: controller,
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  hintText: 'Enter details here...',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final issue = controller.text.trim();
-                if (issue.isNotEmpty) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        '🚨 Discrepancy successfully logged. Foreman notified!',
-                      ),
-                      backgroundColor: Color(0xFFDC2626),
-                    ),
-                  );
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFDC2626),
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Submit Flag'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  // --- TAB 1: AUCTION / RANDOM DRAW FUNCTIONALITY ---
-  Widget _buildSchemeAuctionTab(ChitGroup g, double progressPct) {
-    final bidState = BiddingSessionService.instance.getOrCreateState(g.id);
-    final hostMember = _members.where((m) => m.isHostMember).firstOrNull;
-    final bool hasHostMember = hostMember != null;
-    final bool isCycle2HostPayout = g.currentCycle == 2 && hasHostMember;
-    final bool isHostPayoutRecorded = _ledgerHistory.any(
-      (item) => item['cycle'] == 2 && item['status'] == 'Host payout (self)',
-    );
-    final pendingInGroup = _groupPayments.where((p) => p.isPending).toList();
-
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (widget.isForeman && pendingInGroup.isNotEmpty) ...[
-            GestureDetector(
-              onTap: () => _tabController.animateTo(2),
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFEF3C7),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFFDE68A)),
-                ),
-                child: Row(
+                const Divider(height: 20, color: Color(0xFFCBD5E1)),
+                Row(
                   children: [
-                    const Icon(
-                      Icons.handshake_outlined,
-                      color: Color(0xFFB45309),
-                      size: 22,
-                    ),
-                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            '${pendingInGroup.length} Payment${pendingInGroup.length > 1 ? "s" : ""} Awaiting Foreman Handshake',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF92400E),
+                          const Text(
+                            'Your Assigned Payout',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: _kOnSurfaceVariant,
                             ),
                           ),
                           const SizedBox(height: 2),
+                          Text(
+                            'Month ${_getUserPayoutMonth()}',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: _kOnSurface,
+                            ),
+                          ),
+                          Text(
+                            '₹${NumberFormat('#,##,###').format(widget.group.totalPoolSize.toInt())} pot value',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: _kSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           const Text(
-                            'Subscribers submitted contributions. Tap to verify & confirm receipts.',
+                            'Security Deposit',
                             style: TextStyle(
                               fontSize: 11,
-                              color: Color(0xFF78350F),
+                              color: _kOnSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              Text(
+                                '₹${NumberFormat('#,##,###').format(_depositAmount.toInt())}',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: _kOnSurface,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Icon(
+                                _mySecurityDeposit?.isHeld == true
+                                    ? Icons.verified_user_rounded
+                                    : Icons.info_outline_rounded,
+                                size: 14,
+                                color: _kSecondaryAccent,
+                              ),
+                            ],
+                          ),
+                          Text(
+                            _mySecurityDeposit?.isHeld == true
+                                ? 'Held in Escrow'
+                                : 'Pending Deposit',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: _mySecurityDeposit?.isHeld == true
+                                  ? _kSecondary
+                                  : _kAmberText,
                             ),
                           ),
                         ],
                       ),
-                    ),
-                    const Icon(
-                      Icons.arrow_forward_ios_rounded,
-                      size: 12,
-                      color: Color(0xFFB45309),
                     ),
                   ],
-                ),
-              ),
-            ),
-          ],
-
-          // Schedule Banner (1st & 10th of every month)
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: const Color(0xFF0F4C81),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            g.schemeType == 'Bidding'
-                                ? Icons.gavel
-                                : Icons.casino,
-                            color: const Color(0xFF059669),
-                            size: 16,
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              g.schemeType == 'Bidding'
-                                  ? 'Bidding Auction Starts'
-                                  : 'Lucky Draw Date',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      const Text(
-                        '1st of Every Month',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(height: 36, width: 1, color: Colors.white24),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: const [
-                          Icon(
-                            Icons.payment_rounded,
-                            color: Color(0xFF86EFAC),
-                            size: 16,
-                          ),
-                          SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              'Subscriber Payment Due',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      const Text(
-                        '10th of Every Month',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
-
-          // Requirement 4: In Cycle 2, if host is member, skip auction/random draw and fix payout to host
-          if (isCycle2HostPayout) ...[
+          const SizedBox(height: 14),
+          // Action Buttons
+          if (!_isPaidCurrentCycle) ...[
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton.icon(
+                onPressed: _openInstallmentCheckout,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _kPrimaryContainer,
+                  foregroundColor: Colors.white,
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                icon: const Icon(Icons.account_balance_wallet_rounded, size: 18),
+                label: Text(
+                  'Pay ₹${NumberFormat('#,##,###').format(installmentAmount.toInt())} Installment',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+              ),
+            ),
+          ] else ...[
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(20),
+              height: 48,
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFBBF7D0)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.02),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
+                color: _kSecondaryContainer,
+                borderRadius: BorderRadius.circular(12),
               ),
-              child: Column(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFDCFCE7),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.account_balance_rounded,
-                      size: 36,
-                      color: Color(0xFF166534),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Month 2: Fixed Host Payout',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: Color(0xFF0F172A),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
+                  const Icon(Icons.check_circle_rounded, color: _kSecondary, size: 20),
+                  const SizedBox(width: 8),
                   Text(
-                    'Per scheme rules, the host (${hostMember.name}) receives the Month 2 full pot payout with 0% discount and 0 dividend. Auction and random draw are skipped for Cycle 2.',
-                    textAlign: TextAlign.center,
+                    'Paid for Month ${widget.group.currentCycle}',
                     style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF64748B),
-                      height: 1.4,
+                      fontWeight: FontWeight.bold,
+                      color: _kSecondary,
+                      fontSize: 14,
                     ),
                   ),
-                  const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Full Pot Payout (No discount)',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF475569),
-                          ),
-                        ),
-                        Text(
-                          '₹${g.totalPoolSize.toStringAsFixed(0)}',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFF15803D),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  if (isHostPayoutRecorded)
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFDCFCE7),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          'Host Payout Recorded in Ledger (Self) ✓',
-                          style: TextStyle(
-                            color: Color(0xFF166534),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    )
-                  else if (widget.isForeman)
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          _recordCycle2HostPayout(g, hostMember.name);
-                        },
-                        icon: const Icon(
-                          Icons.check_circle_outline_rounded,
-                          size: 16,
-                        ),
-                        label: const Text('Record Host Payout (Self)'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF059669),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                      ),
-                    ),
                 ],
               ),
             ),
-          ] else if (g.schemeType == 'Bidding') ...[
-            if (bidState.scheduledStartTime == null) ...[
-              // Screen A: No session scheduled -> Show Schedule button
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
+          ],
+          if (_mySecurityDeposit?.isHeld != true) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: OutlinedButton.icon(
+                onPressed: _openDepositCheckoutModal,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _kPrimaryContainer,
+                  side: const BorderSide(color: _kPrimaryContainer, width: 1.2),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
-                child: Column(
-                  children: [
-                    const Icon(
-                      Icons.calendar_month_rounded,
-                      size: 48,
-                      color: Color(0xFF64748B),
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'No Auction Scheduled for this Cycle',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                        color: Color(0xFF1E293B),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    const Text(
-                      'As the host/foreman, you must schedule a bidding session. Members will receive advance reminders.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF64748B),
-                        height: 1.4,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => HostScheduleScreen(group: g),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.schedule_rounded, size: 16),
-                        label: const Text('Schedule Bidding Session'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0F4C81),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                icon: const Icon(Icons.shield_outlined, size: 16),
+                label: Text(
+                  'Pay Security Deposit (₹${NumberFormat('#,##,###').format(_depositAmount.toInt())})',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                 ),
               ),
-            ] else if (bidState.scheduledStartTime != null &&
-                !bidState.isAuctionActive &&
-                !bidState.isAuctionEnded) ...[
-              // Screen B: Session scheduled but not started
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+          ],
+          const SizedBox(height: 8),
+          Center(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(Icons.lock_rounded, size: 12, color: _kSecondaryAccent),
+                SizedBox(width: 4),
+                Text(
+                  'SafeChit Trust Guarantee • Sandbox Mode (Simulated)',
+                  style: TextStyle(fontSize: 10, color: _kOnSurfaceVariant),
                 ),
-                child: Column(
-                  children: [
-                    const Icon(
-                      Icons.event_available_rounded,
-                      size: 48,
-                      color: Color(0xFF0F4C81),
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Bidding Session Scheduled',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: Color(0xFF0F4C81),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Scheduled to start: ${DateFormat('d MMM yyyy, hh:mm a').format(bidState.scheduledStartTime!)}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                        color: Color(0xFF1E293B),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Reminders have been sent to all group members.',
-                      style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => BiddingSessionService.instance
-                                .cancelSchedule(g.id),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFFDC2626),
-                              side: const BorderSide(color: Color(0xFFFCA5A5)),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                            child: const Text(
-                              'Cancel Schedule',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () {
-                              final minBid = g.totalPoolSize * 0.05;
-                              final maxCap = g.totalPoolSize * 0.30;
-                              BiddingSessionService.instance.startAuction(
-                                g.id,
-                                minBid,
-                                maxCap,
-                              );
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF0F4C81),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                            child: const Text(
-                              'Start Now',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ] else if (bidState.isAuctionActive &&
-                !bidState.isAuctionEnded) ...[
-              // Screen C: Live Bidding Room (Active)
-              Container(
-                height: 480, // Constrained height for tab view
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                child: LiveBiddingRoom(
-                  group: g,
-                  currentUsername: widget.currentUsername,
-                  isForeman: true,
-                  isApproved: true,
-                  onAuctionEnded: () => setState(() {}),
-                ),
-              ),
-            ] else if (bidState.isAuctionEnded) ...[
-              // Screen D: Auction Ended / Concluded Summary
-              AuctionClosePayout(
-                group: g,
-                currentUsername: widget.currentUsername,
-                isForeman: true,
-                onPayoutReleased: _handlePayoutReleased,
-              ),
-            ],
-          ] else ...[
-            // Random Draw Lucky Draw panel (retains existing draw UI)
-            Container(
-              padding: const EdgeInsets.all(18),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==================== TAB 1: OVERVIEW ====================
+  Widget _buildOverviewTab(int openSlots) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+      child: Column(
+        children: [
+          // 1. Members Joined Summary Card (Clickable)
+          InkWell(
+            onTap: _openMemberListModal,
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: const Color(0xFF007A87).withOpacity(0.3),
-                  width: 1.5,
-                ),
+                border: Border.all(color: _kBorder),
               ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Expanded(
-                        child: Text(
-                          'RANDOM PICKING CHIT (LUCKY DRAW)',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                            color: Color(0xFF0F4C81),
-                          ),
-                        ),
-                      ),
-                      Chip(
-                        label: const Text('Draw Eligible'),
-                        backgroundColor: const Color(0xFFDCFCE7),
-                        labelStyle: const TextStyle(
-                          color: Color(0xFF166534),
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  if (_luckyDrawWinner != null) ...[
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFDCFCE7),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
+                      Row(
                         children: [
-                          const Icon(
-                            Icons.emoji_events_rounded,
-                            color: Color(0xFF166534),
-                            size: 28,
+                          const Text(
+                            'Members',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: _kOnSurface,
+                            ),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Winner Picked: $_luckyDrawWinner 🎉',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 15,
-                                    color: Color(0xFF166534),
-                                  ),
-                                ),
-                                Text(
-                                  'Full Payout Amount: ₹${g.totalPoolSize.toStringAsFixed(0)}',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: Color(0xFF15803D),
-                                  ),
-                                ),
-                              ],
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _kSecondaryContainer,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              '${_members.length} of ${widget.group.durationMonths} Joined',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: _kSecondary,
+                              ),
                             ),
                           ),
                         ],
                       ),
-                    ),
-                  ] else ...[
-                    const Text(
-                      'Monthly winner is randomly picked from eligible un-prized subscribers.',
-                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                    ),
-                    const SizedBox(height: 14),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: _runRandomPickingDraw,
-                        icon: const Icon(Icons.casino_rounded, size: 18),
-                        label: const Text('Run Monthly Lucky Draw'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF007A87),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
+                      const Row(
+                        children: [
+                          Text(
+                            'View All',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: _kSecondary,
+                            ),
                           ),
+                          Icon(
+                            Icons.chevron_right_rounded,
+                            size: 16,
+                            color: _kSecondary,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Avatar stack
+                      Row(
+                        children: [
+                          for (int i = 0; i < (_members.length > 4 ? 4 : _members.length); i++)
+                            Align(
+                              widthFactor: 0.75,
+                              child: CircleAvatar(
+                                radius: 15,
+                                backgroundColor: Colors.white,
+                                child: CircleAvatar(
+                                  radius: 13,
+                                  backgroundColor: i == 0
+                                      ? _kPrimaryContainer
+                                      : i == 1
+                                          ? _kSecondary
+                                          : _kSurfaceContainerHighest,
+                                  foregroundColor: i < 2 ? Colors.white : _kOnSurface,
+                                  child: Text(
+                                    _members[i].name.isNotEmpty
+                                        ? _members[i].name.substring(0, 1).toUpperCase()
+                                        : 'M',
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          if (_members.length > 4)
+                            Align(
+                              widthFactor: 0.75,
+                              child: CircleAvatar(
+                                radius: 15,
+                                backgroundColor: Colors.white,
+                                child: CircleAvatar(
+                                  radius: 13,
+                                  backgroundColor: _kSecondaryContainer,
+                                  child: Text(
+                                    '+${_members.length - 4}',
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: _kSecondary,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _kSurfaceContainer,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.person_add_rounded,
+                              size: 14,
+                              color: _kSecondaryAccent,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '$openSlots open slots',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: _kOnSurfaceVariant,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ],
               ),
             ),
-          ],
-          const SizedBox(height: 16),
+          ),
+          const SizedBox(height: 12),
 
-          // Subscriber Payment Action (10th of every month)
+          // 2. Cycle Collection Progress Card
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: _kBorder),
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(
-                  Icons.account_balance_wallet_rounded,
-                  color: Color(0xFF007A87),
-                  size: 24,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Cycle ${widget.group.currentCycle} Collection',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: _kOnSurface,
+                      ),
+                    ),
+                    Text(
+                      '₹${NumberFormat('#,##,###').format((_members.length * widget.group.monthlyContribution * 0.7).toInt())} / ₹${NumberFormat('#,##,###').format(widget.group.totalPoolSize.toInt())}',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: _kSecondary,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Monthly Contribution Installment: ₹${g.monthlyContribution.toStringAsFixed(0)}',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const Text(
-                        'Due date: 10th of every month',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFF64748B),
-                        ),
-                      ),
-                    ],
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: LinearProgressIndicator(
+                    value: 0.70,
+                    minHeight: 8,
+                    backgroundColor: _kSurfaceContainer,
+                    valueColor: const AlwaysStoppedAnimation<Color>(_kSecondaryAccent),
                   ),
                 ),
-                ElevatedButton(
-                  onPressed: _makeMonthlyPayment,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF007A87),
-                    foregroundColor: Colors.white,
-                  ),
-                  child: const Text('Pay Installment'),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '${(_members.length * 0.7).ceil()} of ${_members.length} active members paid',
+                      style: const TextStyle(fontSize: 11, color: _kOnSurfaceVariant),
+                    ),
+                    const Text(
+                      '1 payment processing',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: _kAmberText,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
 
-          // Digital Agreement Button
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: _openDigitalAgreement,
-              icon: const Icon(Icons.gavel_rounded, color: Color(0xFF0F4C81)),
-              label: const Text(
-                'Inspect Signed Digital Agreement (Chit Funds Act 1982)',
-                style: TextStyle(
-                  color: Color(0xFF0F4C81),
-                  fontWeight: FontWeight.bold,
+          // 3. Payout Timeline (Horizontal Strip)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: _kBorder),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: const [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Payout Timeline',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: _kOnSurface,
+                          ),
+                        ),
+                        Text(
+                          'Rotating payout allocation schedule',
+                          style: TextStyle(fontSize: 11, color: _kOnSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                    Icon(
+                      Icons.calendar_view_week_rounded,
+                      size: 20,
+                      color: _kSecondaryAccent,
+                    ),
+                  ],
                 ),
-              ),
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Color(0xFF0F4C81), width: 1.5),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 104,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: widget.group.durationMonths,
+                    itemBuilder: (context, idx) {
+                      final monthNum = idx + 1;
+                      final isCurrent = monthNum == widget.group.currentCycle;
+                      final isYou = monthNum == _getUserPayoutMonth();
+                      final isPast = monthNum < widget.group.currentCycle;
+
+                      return Container(
+                        width: isYou ? 124 : 106,
+                        margin: const EdgeInsets.only(right: 8),
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: isYou
+                              ? _kPrimaryContainer
+                              : isCurrent
+                                  ? _kSecondaryContainer.withOpacity(0.4)
+                                  : _kSurfaceContainerLow,
+                          borderRadius: BorderRadius.circular(12),
+                          border: isCurrent
+                              ? Border.all(color: _kSecondaryAccent, width: 1.5)
+                              : null,
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  'Month $monthNum',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: isYou ? Colors.white : _kOnSurface,
+                                  ),
+                                ),
+                                if (isYou) ...[
+                                  const SizedBox(width: 4),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                      vertical: 1,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: _kSecondaryAccent,
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: const Text(
+                                      'YOU',
+                                      style: TextStyle(
+                                        fontSize: 8,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            CircleAvatar(
+                              radius: 12,
+                              backgroundColor: isYou
+                                  ? Colors.white.withOpacity(0.2)
+                                  : _kSurfaceContainer,
+                              child: Text(
+                                isPast
+                                    ? '✓'
+                                    : isYou
+                                        ? widget.currentUsername.substring(0, 1).toUpperCase()
+                                        : 'M$monthNum',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: isYou ? Colors.white : _kOnSurface,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              isPast
+                                  ? 'Disbursed'
+                                  : isCurrent
+                                      ? 'Active Due'
+                                      : '₹${NumberFormat('#,##,###').format(widget.group.totalPoolSize.toInt())}',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: isYou
+                                    ? _kSecondaryContainer
+                                    : isCurrent
+                                        ? _kSecondary
+                                        : _kOnSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
-        ],
-      ),
-    );
-  }
+          const SizedBox(height: 12),
 
-  // --- TAB 2: MEMBER ROSTER & DUES ---
-  Widget _buildMemberRosterTab() {
-    if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(color: Color(0xFF0F4C81)),
-      );
-    }
-
-    if (_members.isEmpty) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: const Center(
-          child: Text(
-            'No members subscribed yet. Share 6-digit code to invite members.',
-            style: TextStyle(color: Color(0xFF64748B)),
-          ),
-        ),
-      );
-    }
-
-    final sessionState =
-        BiddingSessionService.instance.getOrCreateState(widget.group.id);
-    final double auctionDiscount = sessionState.currentHighestBid > 0
-        ? sessionState.currentHighestBid
-        : _currentWinningBid;
-    final int memberCount = widget.group.durationMonths > 0
-        ? widget.group.durationMonths
-        : (_members.isNotEmpty ? _members.length : 1);
-    final double dividendPerMember =
-        auctionDiscount > 0 ? (auctionDiscount / memberCount) : 0.0;
-    final double baseInstallment = widget.group.monthlyContribution;
-    final double reducedInstallment =
-        (baseInstallment - dividendPerMember).clamp(0.0, baseInstallment);
-
-    // Paid vs Unpaid breakdown for current cycle
-    final paidIdentifiers = _groupPayments
-        .where((p) => p.isPaid && p.cycle == widget.group.currentCycle)
-        .map((p) => p.memberUsername.toLowerCase())
-        .toSet();
-    final paidNames = _groupPayments
-        .where((p) => p.isPaid && p.cycle == widget.group.currentCycle)
-        .map((p) => p.memberName.toLowerCase())
-        .toSet();
-
-    final paidMembers = _members.where((m) {
-      final lower = m.name.toLowerCase();
-      return m.isHostMember ||
-          paidIdentifiers.contains(lower) ||
-          paidNames.contains(lower);
-    }).toList();
-
-    final unpaidMembers =
-        _members.where((m) => !paidMembers.contains(m)).toList();
-
-    List<ChitMemberRisk> displayMembers = _members;
-    if (_rosterFilter == 'Paid') {
-      displayMembers = paidMembers;
-    } else if (_rosterFilter == 'Unpaid') {
-      displayMembers = unpaidMembers;
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // 1. Upcoming Month Reduced Installment Card
-        Container(
-          width: double.infinity,
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: const Color(0xFFEFF6FF),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFBFDBFE)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.trending_down_rounded,
-                        size: 18,
-                        color: Color(0xFF1D4ED8),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Upcoming Month Installment (Cycle ${widget.group.currentCycle + 1})',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF1E3A8A),
-                        ),
-                      ),
-                    ],
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFDBEAFE),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Text(
-                      'Dividend Applied',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1E40AF),
+          // 4. Host Trust & Escrow Guarantee Card
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: _kBorder),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 20,
+                      backgroundColor: _kPrimaryContainer,
+                      foregroundColor: Colors.white,
+                      child: Text(
+                        _foremanName.isNotEmpty
+                            ? _foremanName.substring(0, 1).toUpperCase()
+                            : 'F',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Base Contribution',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: Color(0xFF64748B),
-                        ),
-                      ),
-                      Text(
-                        baseInstallment < 10
-                            ? '₹${baseInstallment.toStringAsFixed(2)}'
-                            : '₹${baseInstallment.toStringAsFixed(0)}',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF475569),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const Text(
-                    '-',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF94A3B8),
-                    ),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Auction Dividend',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: Color(0xFF059669),
-                        ),
-                      ),
-                      Text(
-                        dividendPerMember < 10
-                            ? '₹${dividendPerMember.toStringAsFixed(2)}'
-                            : '₹${dividendPerMember.toStringAsFixed(0)}',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF059669),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const Text(
-                    '=',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF94A3B8),
-                    ),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      const Text(
-                        'Net Upcoming Due',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF1E3A8A),
-                        ),
-                      ),
-                      Text(
-                        reducedInstallment < 10
-                            ? '₹${reducedInstallment.toStringAsFixed(2)}'
-                            : '₹${reducedInstallment.toStringAsFixed(0)}',
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFF1D4ED8),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Winning discount: ₹${auctionDiscount < 10 ? auctionDiscount.toStringAsFixed(2) : auctionDiscount.toStringAsFixed(0)} ÷ $memberCount members = ₹${dividendPerMember < 10 ? dividendPerMember.toStringAsFixed(2) : dividendPerMember.toStringAsFixed(0)} savings per member.',
-                style: const TextStyle(
-                  fontSize: 10.5,
-                  color: Color(0xFF475569),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // 2. Collection Dues Summary and Filters
-        Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: const Color(0xFFF8FAFC),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Cycle ${widget.group.currentCycle}: ${paidMembers.length}/${_members.length} Paid',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF0F172A),
-                  ),
-                ),
-              ),
-              Wrap(
-                spacing: 4,
-                children: ['All', 'Paid', 'Unpaid'].map((filter) {
-                  final isSelected = _rosterFilter == filter;
-                  final count = filter == 'All'
-                      ? _members.length
-                      : (filter == 'Paid'
-                          ? paidMembers.length
-                          : unpaidMembers.length);
-                  return ChoiceChip(
-                    label: Text('$filter ($count)'),
-                    selected: isSelected,
-                    onSelected: (_) => setState(() => _rosterFilter = filter),
-                    selectedColor: const Color(0xFF0F4C81),
-                    labelStyle: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color:
-                          isSelected ? Colors.white : const Color(0xFF475569),
-                    ),
-                    visualDensity: VisualDensity.compact,
-                  );
-                }).toList(),
-              ),
-            ],
-          ),
-        ),
-
-        // 3. Member List
-        Expanded(
-          child: displayMembers.isEmpty
-              ? Center(
-                  child: Text(
-                    _rosterFilter == 'Unpaid'
-                        ? 'All members have paid for Cycle ${widget.group.currentCycle}!'
-                        : 'No members in this filter.',
-                    style: const TextStyle(color: Color(0xFF64748B)),
-                  ),
-                )
-              : ListView.builder(
-                  itemCount: displayMembers.length,
-                  itemBuilder: (context, index) {
-                    final m = displayMembers[index];
-                    final dep = _rosterDeposits[m.name];
-                    final depStatus = dep?.displayStatus ?? 'Pending';
-                    final depAmt = dep?.amount ?? _depositAmount;
-                    final bool isMemberPaid = paidMembers.contains(m);
-
-                    Color depBadgeBg = const Color(0xFFFEF3C7);
-                    Color depBadgeText = const Color(0xFF92400E);
-                    if (dep?.isHeld == true) {
-                      depBadgeBg = const Color(0xFFDCFCE7);
-                      depBadgeText = const Color(0xFF166534);
-                    } else if (dep?.isRefunded == true) {
-                      depBadgeBg = const Color(0xFFE0F2FE);
-                      depBadgeText = const Color(0xFF0369A1);
-                    } else if (dep?.isForfeited == true) {
-                      depBadgeBg = const Color(0xFFFEE2E2);
-                      depBadgeText = const Color(0xFF991B1B);
-                    }
-
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isMemberPaid
-                              ? const Color(0xFFE2E8F0)
-                              : const Color(0xFFFCA5A5),
-                        ),
-                      ),
+                    const SizedBox(width: 12),
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
                             children: [
-                              CircleAvatar(
-                                backgroundColor: isMemberPaid
-                                    ? const Color(0xFF0F4C81)
-                                    : const Color(0xFFDC2626),
-                                child: Text(
-                                  '${index + 1}',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
-                                  ),
+                              Text(
+                                _foremanName,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  color: _kOnSurface,
                                 ),
                               ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _kSecondaryContainer,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Row(
                                   children: [
-                                    GestureDetector(
-                                      onTap: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) => UserProfileScreen(
-                                              username: m.name,
-                                              isOwnProfile: false,
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Flexible(
-                                            child: Text(
-                                              m.name,
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 14,
-                                                color: Color(0xFF0F172A),
-                                                decoration:
-                                                    TextDecoration.underline,
-                                                decorationColor:
-                                                    Color(0xFFCBD5E1),
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                          if (m.isHostMember) ...[
-                                            const SizedBox(width: 6),
-                                            Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                horizontal: 6,
-                                                vertical: 2,
-                                              ),
-                                              decoration: BoxDecoration(
-                                                color: const Color(0xFFDCFCE7),
-                                                borderRadius:
-                                                    BorderRadius.circular(6),
-                                                border: Border.all(
-                                                  color:
-                                                      const Color(0xFFBBF7D0),
-                                                ),
-                                              ),
-                                              child: const Text(
-                                                'Host · Month 2',
-                                                style: TextStyle(
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: Color(0xFF166534),
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                          const SizedBox(width: 4),
-                                          const Icon(
-                                            Icons.open_in_new,
-                                            size: 12,
-                                            color: Color(0xFF007A87),
-                                          ),
-                                        ],
-                                      ),
+                                    Icon(
+                                      Icons.verified_rounded,
+                                      size: 11,
+                                      color: _kSecondary,
                                     ),
+                                    SizedBox(width: 2),
                                     Text(
-                                      'Payout: ${m.payoutPosition} • Trend: ${m.paymentTrend}',
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        color: Color(0xFF64748B),
+                                      'Gold Host',
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                        color: _kSecondary,
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 3,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: isMemberPaid
-                                          ? const Color(0xFFDCFCE7)
-                                          : const Color(0xFFFEE2E2),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      m.isHostMember
-                                          ? 'Paid (Host share)'
-                                          : (isMemberPaid
-                                              ? 'Paid (Cycle ${widget.group.currentCycle})'
-                                              : 'Due ₹${baseInstallment < 10 ? baseInstallment.toStringAsFixed(2) : baseInstallment.toStringAsFixed(0)}'),
-                                      style: TextStyle(
-                                        color: isMemberPaid
-                                            ? const Color(0xFF166534)
-                                            : const Color(0xFF991B1B),
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 2,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: depBadgeBg,
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      'Deposit: $depStatus',
-                                      style: TextStyle(
-                                        color: depBadgeText,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
                             ],
                           ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.calendar_month_outlined,
-                                size: 12,
-                                color: Color(0xFF1D4ED8),
-                              ),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Text(
-                                  'Next Month Net Due: ₹${reducedInstallment < 10 ? reducedInstallment.toStringAsFixed(2) : reducedInstallment.toStringAsFixed(0)} (Saved ₹${dividendPerMember < 10 ? dividendPerMember.toStringAsFixed(2) : dividendPerMember.toStringAsFixed(0)} via auction dividend)',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF1E40AF),
-                                  ),
-                                ),
-                              ),
-                              if (!isMemberPaid &&
-                                  !m.isHostMember &&
-                                  widget.isForeman) ...[
-                                TextButton.icon(
-                                  onPressed: () {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          'Payment reminder sent to ${m.name} for Cycle ${widget.group.currentCycle}!',
-                                        ),
-                                        backgroundColor:
-                                            const Color(0xFF0F4C81),
-                                      ),
-                                    );
-                                  },
-                                  icon: const Icon(
-                                    Icons.notifications_active_outlined,
-                                    size: 12,
-                                  ),
-                                  label: const Text(
-                                    'Remind',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  style: TextButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 2,
-                                    ),
-                                    foregroundColor: const Color(0xFFDC2626),
-                                    visualDensity: VisualDensity.compact,
-                                  ),
-                                ),
-                              ],
-                            ],
+                          const Text(
+                            'Foreman & Community Organizer',
+                            style: TextStyle(fontSize: 11, color: _kOnSurfaceVariant),
                           ),
-                          if (widget.isForeman && kDevTools) ...[
-                            const SizedBox(height: 8),
-                            const Divider(height: 1, color: Color(0xFFF1F5F9)),
-                            const SizedBox(height: 6),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                OutlinedButton.icon(
-                                  onPressed: () async {
-                                    await SupabaseService.refundDeposit(
-                                      depositId: dep?.id ?? '',
-                                      groupId: widget.group.id,
-                                      memberId: m.name,
-                                      amount: depAmt,
-                                    );
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            'Deposit refunded for ${m.name} (₹${depAmt.toStringAsFixed(0)})',
-                                          ),
-                                          backgroundColor:
-                                              const Color(0xFF0284C7),
-                                        ),
-                                      );
-                                      _loadGroupMembers();
-                                    }
-                                  },
-                                  icon: const Icon(
-                                    Icons.replay_rounded,
-                                    size: 12,
-                                  ),
-                                  label: const Text(
-                                    'Test: refund deposit',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  style: OutlinedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    side: const BorderSide(
-                                      color: Color(0xFF0284C7),
-                                    ),
-                                    foregroundColor: const Color(0xFF0284C7),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                OutlinedButton.icon(
-                                  onPressed: () async {
-                                    await SupabaseService.forfeitDeposit(
-                                      depositId: dep?.id ?? '',
-                                      groupId: widget.group.id,
-                                      memberId: m.name,
-                                      amount: depAmt,
-                                    );
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            'Deposit forfeited for ${m.name} & applied to missed installment',
-                                          ),
-                                          backgroundColor:
-                                              const Color(0xFFDC2626),
-                                        ),
-                                      );
-                                      _loadGroupMembers();
-                                    }
-                                  },
-                                  icon: const Icon(
-                                    Icons.gavel_rounded,
-                                    size: 12,
-                                  ),
-                                  label: const Text(
-                                    'Test: forfeit deposit',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  style: OutlinedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    side: const BorderSide(
-                                      color: Color(0xFFDC2626),
-                                    ),
-                                    foregroundColor: const Color(0xFFDC2626),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
                         ],
                       ),
-                    );
-                  },
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: _kSurfaceContainerLow,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    children: [
+                      _buildMetricRow(
+                        Icons.star_rounded,
+                        const Color(0xFFF59E0B),
+                        'Host Rating',
+                        '4.9★ (14 successful groups)',
+                      ),
+                      const SizedBox(height: 8),
+                      _buildMetricRow(
+                        Icons.security_rounded,
+                        _kSecondaryAccent,
+                        'Foreman Escrow Bond',
+                        '₹50,000 Deposited',
+                      ),
+                      const SizedBox(height: 8),
+                      _buildMetricRow(
+                        Icons.history_rounded,
+                        _kOnSurfaceVariant,
+                        'Default Rate',
+                        '0.0% historic defaults',
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // 5. My Reputation Card
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: _kBorder),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: _kSecondaryContainer,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.workspace_premium_rounded,
+                    color: _kSecondary,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Elite Member',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: _kOnSurface,
+                        ),
+                      ),
+                      Text(
+                        '100% on-time record across chit groups',
+                        style: TextStyle(fontSize: 11, color: _kOnSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.check_circle_rounded,
+                  color: _kSecondaryAccent,
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMetricRow(IconData icon, Color iconColor, String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 16, color: iconColor),
+            const SizedBox(width: 6),
+            Text(label, style: const TextStyle(fontSize: 12, color: _kOnSurfaceVariant)),
+          ],
+        ),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: _kOnSurface,
+          ),
         ),
       ],
     );
   }
 
-  // --- TAB 3: HANDSHAKE CONFIRMATIONS ---
-  Widget _buildHandshakeConfirmationsTab() {
-    final pending = _groupPayments.where((p) => p.isPending).toList();
+  // ==================== TAB 2: AUCTION ====================
+  Widget _buildAuctionTab() {
+    final double maxCap = widget.group.totalPoolSize * 0.20;
+    final double minDividend = maxCap / widget.group.durationMonths;
 
-    if (pending.isEmpty) {
-      return Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFDCFCE7),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.handshake_rounded,
-                  size: 48,
-                  color: Color(0xFF166534),
-                ),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+      child: Column(
+        children: [
+          // Live Auction Schedule Countdown Banner
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [_kPrimaryContainer, Color(0xFF1A365D)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-              const SizedBox(height: 16),
-              const Text(
-                'All Handshakes Confirmed!',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF0F172A),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: _kPrimaryContainer.withOpacity(0.2),
+                  blurRadius: 14,
+                  offset: const Offset(0, 4),
                 ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'No pending payments awaiting foreman confirmation for ${widget.group.name}.\nMember installments will appear here for verification when submitted.',
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF64748B),
-                  height: 1.4,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: pending.length,
-      itemBuilder: (context, index) {
-        final p = pending[index];
-        final formattedDate =
-            DateFormat('d MMM yyyy, hh:mm a').format(p.createdAt);
-
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFF007A87), width: 1.2),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.03),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE6F4F5),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(
-                      Icons.handshake_outlined,
-                      color: Color(0xFF007A87),
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: const [
+                        Icon(Icons.sensors_rounded, size: 16, color: Color(0xFF89F5E7)),
+                        SizedBox(width: 4),
                         Text(
-                          p.memberName.isNotEmpty
-                              ? p.memberName
-                              : p.memberUsername,
-                          style: const TextStyle(
-                            fontSize: 15,
+                          'CYCLE 3 AUCTION WINDOW',
+                          style: TextStyle(
+                            fontSize: 10,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFF0F172A),
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          p.amount < 10
-                              ? '₹${p.amount.toStringAsFixed(2)} via ${p.paymentMethod}'
-                              : '₹${p.amount.toStringAsFixed(0)} via ${p.paymentMethod}',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFF059669),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Txn: ${p.utr ?? p.id} • $formattedDate',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: Color(0xFF64748B),
+                            color: Color(0xFF89F5E7),
+                            letterSpacing: 0.5,
                           ),
                         ),
                       ],
                     ),
-                  ),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFEF3C7),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Text(
-                      'Awaiting Confirmation',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF92400E),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
                       ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () => _confirmPaymentWithCelebration(p),
-                  icon:
-                      const Icon(Icons.check_circle_outline_rounded, size: 16),
-                  label: const Text(
-                    'Confirm Receipt',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF007A87),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  void _confirmPaymentWithCelebration(ChitPaymentRecord p) async {
-    final success = await SupabaseService.confirmPaymentHandshake(
-      paymentId: p.id,
-      foremanUsername: widget.currentUsername,
-      notes: 'Foreman verified receipt of ₹${p.amount} from ${p.memberName}',
-    );
-
-    if (!success) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to confirm payment handshake.'),
-            backgroundColor: Color(0xFFDC2626),
-          ),
-        );
-      }
-      return;
-    }
-
-    _loadGroupMembers();
-
-    if (!mounted) return;
-
-    // Pop-up celebratory notification message
-    showDialog(
-      context: context,
-      builder: (_) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TweenAnimationBuilder<double>(
-                tween: Tween<double>(begin: 0.0, end: 1.0),
-                duration: const Duration(milliseconds: 500),
-                curve: Curves.elasticOut,
-                builder: (context, scale, child) {
-                  return Transform.scale(
-                    scale: scale,
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFDCFCE7),
-                        shape: BoxShape.circle,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Icon(
-                        Icons.check_rounded,
-                        color: Color(0xFF166534),
-                        size: 48,
-                      ),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Payment Confirmed! 🤝',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF0F172A),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Payment handshake verified for ${p.memberName.isNotEmpty ? p.memberName : p.memberUsername}.\n'
-                'Amount: ₹${p.amount < 10 ? p.amount.toStringAsFixed(2) : p.amount.toStringAsFixed(0)}\n'
-                'Cycle ${p.cycle} contribution is recorded in the group ledger.',
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF64748B),
-                  height: 1.4,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  children: const [
-                    Icon(
-                      Icons.notifications_active_outlined,
-                      size: 16,
-                      color: Color(0xFF007A87),
-                    ),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Notification and digital payment receipt dispatched to member.',
+                      child: const Text(
+                        '100% Online',
                         style: TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFF334155),
+                          fontSize: 10,
                           fontWeight: FontWeight.w600,
+                          color: Colors.white,
                         ),
                       ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF007A87),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  child: const Text('OK'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content:
-            Text('Payment confirmed for ${p.memberName}! Notification sent.'),
-        backgroundColor: const Color(0xFF059669),
-      ),
-    );
-  }
-
-  // --- TAB 3: PAYOUT & INSTALLMENT LEDGER ---
-  Widget _buildPayoutLedgerTab(ChitGroup g) {
-    return FutureBuilder<List<ChitPaymentRecord>>(
-      future: SupabaseService.getGroupPayments(g.id),
-      builder: (context, snapshot) {
-        final payments = snapshot.data ?? [];
-        return ListView(
-          children: [
-            // Section 1: Recent Auction Payouts
-            if (_ledgerHistory.isNotEmpty) ...[
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                child: Text(
-                  'Auction Winning Payouts & Dividends',
+                const SizedBox(height: 10),
+                const Text(
+                  '1st of next month, 7:00 PM',
                   style: TextStyle(
+                    fontSize: 20,
                     fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                    color: Color(0xFF64748B),
-                  ),
-                ),
-              ),
-              ..._ledgerHistory.map((item) {
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Cycle ${item["cycle"]} Ledger Entry',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                              color: Color(0xFF0F4C81),
-                            ),
-                          ),
-                          Chip(
-                            label: Text('${item["status"]}'),
-                            backgroundColor: const Color(0xFF007A87),
-                            labelStyle: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Text(
-                            'Winner: ${item["winner"]}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
-                            ),
-                          ),
-                          const Spacer(),
-                          Text(
-                            'Payout: ₹${(item["payoutAmount"] as double).toStringAsFixed(0)}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w900,
-                              color: Color(0xFF059669),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Date: ${item["date"]} • Member Dividend: ₹${(item["dividendPerMember"] as double).toStringAsFixed(0)}/user',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFF64748B),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }),
-            ],
-
-            // Section 2: Verified Member Installment Collections (YouPI & Cash)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text(
-                'Verified Subscriber Installments (YouPI & Cash)',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                  color: Color(0xFF64748B),
-                ),
-              ),
-            ),
-            if (payments.isEmpty)
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Center(
-                  child: Text(
-                    'No installment collections recorded yet.',
-                    style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                   ),
                 ),
-              )
-            else
-              ...payments.map((p) {
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: p.isPaid
-                          ? const Color(0xFFBBF7D0)
-                          : const Color(0xFFE2E8F0),
+                const Text(
+                  'Bidding opens for all non-prized members',
+                  style: TextStyle(fontSize: 12, color: Color(0xFFCBD5E1)),
+                ),
+                const SizedBox(height: 14),
+                // 4 Countdown Boxes
+                Row(
+                  children: [
+                    _buildCountdownBox('$_countdownDays', 'DAYS'),
+                    const SizedBox(width: 6),
+                    _buildCountdownBox(
+                      _countdownHours < 10 ? '0$_countdownHours' : '$_countdownHours',
+                      'HOURS',
                     ),
+                    const SizedBox(width: 6),
+                    _buildCountdownBox(
+                      '${(_countdownSeconds ~/ 60) < 10 ? '0' : ''}${_countdownSeconds ~/ 60}',
+                      'MINS',
+                    ),
+                    const SizedBox(width: 6),
+                    _buildCountdownBox(
+                      '${(_countdownSeconds % 60) < 10 ? '0' : ''}${_countdownSeconds % 60}',
+                      'SECS',
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Statutory Chit Act Caps & Dividends Card
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: _kBorder),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Auction Rules & Safeguards',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: _kOnSurface,
                   ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: p.isPaid
-                              ? const Color(0xFFDCFCE7)
-                              : const Color(0xFFF1F5F9),
-                          shape: BoxShape.circle,
+                          color: _kSurfaceContainerLow,
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Icon(
-                          p.isPaid
-                              ? Icons.check_circle_rounded
-                              : Icons.pending_rounded,
-                          color: p.isPaid
-                              ? const Color(0xFF16A34A)
-                              : const Color(0xFF64748B),
-                          size: 20,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              p.memberName,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
+                            const Text(
+                              'Max Discount Cap',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: _kOnSurfaceVariant,
                               ),
                             ),
                             Text(
-                              p.paymentMethod == 'HOST_SHARE'
-                                  ? 'Host Share • Auto-credited'
-                                  : 'UTR: ${p.utr ?? "Pending verification"} • ${p.paymentMethod}',
+                              '₹${NumberFormat('#,##,###').format(maxCap.toInt())}',
                               style: const TextStyle(
-                                fontSize: 11,
-                                color: Color(0xFF64748B),
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: _kOnSurface,
+                              ),
+                            ),
+                            const Text(
+                              '20% Legal Ceiling',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: _kSecondary,
+                              ),
+                            ),
+                            Text(
+                              'As per Chit Funds Act',
+                              style: TextStyle(
+                                fontSize: 9,
+                                color: _kOnSurfaceVariant.withOpacity(0.7),
                               ),
                             ),
                           ],
                         ),
                       ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            '₹${p.amount.toStringAsFixed(0)}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w900,
-                              fontSize: 14,
-                              color: Color(0xFF15803D),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: _kSurfaceContainerLow,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Minimum Dividend',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: _kOnSurfaceVariant,
+                              ),
                             ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
+                            Text(
+                              '₹${NumberFormat('#,##,###').format(minDividend.toInt())}',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: _kSecondary,
+                              ),
                             ),
-                            decoration: BoxDecoration(
-                              color: p.isPaid
-                                  ? const Color(0xFFDCFCE7)
-                                  : const Color(0xFFF1F5F9),
-                              borderRadius: BorderRadius.circular(4),
+                            const Text(
+                              'Per non-bidder',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: _kSecondary,
+                              ),
                             ),
-                            child: Text(
-                              p.paymentMethod == 'HOST_SHARE'
-                                  ? 'Paid (host share)'
-                                  : p.status,
+                            Text(
+                              'Reduces next due',
                               style: TextStyle(
                                 fontSize: 9,
-                                fontWeight: FontWeight.bold,
-                                color: p.isPaid
-                                    ? const Color(0xFF166534)
-                                    : const Color(0xFF475569),
+                                color: _kOnSurfaceVariant.withOpacity(0.7),
                               ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: _kSecondaryContainer.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline_rounded, size: 18, color: _kSecondary),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'You are scheduled for payout in Month ${_getUserPayoutMonth()}. Bidding early will forfeit your priority allocation for month ${_getUserPayoutMonth()}.',
+                          style: const TextStyle(fontSize: 11, color: _kOnSurface),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Past Auction (Cycle 2) Result
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: _kBorder),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Past Auction (Cycle ${widget.group.currentCycle > 1 ? widget.group.currentCycle - 1 : 1})',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: _kOnSurface,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _kSurfaceContainer,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Text(
+                        '14 Oct 2025',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: _kOnSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: _kSurfaceContainerLow,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: const [
+                          Text(
+                            'Winning Bid Discount',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: _kOnSurfaceVariant,
+                            ),
+                          ),
+                          Text(
+                            '₹14,500',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: _kOnSurface,
+                            ),
+                          ),
+                          Text(
+                            'Winner: Prized Member',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: _kOnSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: const [
+                          Text(
+                            'Dividend Earned By You',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: _kOnSurfaceVariant,
+                            ),
+                          ),
+                          Text(
+                            '+₹1,611',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: _kSecondary,
+                            ),
+                          ),
+                          Text(
+                            'Deducted from Oct due',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: _kSecondary,
                             ),
                           ),
                         ],
                       ),
                     ],
                   ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // Auction Action Button
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => LiveBiddingRoom(
+                      group: widget.group,
+                      currentUsername: widget.currentUsername,
+                      isForeman: widget.isForeman,
+                      isApproved: true,
+                      onAuctionEnded: () {
+                        _loadGroupMembers();
+                      },
+                    ),
+                  ),
                 );
-              }),
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _kSecondary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              icon: const Icon(Icons.gavel_rounded, size: 18),
+              label: const Text(
+                'Enter Live Auction Room',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextButton.icon(
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Auction event synced to your calendar reminder.'),
+                  backgroundColor: Color(0xFF0F4C81),
+                ),
+              );
+            },
+            icon: const Icon(Icons.event_rounded, size: 16, color: _kSecondary),
+            label: const Text(
+              'Add to Google Calendar reminder',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: _kSecondary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCountdownBox(String val, String unit) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          children: [
+            Text(
+              val,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            Text(
+              unit,
+              style: const TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFFCBD5E1),
+              ),
+            ),
           ],
-        );
-      },
+        ),
+      ),
+    );
+  }
+
+  // ==================== TAB 3: LEDGER ====================
+  Widget _buildLedgerTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+      child: Column(
+        children: [
+          // Passbook Header
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: _kBorder),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Member Passbook',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: _kOnSurface,
+                      ),
+                    ),
+                    Text(
+                      'Digitally timestamped dual-party ledger',
+                      style: TextStyle(fontSize: 11, color: _kOnSurfaceVariant),
+                    ),
+                  ],
+                ),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Downloading digitally signed passbook PDF...'),
+                        backgroundColor: Color(0xFF0F4C81),
+                      ),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _kSurfaceContainer,
+                    foregroundColor: _kOnSurface,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  icon: const Icon(Icons.download_rounded, size: 14),
+                  label: const Text(
+                    'Export',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Passbook Entry: Current Due
+          _buildPassbookCard(
+            title: 'Installment #${widget.group.currentCycle} (${DateFormat('MMM').format(DateTime.now())})',
+            dateSubtitle: _isPaidCurrentCycle
+                ? 'Paid ${DateFormat('dd MMM yyyy').format(DateTime.now())}'
+                : 'Due by 10th of this month',
+            amount:
+                '₹${NumberFormat('#,##,###').format(widget.group.monthlyContribution.toInt())}',
+            badgeText: _isPaidCurrentCycle ? 'Confirmed' : 'Due in 3 days',
+            isConfirmed: _isPaidCurrentCycle,
+            subLeft: _isPaidCurrentCycle ? 'Verified Escrow UPI' : 'Standard installment',
+            subRight: _isPaidCurrentCycle ? 'UTR: Verified • View receipt →' : 'Tap to view break-up →',
+            onTap: () => _openReceiptDrawer('preview-due'),
+          ),
+          const SizedBox(height: 8),
+
+          // Passbook Entry: Previous Month Installment
+          _buildPassbookCard(
+            title: 'Installment #${widget.group.currentCycle > 1 ? widget.group.currentCycle - 1 : 1} (Oct)',
+            dateSubtitle: 'Paid 14 Oct 2025',
+            amount:
+                '₹${NumberFormat('#,##,###').format((widget.group.monthlyContribution * 0.85).toInt())}',
+            badgeText: 'Confirmed',
+            isConfirmed: true,
+            subLeft: 'Saved ₹1,450 dividend discount',
+            subRight: 'UPI • UTR: #SC849102834',
+            onTap: () => _openReceiptDrawer('m2-oct'),
+          ),
+          const SizedBox(height: 8),
+
+          // Passbook Entry: Installment #1
+          _buildPassbookCard(
+            title: 'Installment #1 (Sep)',
+            dateSubtitle: 'Paid 12 Sep 2025',
+            amount:
+                '₹${NumberFormat('#,##,###').format((widget.group.monthlyContribution * 0.83).toInt())}',
+            badgeText: 'Confirmed',
+            isConfirmed: true,
+            subLeft: 'Saved ₹1,611 dividend discount',
+            subRight: 'UPI • UTR: #SC710294821',
+            onTap: () => _openReceiptDrawer('m1-sep'),
+          ),
+          const SizedBox(height: 8),
+
+          // Passbook Entry: Security Deposit
+          _buildPassbookCard(
+            title: 'Initial Security Deposit',
+            dateSubtitle: 'Paid 10 Sep 2025',
+            amount:
+                '₹${NumberFormat('#,##,###').format(_depositAmount.toInt())}',
+            badgeText: _mySecurityDeposit?.isHeld == true ? 'Escrow Held' : 'Pending',
+            isConfirmed: _mySecurityDeposit?.isHeld == true,
+            subLeft: '100% Refundable at cycle close',
+            subRight: 'Autopay • UTR: #SC102938472',
+            icon: Icons.shield_rounded,
+            onTap: () => _openReceiptDrawer('sec-dep'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPassbookCard({
+    required String title,
+    required String dateSubtitle,
+    required String amount,
+    required String badgeText,
+    required bool isConfirmed,
+    required String subLeft,
+    required String subRight,
+    IconData? icon,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _kBorder),
+        ),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 17,
+                      backgroundColor: isConfirmed
+                          ? _kSecondaryContainer
+                          : _kAmberBg,
+                      child: Icon(
+                        icon ??
+                            (isConfirmed
+                                ? Icons.check_rounded
+                                : Icons.pending_rounded),
+                        size: 18,
+                        color: isConfirmed ? _kSecondary : _kAmberText,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: _kOnSurface,
+                          ),
+                        ),
+                        Text(
+                          dateSubtitle,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: _kOnSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      amount,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: _kOnSurface,
+                      ),
+                    ),
+                    Container(
+                      margin: const EdgeInsets.only(top: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isConfirmed
+                            ? _kSecondaryContainer
+                            : _kAmberBg,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        badgeText,
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          color: isConfirmed ? _kSecondary : _kAmberText,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.only(top: 8),
+              decoration: const BoxDecoration(
+                border: Border(top: BorderSide(color: Color(0xFFF1F5F9))),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    subLeft,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isConfirmed ? _kSecondary : _kOnSurfaceVariant,
+                      fontWeight: isConfirmed ? FontWeight.w600 : FontWeight.normal,
+                    ),
+                  ),
+                  Text(
+                    subRight,
+                    style: const TextStyle(fontSize: 10, color: _kOnSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ==================== PERSISTENT FLOATING BOTTOM ACTION BAR ====================
+  Widget _buildPersistentBottomBar(double installmentAmount) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.97),
+        border: const Border(top: BorderSide(color: _kBorder)),
+        boxShadow: [
+          BoxShadow(
+            color: _kPrimaryContainer.withOpacity(0.08),
+            blurRadius: 16,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      '₹${NumberFormat('#,##,###').format(installmentAmount.toInt())}',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: _kOnSurface,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: _kAmberBg,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Text(
+                        '3 days left',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: _kAmberText,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                Text(
+                  'Cycle ${widget.group.currentCycle} Installment Due',
+                  style: const TextStyle(fontSize: 11, color: _kOnSurfaceVariant),
+                ),
+              ],
+            ),
+            ElevatedButton.icon(
+              onPressed: _openInstallmentCheckout,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _kSecondary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 1,
+              ),
+              icon: const Text(
+                'Pay now',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
+              label: const Icon(Icons.arrow_forward_rounded, size: 16),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

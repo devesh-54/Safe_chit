@@ -69,7 +69,7 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen> {
     _amount = widget.customAmount ?? widget.group.monthlyContribution;
     final randSuffix = DateTime.now().millisecondsSinceEpoch % 10000;
     _orderId =
-        'SC-${widget.group.id.toUpperCase()}-C${widget.group.currentCycle + 1}-$randSuffix';
+        'SC-${widget.group.id.toUpperCase()}-C${widget.group.currentCycle}-$randSuffix';
 
     _payeeVpa = widget.group.foremanUpiId.trim().isNotEmpty
         ? widget.group.foremanUpiId.trim()
@@ -143,7 +143,7 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen> {
       id: _orderId,
       groupId: widget.group.id,
       groupName: widget.group.name,
-      cycle: widget.group.currentCycle + 1,
+      cycle: widget.group.currentCycle,
       memberUsername: widget.currentUsername,
       memberName: _memberName.isNotEmpty ? _memberName : widget.currentUsername,
       amount: _amount,
@@ -156,7 +156,7 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen> {
       createdAt: now,
       completedAt: now,
       notes:
-          'Monthly installment for Cycle ${widget.group.currentCycle + 1} via ${_getMethodTitle(_selectedMethod)}',
+          'Monthly installment for Cycle ${widget.group.currentCycle} via ${_getMethodTitle(_selectedMethod)}',
     );
 
     await SupabaseService.recordPayment(paymentRecord);
@@ -722,7 +722,7 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen> {
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
-                            'Cycle ${widget.group.currentCycle + 1}',
+                            'Cycle ${widget.group.currentCycle}',
                             style: const TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.bold,

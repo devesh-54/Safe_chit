@@ -16,6 +16,8 @@ import '../../models/security_deposit.dart';
 import '../../core/config/deposit_config.dart';
 import '../../widgets/razorpay_checkout_modal.dart';
 import '../profile/user_profile_screen.dart';
+import '../../features/bidding/live_bidding_room.dart';
+import 'package:intl/intl.dart';
 
 class MemberDashboardScreen extends StatefulWidget {
   final OnboardingState? state;
@@ -48,6 +50,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
   String _displayName = '';
   String _selectedFilterType = 'All'; // 'All', 'Bidding', 'Random Picking'
   int _currentIndex = 0; // 0: Overview, 1: Joined Schemes, 2: Discovery, 3: Notifications, 4: Profile
+  String _joinedFilter = 'All'; // 'All', 'Action Required', 'Auction This Week', 'Completed'
 
   Map<String, bool> _signedAgreementsMap = {};
   List<ChitPaymentRecord> _memberPayments = [];
@@ -2093,77 +2096,588 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
   }
 
   Widget _buildJoinedChitsPage() {
-    final joinedGroups = _myRequests.where((r) => r.isApproved).toList();
+    final allJoinedGroups = _myRequests.where((r) => r.isApproved).toList();
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 800),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'My Joined Chit Schemes',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF0F172A),
+    // Calculate real-time financial commitments for current calendar month
+    double totalMonthlyCommitment = 0;
+    double totalPaidAmount = 0;
+    double totalDueAmount = 0;
+    int paidCount = 0;
+    int dueCount = 0;
+    int auctionThisWeekCount = 0;
+
+    for (final req in allJoinedGroups) {
+      final grp = _groupDetailsMap[req.groupId];
+      final monthly = grp?.monthlyContribution ?? 0.0;
+      totalMonthlyCommitment += monthly;
+
+      final isPaid = _memberPayments.any((p) =>
+          p.groupId == req.groupId &&
+          (p.cycle == (grp?.currentCycle ?? 1) || p.cycle == (grp?.currentCycle ?? 1) + 1) &&
+          (p.status == 'PAID' || p.status == 'CONFIRMED'));
+
+      if (isPaid) {
+        paidCount++;
+        totalPaidAmount += monthly;
+      } else {
+        dueCount++;
+        totalDueAmount += monthly;
+      }
+
+      if (grp?.schemeType == 'Bidding') {
+        auctionThisWeekCount++;
+      }
+    }
+
+    // Filter groups according to selected filter tab
+    List<ChitJoinRequest> filteredGroups = allJoinedGroups;
+    if (_joinedFilter == 'Action Required') {
+      filteredGroups = allJoinedGroups.where((req) {
+        final grp = _groupDetailsMap[req.groupId];
+        final isPaid = _memberPayments.any((p) =>
+            p.groupId == req.groupId &&
+            (p.cycle == (grp?.currentCycle ?? 1) || p.cycle == (grp?.currentCycle ?? 1) + 1) &&
+            (p.status == 'PAID' || p.status == 'CONFIRMED'));
+        return !isPaid;
+      }).toList();
+    } else if (_joinedFilter == 'Auction This Week') {
+      filteredGroups = allJoinedGroups.where((req) {
+        final grp = _groupDetailsMap[req.groupId];
+        return grp?.schemeType == 'Bidding';
+      }).toList();
+    } else if (_joinedFilter == 'Completed') {
+      filteredGroups = allJoinedGroups.where((req) {
+        final grp = _groupDetailsMap[req.groupId];
+        return grp?.status == 'Completed';
+      }).toList();
+    }
+
+    return RefreshIndicator(
+      onRefresh: () async => _loadMemberData(),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 90),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 800),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header with Active Pill
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Text(
+                          'Joined Schemes',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0B1C30),
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF86F2E4).withOpacity(0.4),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            '${allJoinedGroups.length} Active',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF006F66),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // Horizontal Filter Chips
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _buildJoinedFilterChip('All (${allJoinedGroups.length})', 'All'),
+                      const SizedBox(width: 8),
+                      _buildJoinedFilterChip(
+                        'Action Required ($dueCount)',
+                        'Action Required',
+                        showDot: dueCount > 0,
+                      ),
+                      const SizedBox(width: 8),
+                      _buildJoinedFilterChip(
+                        'Auction This Week ($auctionThisWeekCount)',
+                        'Auction This Week',
+                        icon: Icons.gavel_rounded,
+                      ),
+                      const SizedBox(width: 8),
+                      _buildJoinedFilterChip('Completed (0)', 'Completed'),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // Monthly Commitment Card (Hero Box)
+                if (allJoinedGroups.isNotEmpty)
+                  _buildMonthlyCommitmentBanner(
+                    totalMonthlyCommitment: totalMonthlyCommitment,
+                    totalPaid: totalPaidAmount,
+                    totalDue: totalDueAmount,
+                    paidCount: paidCount,
+                    dueCount: dueCount,
+                    totalGroupsCount: allJoinedGroups.length,
+                  ),
+                if (allJoinedGroups.isNotEmpty) const SizedBox(height: 14),
+
+                // Cards List or Empty State
+                if (allJoinedGroups.isEmpty)
+                  _buildEmptyJoinedSchemesState()
+                else if (filteredGroups.isEmpty)
+                  _buildNoMatchingFilterState()
+                else
+                  ...filteredGroups.map((req) => _buildJoinedRequestCard(req)),
+
+                const SizedBox(height: 8),
+
+                // Expand Your Portfolio Banner
+                _buildExpandPortfolioBanner(),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildJoinedFilterChip(
+    String label,
+    String filterKey, {
+    bool showDot = false,
+    IconData? icon,
+  }) {
+    final isSelected = _joinedFilter == filterKey;
+    return InkWell(
+      onTap: () => setState(() => _joinedFilter = filterKey),
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF000E2B) : const Color(0xFFDCE9FF),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF000E2B).withOpacity(0.15),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (showDot) ...[
+              Container(
+                width: 6,
+                height: 6,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFBA1A1A),
+                  shape: BoxShape.circle,
                 ),
               ),
-              const SizedBox(height: 4),
-              const Text(
-                'Manage and open dashboards for all active and approved chit groups you are a member of.',
-                style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+              const SizedBox(width: 6),
+            ],
+            if (icon != null) ...[
+              Icon(icon, size: 14, color: isSelected ? Colors.white : const Color(0xFF006A61)),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: isSelected ? Colors.white : const Color(0xFF44474E),
               ),
-              const SizedBox(height: 20),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-              if (joinedGroups.isEmpty)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(32),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
+  Widget _buildMonthlyCommitmentBanner({
+    required double totalMonthlyCommitment,
+    required double totalPaid,
+    required double totalDue,
+    required int paidCount,
+    required int dueCount,
+    required int totalGroupsCount,
+  }) {
+    final currentMonthName = DateFormat('MMMM').format(DateTime.now()).toUpperCase();
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFF000E2B),
+            Color(0xFF0D234A),
+            Color(0xFF006A61),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0D234A).withOpacity(0.2),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '$currentMonthName COMMITMENT',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.8,
+                      color: Color(0xFFD3E4FE),
+                    ),
                   ),
-                  child: Column(
-                    children: const [
-                      Icon(
-                        Icons.groups_outlined,
-                        size: 48,
-                        color: Color(0xFF94A3B8),
-                      ),
-                      SizedBox(height: 12),
+                  const SizedBox(height: 3),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
                       Text(
-                        'No Joined Chit Schemes Yet',
-                        style: TextStyle(
-                          fontSize: 16,
+                        '₹${NumberFormat('#,##,###').format(totalMonthlyCommitment.toInt())}',
+                        style: const TextStyle(
+                          fontSize: 24,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFF334155),
+                          color: Colors.white,
+                          letterSpacing: -0.5,
                         ),
                       ),
-                      SizedBox(height: 4),
-                      Text(
-                        'Browse the Discovery tab to explore verified public chit schemes or search by private 6-digit code.',
-                        textAlign: TextAlign.center,
+                      const SizedBox(width: 4),
+                      const Text(
+                        '/ month',
                         style: TextStyle(
                           fontSize: 12,
-                          color: Color(0xFF64748B),
+                          color: Color(0xFFDCE9FF),
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
                   ),
-                )
-              else
-                Column(
-                  children: joinedGroups
-                      .map((req) => _buildJoinedRequestCard(req))
-                      .toList(),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Across $totalGroupsCount active rotating chit funds',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.white.withOpacity(0.8),
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
                 ),
+                child: const Icon(
+                  Icons.account_balance_wallet_outlined,
+                  color: Color(0xFF86F2E4),
+                  size: 22,
+                ),
+              ),
             ],
           ),
-        ),
+          const SizedBox(height: 12),
+          // Breakdown Pills Bar
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF86F2E4),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.check_circle_rounded, size: 12, color: Color(0xFF006F66)),
+                    const SizedBox(width: 4),
+                    Text(
+                      '$paidCount Paid (₹${NumberFormat('#,##,###').format(totalPaid.toInt())})',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF006F66),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (dueCount > 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFDAD6),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFFBA1A1A),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$dueCount Due Soon (₹${NumberFormat('#,##,###').format(totalDue.toInt())})',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF93000A),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.event_rounded, size: 12, color: Colors.white),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Auction: 14 ${DateFormat('MMM').format(DateTime.now())} • 7:00 PM',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              const Icon(
+                Icons.verified_user_rounded,
+                size: 14,
+                color: Color(0xFF86F2E4),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'All groups protected with 100% escrow deposits',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: const Color(0xFFD3E4FE).withOpacity(0.9),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyJoinedSchemesState() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: const BoxDecoration(
+              color: Color(0xFFEFF4FF),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.savings_outlined,
+              size: 28,
+              color: Color(0xFF006A61),
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'You haven\'t joined any chit schemes yet',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF0B1C30),
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Explore peer-reviewed, escrow-backed savings circles in your community with verified hosts.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              color: Color(0xFF44474E),
+            ),
+          ),
+          const SizedBox(height: 14),
+          ElevatedButton.icon(
+            onPressed: () => setState(() => _currentIndex = 2),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF000E2B),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            icon: const Icon(Icons.search_rounded, size: 16),
+            label: const Text(
+              'Explore Verified Schemes',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoMatchingFilterState() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        children: [
+          const Icon(Icons.filter_list_off_rounded, size: 36, color: Color(0xFF94A3B8)),
+          const SizedBox(height: 8),
+          Text(
+            'No schemes match "$_joinedFilter"',
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF334155),
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: () => setState(() => _joinedFilter = 'All'),
+            child: const Text('Show All Schemes'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExpandPortfolioBanner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF4FF),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFD3E4FE)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.groups_rounded, size: 16, color: Color(0xFF006A61)),
+                    SizedBox(width: 6),
+                    Text(
+                      'EXPAND YOUR PORTFOLIO',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.6,
+                        color: Color(0xFF006A61),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                const Text(
+                  'Looking to join another group?',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0B1C30),
+                  ),
+                ),
+                Text(
+                  'Explore 28+ government registered and private circles.',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: const Color(0xFF44474E).withOpacity(0.9),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          ElevatedButton.icon(
+            onPressed: () => setState(() => _currentIndex = 2),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF000E2B),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              elevation: 0,
+            ),
+            label: const Text(
+              'Discover',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+            ),
+            icon: const Icon(Icons.arrow_forward_rounded, size: 14),
+          ),
+        ],
       ),
     );
   }
@@ -3623,26 +4137,44 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
     );
   }
 
+  String _formatIndianCurrency(num amount) {
+    try {
+      return NumberFormat.currency(locale: 'en_IN', symbol: '', decimalDigits: 0).format(amount.toInt()).trim();
+    } catch (_) {
+      return NumberFormat('#,##,###').format(amount.toInt());
+    }
+  }
+
   Widget _buildJoinedRequestCard(ChitJoinRequest req) {
     final group = _groupDetailsMap[req.groupId];
     final dep = _depositsMap[req.groupId];
 
     final poolSize = group?.totalPoolSize ?? 0.0;
     final monthly = group?.monthlyContribution ?? 0.0;
-    final duration = group?.durationMonths ?? 0;
+    final duration = group?.durationMonths ?? 10;
+    final currentCycle = group?.currentCycle ?? 1;
     final schemeType = group?.schemeType ?? 'Bidding';
+    final securityDeposit = dep?.amount ?? group?.securityDeposit ?? (monthly * 0.25);
+    final payoutMonth = (duration >= 9) ? 9 : (duration > 2 ? duration - 1 : duration);
+
+    final isPaid = _memberPayments.any((p) =>
+        p.groupId == req.groupId &&
+        (p.cycle == currentCycle || p.cycle == currentCycle + 1) &&
+        (p.status == 'PAID' || p.status == 'CONFIRMED'));
+
+    final isBidding = schemeType == 'Bidding';
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: const Color(0xFF000E2B).withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
@@ -3653,26 +4185,29 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
           borderRadius: BorderRadius.circular(16),
           onTap: () => _openMemberDashboard(req),
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
+                // 1. Header & Cycle Badge
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(10),
+                      width: 36,
+                      height: 36,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF0F4C81).withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(12),
+                        color: const Color(0xFF006A61).withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Icon(
-                        Icons.gavel_rounded,
-                        color: Color(0xFF0F4C81),
-                        size: 24,
+                      child: Icon(
+                        isBidding ? Icons.gavel_rounded : Icons.shuffle_rounded,
+                        color: const Color(0xFF006A61),
+                        size: 20,
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3680,156 +4215,286 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                           Text(
                             req.groupName,
                             style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w700,
                               color: Color(0xFF0F172A),
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'Code: ${req.inviteCode}${req.memberCity.isNotEmpty ? " • ${req.memberCity}" : ""}',
+                            '#${group?.inviteCode ?? req.inviteCode} • ${group?.city ?? (req.memberCity.isNotEmpty ? req.memberCity : 'Bengaluru')}',
                             style: const TextStyle(
-                              fontSize: 12,
+                              fontSize: 11,
                               color: Color(0xFF64748B),
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFDCFCE7),
-                        borderRadius: BorderRadius.circular(12),
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
                       ),
-                      child: const Text(
-                        'Approved & Active',
-                        style: TextStyle(
-                          color: Color(0xFF166534),
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
+                      child: Text(
+                        'Cycle $currentCycle/$duration',
+                        style: const TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF334155),
                         ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFFF1F5F9)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Pool Value',
-                            style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            poolSize > 0 ? '₹${poolSize.toStringAsFixed(0)}' : '₹10,00,000',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF0F172A),
-                            ),
-                          ),
-                        ],
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Monthly Due',
-                            style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            monthly > 0 ? '₹${monthly.toStringAsFixed(0)}/mo' : '₹10,000/mo',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF007A87),
-                            ),
-                          ),
-                        ],
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Duration / Type',
-                            style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            duration > 0 ? '$duration Mos ($schemeType)' : '10 Mos ($schemeType)',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF334155),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                if (dep != null && dep.isHeld) ...[
-                  const SizedBox(height: 10),
+                const SizedBox(height: 10),
+
+                // 2. High Visibility Action Strip
+                if (!isPaid)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFDCFCE7),
-                      borderRadius: BorderRadius.circular(8),
+                      color: const Color(0xFFFFF1F2),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFFECDD3)),
                     ),
                     child: Row(
-                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Icon(
-                          Icons.verified_user_rounded,
-                          size: 14,
-                          color: Color(0xFF166534),
+                        Expanded(
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.schedule_rounded,
+                                size: 15,
+                                color: Color(0xFFE11D48),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  '₹${_formatIndianCurrency(monthly)} due in 3 days (15 Nov)',
+                                  style: const TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFFBE123C),
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Deposit: Held (₹${dep.amount.toStringAsFixed(0)})',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF166534),
+                        InkWell(
+                          onTap: () {
+                            if (group != null && mounted) {
+                              PaymentCheckoutScreen.open(
+                                context: context,
+                                group: group,
+                                currentUsername: _username,
+                                onPaymentSuccess: () {
+                                  _loadMemberData();
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        '🎉 Monthly installment verified and recorded in SafeChit ledger!',
+                                      ),
+                                      backgroundColor: Color(0xFF16A34A),
+                                    ),
+                                  );
+                                },
+                              );
+                            } else {
+                              _openMemberDashboard(req);
+                            }
+                          },
+                          borderRadius: BorderRadius.circular(8),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF006A61),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: const [
+                                Text(
+                                  'Pay Now',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                SizedBox(width: 3),
+                                Icon(
+                                  Icons.arrow_forward_rounded,
+                                  size: 13,
+                                  color: Colors.white,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0FDF4),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFBBF7D0)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.check_circle_rounded,
+                                size: 15,
+                                color: Color(0xFF16A34A),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  '✓ Month $currentCycle Settled • Dual Ledger Confirmed',
+                                  style: const TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF15803D),
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF006A61),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(
+                                Icons.verified_rounded,
+                                size: 11,
+                                color: Colors.white,
+                              ),
+                              SizedBox(width: 3),
+                              Text(
+                                'Settled',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
                   ),
-                ],
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
+
+                // 3. Compact Visual Progress Stepper (No redundant bottom line!)
+                _buildCompactStepperTimeline(currentCycle, duration, payoutMonth),
+                const SizedBox(height: 8),
+
+                // 4. Twin Streamlined Financial Metric Tiles (Pot Value & Monthly Due)
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: const [
+                  children: [
+                    _buildCompactMetricTile(
+                      label: 'Pot Value',
+                      value: '₹${_formatIndianCurrency(poolSize)}',
+                      icon: Icons.account_balance_outlined,
+                      valueColor: const Color(0xFF0F172A),
+                    ),
+                    const SizedBox(width: 8),
+                    _buildCompactMetricTile(
+                      label: 'Monthly Due',
+                      value: '₹${_formatIndianCurrency(monthly)}',
+                      icon: Icons.payments_outlined,
+                      valueColor: const Color(0xFF006A61),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+
+                // 5. Trust Footer Details
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.shield_outlined,
+                          size: 13,
+                          color: Color(0xFF006A61),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Escrow Deposit: ₹${_formatIndianCurrency(securityDeposit)}',
+                          style: const TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w500,
+                            color: Color(0xFF475569),
+                          ),
+                        ),
+                      ],
+                    ),
                     Text(
-                      'Tap to open group dashboard',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Color(0xFF64748B),
+                      'Auction Mode: ${isBidding ? "Live Bidding" : "Random Draw"}',
+                      style: const TextStyle(
+                        fontSize: 10.5,
                         fontWeight: FontWeight.w500,
+                        color: Color(0xFF475569),
                       ),
                     ),
-                    SizedBox(width: 4),
-                    Icon(
-                      Icons.arrow_forward_ios_rounded,
-                      size: 12,
-                      color: Color(0xFF64748B),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Host: Rajesh Kumar (Foreman)',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        Icon(
+                          Icons.verified_rounded,
+                          size: 13,
+                          color: Color(0xFF006A61),
+                        ),
+                        SizedBox(width: 3),
+                        Text(
+                          'Verified Escrow',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF006A61),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -3837,6 +4502,322 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildCompactMetricTile({
+    required String label,
+    required String value,
+    required IconData icon,
+    required Color valueColor,
+  }) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFE2E8F0), width: 0.8),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    label.toUpperCase(),
+                    style: const TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                      color: Color(0xFF64748B),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    value,
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w800,
+                      color: valueColor,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              icon,
+              size: 16,
+              color: const Color(0xFF006A61),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactStepperTimeline(int currentCycle, int totalCycles, int payoutMonth) {
+    final progressPercent = ((currentCycle / totalCycles) * 100).round().clamp(0, 100);
+
+    final List<int> milestones = [];
+    milestones.add(1);
+
+    if (totalCycles <= 5) {
+      for (int i = 2; i <= totalCycles; i++) {
+        milestones.add(i);
+      }
+    } else {
+      if (currentCycle > 1 && currentCycle < totalCycles) {
+        if (currentCycle > 2) {
+          milestones.add(currentCycle - 1);
+        }
+        milestones.add(currentCycle);
+      }
+      final midway = (totalCycles / 2).round();
+      if (!milestones.contains(midway) && midway > currentCycle && midway < payoutMonth) {
+        milestones.add(midway);
+      }
+      if (!milestones.contains(payoutMonth) && payoutMonth <= totalCycles) {
+        milestones.add(payoutMonth);
+      }
+      if (!milestones.contains(totalCycles)) {
+        milestones.add(totalCycles);
+      }
+    }
+    milestones.sort();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFF1F5F9)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.timeline_rounded,
+                    size: 14,
+                    color: Color(0xFF006A61),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Cycle Progress • $currentCycle of $totalCycles Months',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF1E293B),
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFCCFBF1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '$progressPercent% Complete',
+                  style: const TextStyle(
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF0F766E),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+
+          // Stepper track & circles
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final activeRatio = totalCycles > 1
+                  ? ((currentCycle - 1) / (totalCycles - 1)).clamp(0.0, 1.0)
+                  : 1.0;
+              return Stack(
+                alignment: Alignment.centerLeft,
+                children: [
+                  Positioned(
+                    left: 10,
+                    right: 10,
+                    top: 9,
+                    child: Container(
+                      height: 3,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE2E8F0),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: 10,
+                    right: 10,
+                    top: 9,
+                    child: FractionallySizedBox(
+                      alignment: Alignment.centerLeft,
+                      widthFactor: activeRatio,
+                      child: Container(
+                        height: 3,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF006A61),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: milestones.map((m) {
+                      return _buildMilestoneNode(m, currentCycle, payoutMonth);
+                    }).toList(),
+                  ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 4),
+
+          // Milestone labels row (NO redundant bottom line!)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: milestones.map((m) {
+              return _buildMilestoneLabel(m, currentCycle, payoutMonth, totalCycles);
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMilestoneNode(int month, int currentCycle, int payoutMonth) {
+    if (month < currentCycle) {
+      return Container(
+        width: 20,
+        height: 20,
+        decoration: const BoxDecoration(
+          color: Color(0xFF006A61),
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(
+          Icons.check,
+          size: 11,
+          color: Colors.white,
+        ),
+      );
+    } else if (month == currentCycle) {
+      return Container(
+        width: 22,
+        height: 22,
+        decoration: BoxDecoration(
+          color: const Color(0xFF000E2B),
+          shape: BoxShape.circle,
+          border: Border.all(color: const Color(0xFF99F6E4), width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF006A61).withOpacity(0.3),
+              blurRadius: 4,
+            ),
+          ],
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          '$month',
+          style: const TextStyle(
+            fontSize: 9.5,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+      );
+    } else if (month == payoutMonth) {
+      return Container(
+        width: 20,
+        height: 20,
+        decoration: BoxDecoration(
+          color: const Color(0xFFCCFBF1),
+          shape: BoxShape.circle,
+          border: Border.all(color: const Color(0xFF006A61), width: 1.5),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          '$month',
+          style: const TextStyle(
+            fontSize: 9,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF0F766E),
+          ),
+        ),
+      );
+    } else {
+      return Container(
+        width: 20,
+        height: 20,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          border: Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          '$month',
+          style: const TextStyle(
+            fontSize: 9,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF64748B),
+          ),
+        ),
+      );
+    }
+  }
+
+  Widget _buildMilestoneLabel(int month, int currentCycle, int payoutMonth, int totalCycles) {
+    String text;
+    Color color = const Color(0xFF64748B);
+    FontWeight weight = FontWeight.w500;
+
+    if (month == currentCycle) {
+      text = 'M$month (Now)';
+      color = const Color(0xFF000E2B);
+      weight = FontWeight.bold;
+    } else if (month == payoutMonth) {
+      text = '🎯 Payout';
+      color = const Color(0xFF006A61);
+      weight = FontWeight.bold;
+    } else if (month == 1) {
+      text = 'M1';
+    } else if (month == totalCycles) {
+      text = 'Wrap';
+    } else {
+      text = 'M$month';
+    }
+
+    return SizedBox(
+      width: 32,
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 8.5,
+          fontWeight: weight,
+          color: color,
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.visible,
       ),
     );
   }

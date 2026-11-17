@@ -85,14 +85,14 @@ class _CardPaymentScreenState extends State<CardPaymentScreen> {
     final last4 = cleanCard.length >= 4 ? cleanCard.substring(cleanCard.length - 4) : '1234';
     final randSuffix = DateTime.now().millisecondsSinceEpoch % 10000;
     final orderId =
-        'SC-${widget.group.id.toUpperCase()}-C${widget.group.currentCycle + 1}-$randSuffix';
+        'SC-${widget.group.id.toUpperCase()}-C${widget.group.currentCycle}-$randSuffix';
     final utr = '4291${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}';
 
     final paymentRecord = ChitPaymentRecord(
       id: orderId,
       groupId: widget.group.id,
       groupName: widget.group.name,
-      cycle: widget.group.currentCycle + 1,
+      cycle: widget.group.currentCycle,
       memberUsername: widget.currentUsername,
       memberName: _nameController.text.trim(),
       amount: widget.amount,
