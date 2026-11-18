@@ -55,6 +55,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
   Map<String, bool> _signedAgreementsMap = {};
   List<ChitPaymentRecord> _memberPayments = [];
   String _notificationFilter = 'All'; // 'All', 'Guarantees', 'Approvals', 'Payments'
+  final Set<String> _recentlySettledGroupIds = {};
 
   Timer? _realtimeTimer;
 
@@ -4155,7 +4156,6 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
     final currentCycle = group?.currentCycle ?? 1;
     final schemeType = group?.schemeType ?? 'Bidding';
     final securityDeposit = dep?.amount ?? group?.securityDeposit ?? (monthly * 0.25);
-    final payoutMonth = (duration >= 9) ? 9 : (duration > 2 ? duration - 1 : duration);
 
     final isPaid = _memberPayments.any((p) =>
         p.groupId == req.groupId &&
@@ -4163,6 +4163,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
         (p.status == 'PAID' || p.status == 'CONFIRMED'));
 
     final isBidding = schemeType == 'Bidding';
+    final isRecentlySettled = _recentlySettledGroupIds.contains(req.groupId);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -4255,8 +4256,8 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                 ),
                 const SizedBox(height: 10),
 
-                // 2. High Visibility Action Strip
-                if (!isPaid)
+                // 2. High Visibility Action Strip (Shown when payment is due, or temporarily when freshly settled)
+                if (!isPaid) ...[
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                     decoration: BoxDecoration(
@@ -4299,6 +4300,18 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                                 currentUsername: _username,
                                 onPaymentSuccess: () {
                                   _loadMemberData();
+                                  if (mounted) {
+                                    setState(() {
+                                      _recentlySettledGroupIds.add(req.groupId);
+                                    });
+                                    Timer(const Duration(seconds: 4), () {
+                                      if (mounted) {
+                                        setState(() {
+                                          _recentlySettledGroupIds.remove(req.groupId);
+                                        });
+                                      }
+                                    });
+                                  }
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
                                       content: Text(
@@ -4343,8 +4356,9 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                         ),
                       ],
                     ),
-                  )
-                else
+                  ),
+                  const SizedBox(height: 8),
+                ] else if (isRecentlySettled) ...[
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                     decoration: BoxDecoration(
@@ -4407,10 +4421,11 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                       ],
                     ),
                   ),
-                const SizedBox(height: 8),
+                  const SizedBox(height: 8),
+                ],
 
-                // 3. Compact Visual Progress Stepper (No redundant bottom line!)
-                _buildCompactStepperTimeline(currentCycle, duration, payoutMonth),
+                // 3. Compact Visual Progress Stepper (No artificial payout target)
+                _buildCompactStepperTimeline(currentCycle, duration),
                 const SizedBox(height: 8),
 
                 // 4. Twin Streamlined Financial Metric Tiles (Pot Value & Monthly Due)
@@ -4562,7 +4577,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
     );
   }
 
-  Widget _buildCompactStepperTimeline(int currentCycle, int totalCycles, int payoutMonth) {
+  Widget _buildCompactStepperTimeline(int currentCycle, int totalCycles) {
     final progressPercent = ((currentCycle / totalCycles) * 100).round().clamp(0, 100);
 
     final List<int> milestones = [];
@@ -4580,11 +4595,8 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
         milestones.add(currentCycle);
       }
       final midway = (totalCycles / 2).round();
-      if (!milestones.contains(midway) && midway > currentCycle && midway < payoutMonth) {
+      if (!milestones.contains(midway) && midway > currentCycle && midway < totalCycles) {
         milestones.add(midway);
-      }
-      if (!milestones.contains(payoutMonth) && payoutMonth <= totalCycles) {
-        milestones.add(payoutMonth);
       }
       if (!milestones.contains(totalCycles)) {
         milestones.add(totalCycles);
@@ -4683,7 +4695,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: milestones.map((m) {
-                      return _buildMilestoneNode(m, currentCycle, payoutMonth);
+                      return _buildMilestoneNode(m, currentCycle);
                     }).toList(),
                   ),
                 ],
@@ -4692,11 +4704,11 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
           ),
           const SizedBox(height: 4),
 
-          // Milestone labels row (NO redundant bottom line!)
+          // Milestone labels row (Clean, no fake payout)
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: milestones.map((m) {
-              return _buildMilestoneLabel(m, currentCycle, payoutMonth, totalCycles);
+              return _buildMilestoneLabel(m, currentCycle, totalCycles);
             }).toList(),
           ),
         ],
@@ -4704,7 +4716,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
     );
   }
 
-  Widget _buildMilestoneNode(int month, int currentCycle, int payoutMonth) {
+  Widget _buildMilestoneNode(int month, int currentCycle) {
     if (month < currentCycle) {
       return Container(
         width: 20,
@@ -4744,25 +4756,6 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
           ),
         ),
       );
-    } else if (month == payoutMonth) {
-      return Container(
-        width: 20,
-        height: 20,
-        decoration: BoxDecoration(
-          color: const Color(0xFFCCFBF1),
-          shape: BoxShape.circle,
-          border: Border.all(color: const Color(0xFF006A61), width: 1.5),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          '$month',
-          style: const TextStyle(
-            fontSize: 9,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF0F766E),
-          ),
-        ),
-      );
     } else {
       return Container(
         width: 20,
@@ -4785,7 +4778,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
     }
   }
 
-  Widget _buildMilestoneLabel(int month, int currentCycle, int payoutMonth, int totalCycles) {
+  Widget _buildMilestoneLabel(int month, int currentCycle, int totalCycles) {
     String text;
     Color color = const Color(0xFF64748B);
     FontWeight weight = FontWeight.w500;
@@ -4793,10 +4786,6 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
     if (month == currentCycle) {
       text = 'M$month (Now)';
       color = const Color(0xFF000E2B);
-      weight = FontWeight.bold;
-    } else if (month == payoutMonth) {
-      text = '🎯 Payout';
-      color = const Color(0xFF006A61);
       weight = FontWeight.bold;
     } else if (month == 1) {
       text = 'M1';
