@@ -47,10 +47,11 @@ class GuaranteeRequest {
       consentText: json['consent_text'] as String? ??
           "By accepting, you agree to act as a guarantor for this member's chit commitments.",
       createdAt: json['created_at'] != null
-          ? DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now()
+          ? (DateTime.tryParse(json['created_at'].toString())?.toLocal() ??
+              DateTime.now())
           : DateTime.now(),
       respondedAt: json['responded_at'] != null
-          ? DateTime.tryParse(json['responded_at'].toString())
+          ? DateTime.tryParse(json['responded_at'].toString())?.toLocal()
           : null,
     );
   }
@@ -65,9 +66,19 @@ class GuaranteeRequest {
       'relation': relation,
       'status': status,
       'consent_text': consentText,
-      'created_at': createdAt.toIso8601String(),
-      'responded_at': respondedAt?.toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
+      'responded_at': respondedAt?.toUtc().toIso8601String(),
     };
+  }
+
+  /// Map for database inserts: leaves out created_at so Supabase server stamps DEFAULT NOW()
+  Map<String, dynamic> toInsertMap() {
+    final map = toJson();
+    map.remove('created_at');
+    if (respondedAt == null) {
+      map.remove('responded_at');
+    }
+    return map;
   }
 
   GuaranteeRequest copyWith({

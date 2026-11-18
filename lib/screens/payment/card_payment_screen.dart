@@ -101,7 +101,7 @@ class _CardPaymentScreenState extends State<CardPaymentScreen> {
       status: 'PAID',
       utr: utr,
       payeeVpa: widget.group.foremanUpiId,
-      payeeName: 'SafeChit Foreman Escrow',
+      payeeName: 'SafeChit Foreman Account',
       createdAt: DateTime.now(),
       completedAt: DateTime.now(),
       notes: 'Paid with $_cardType card ending in $last4',

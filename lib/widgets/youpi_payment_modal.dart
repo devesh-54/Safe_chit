@@ -77,7 +77,7 @@ class _YoupiPaymentModalState extends State<YoupiPaymentModal> {
     _payeeVpa = widget.group.foremanUpiId.trim().isNotEmpty
         ? widget.group.foremanUpiId.trim()
         : SupabaseService.foremanUpiId;
-    _payeeName = 'SafeChit Escrow';
+    _payeeName = 'SafeChit Chit Pool';
 
     _startCountdown();
     _initiateSession();
@@ -770,7 +770,7 @@ class _YoupiPaymentModalState extends State<YoupiPaymentModal> {
           ),
           const SizedBox(height: 6),
           Text(
-            '${_amount < 100 ? "₹${_amount.toStringAsFixed(2)}" : "₹${NumberFormat('#,##,###').format(_amount)}"} credited to Foreman Escrow',
+            '${_amount < 100 ? "₹${_amount.toStringAsFixed(2)}" : "₹${NumberFormat('#,##,###').format(_amount)}"} credited to Foreman Chit Account',
             style: const TextStyle(
               fontSize: 14,
               color: Color(0xFF15803D),

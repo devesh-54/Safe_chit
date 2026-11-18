@@ -25,7 +25,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
   double _totalPoolSize = 5; // default ₹5 (test mode)
   int _durationMonths = 5; // default 5 months (₹1/month)
   int _targetMembers = 5; // default 5 members
-  double _securityDeposit = 1; // default ₹1
+  double _securityDeposit = 0.27; // default 27% of ₹1/mo installment
   String _schemeType = 'Bidding'; // 'Bidding' or 'Random Picking'
   bool _isPublic = true; // Listed in public discovery marketplace
 
@@ -102,6 +102,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
               durationMonths: _durationMonths,
               monthlyContribution: monthlyCont,
               securityDeposit: _securityDeposit,
+              depositAmount: _securityDeposit,
               payoutRules: _payoutRulesController.text.isEmpty
                   ? 'Standard $_schemeType rules per Chit Funds Act 1982.'
                   : _payoutRulesController.text.trim(),
@@ -552,7 +553,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                   _totalPoolSize = 5;
                                   _durationMonths = 5;
                                   _targetMembers = 5;
-                                  _securityDeposit = 1;
+                                  _securityDeposit = 0.27;
                                 });
                               },
                             ),
@@ -561,16 +562,24 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                                 '₹50,000 Pool',
                                 style: TextStyle(fontSize: 11),
                               ),
-                              onPressed: () =>
-                                  setState(() => _totalPoolSize = 50000),
+                              onPressed: () => setState(() {
+                                _totalPoolSize = 50000;
+                                _securityDeposit = double.parse(
+                                    ((50000 / _durationMonths) * 0.27)
+                                        .toStringAsFixed(2));
+                              }),
                             ),
                             ActionChip(
                               label: const Text(
                                 '₹1,00,000 Pool',
                                 style: TextStyle(fontSize: 11),
                               ),
-                              onPressed: () =>
-                                  setState(() => _totalPoolSize = 100000),
+                              onPressed: () => setState(() {
+                                _totalPoolSize = 100000;
+                                _securityDeposit = double.parse(
+                                    ((100000 / _durationMonths) * 0.27)
+                                        .toStringAsFixed(2));
+                              }),
                             ),
                           ],
                         ),
@@ -652,7 +661,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                         ),
                         const SizedBox(height: 20),
 
-                        // 7. Security Deposit Slider
+                        // 7. Security Deposit Setting
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
@@ -676,14 +685,88 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                             ),
                           ],
                         ),
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 8,
+                          children: [
+                            ChoiceChip(
+                              label: const Text('27% (Standard)',
+                                  style: TextStyle(fontSize: 11)),
+                              selected: (_securityDeposit -
+                                          (_totalPoolSize /
+                                              _durationMonths *
+                                              0.27))
+                                      .abs() <
+                                  0.01,
+                              onSelected: (_) {
+                                final mc = _totalPoolSize / _durationMonths;
+                                setState(() => _securityDeposit = double.parse(
+                                    (mc * 0.27).toStringAsFixed(2)));
+                              },
+                            ),
+                            ChoiceChip(
+                              label: const Text('20%',
+                                  style: TextStyle(fontSize: 11)),
+                              selected: (_securityDeposit -
+                                          (_totalPoolSize /
+                                              _durationMonths *
+                                              0.20))
+                                      .abs() <
+                                  0.01,
+                              onSelected: (_) {
+                                final mc = _totalPoolSize / _durationMonths;
+                                setState(() => _securityDeposit = double.parse(
+                                    (mc * 0.20).toStringAsFixed(2)));
+                              },
+                            ),
+                            ChoiceChip(
+                              label: const Text('15%',
+                                  style: TextStyle(fontSize: 11)),
+                              selected: (_securityDeposit -
+                                          (_totalPoolSize /
+                                              _durationMonths *
+                                              0.15))
+                                      .abs() <
+                                  0.01,
+                              onSelected: (_) {
+                                final mc = _totalPoolSize / _durationMonths;
+                                setState(() => _securityDeposit = double.parse(
+                                    (mc * 0.15).toStringAsFixed(2)));
+                              },
+                            ),
+                            ChoiceChip(
+                              label: const Text('10%',
+                                  style: TextStyle(fontSize: 11)),
+                              selected: (_securityDeposit -
+                                          (_totalPoolSize /
+                                              _durationMonths *
+                                              0.10))
+                                      .abs() <
+                                  0.01,
+                              onSelected: (_) {
+                                final mc = _totalPoolSize / _durationMonths;
+                                setState(() => _securityDeposit = double.parse(
+                                    (mc * 0.10).toStringAsFixed(2)));
+                              },
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
                         Slider(
-                          value: _securityDeposit.clamp(0.0, 200000.0),
-                          min: 0,
-                          max: 200000,
-                          divisions: 200,
+                          value: _securityDeposit.clamp(
+                              0.05,
+                              (_totalPoolSize / _durationMonths > 10
+                                  ? (_totalPoolSize / _durationMonths)
+                                  : 2.0)),
+                          min: 0.05,
+                          max: (_totalPoolSize / _durationMonths > 10
+                              ? (_totalPoolSize / _durationMonths)
+                              : 2.0),
+                          divisions: 100,
                           activeColor: const Color(0xFF007A87),
-                          onChanged: (val) =>
-                              setState(() => _securityDeposit = val),
+                          onChanged: (val) => setState(() =>
+                              _securityDeposit =
+                                  double.parse(val.toStringAsFixed(2))),
                         ),
                         const SizedBox(height: 24),
 

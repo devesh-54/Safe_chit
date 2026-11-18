@@ -19,6 +19,7 @@ import '../models/guarantee_request.dart';
 import '../models/reputation_event.dart';
 
 import '../models/security_deposit.dart';
+import '../models/deposit_transaction.dart';
 
 import 'package:flutter/widgets.dart';
 
@@ -130,8 +131,8 @@ class SupabaseService {
 
       if (!isFlutterTest) {
         await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
-        if (kDevTools) {
-          // Check deposit server health on app start
+        if (kDevTools && kDepositViaRazorpay) {
+          // Check deposit server health on app start (only when Razorpay/Node flow is active)
           checkDepositServerHealth();
         }
       }
@@ -264,10 +265,8 @@ class SupabaseService {
         'is_bank_verified': state.bankStatus == VerificationStatus.verified,
         // KYC Consent
         'has_consented': state.hasConsented,
-        'consent_timestamp': DateTime.now().toIso8601String(),
         // Signature Photo
         'signature_document_url': state.signaturePath,
-        'updated_at': DateTime.now().toIso8601String(),
       }, onConflict: 'username');
 
       _registeredUsernames.add(cleanUsername);
@@ -465,7 +464,9 @@ class SupabaseService {
 
       monthlyContribution: 1.0,
 
-      securityDeposit: 1.0,
+      securityDeposit: 0.27,
+
+      depositAmount: 0.27,
 
       payoutRules:
           'Bidding starts at 20% discount. Minimum bid increment ₹0.10.',
@@ -492,7 +493,9 @@ class SupabaseService {
 
       monthlyContribution: 1.0,
 
-      securityDeposit: 1.0,
+      securityDeposit: 0.27,
+
+      depositAmount: 0.27,
 
       payoutRules:
           'Fixed payout at Month 2 and Month 4. Bidding for other months.',
@@ -785,9 +788,9 @@ class SupabaseService {
       id: 'rep_7',
       username: 'foreman_admin',
       role: 'foreman',
-      eventType: 'escrow_disbursed',
+      eventType: 'payout_disbursed',
       scoreDelta: 10.0,
-      description: 'Escrow payout released on schedule to winning bidder',
+      description: 'Auction payout released on schedule to winning bidder',
       createdAt: DateTime.now().subtract(const Duration(days: 20)),
     ),
     ReputationEvent(
@@ -1074,7 +1077,7 @@ class SupabaseService {
         await Future.wait([
           supaClient
               .from('group_members')
-              .select('group_id, name, phone')
+              .select('group_id, name, member_username, phone')
               .timeout(const Duration(seconds: 3))
               .then((res) => memberRows = List<Map<String, dynamic>>.from(res))
               .catchError((_) => memberRows = []),
@@ -1089,7 +1092,11 @@ class SupabaseService {
 
         for (var row in memberRows) {
           final gid = row['group_id'] as String? ?? '';
-          final identifier = (row['phone'] as String? ?? row['name'] as String? ?? '').trim();
+          final identifier = (row['member_username'] as String? ??
+                  row['phone'] as String? ??
+                  row['name'] as String? ??
+                  '')
+              .trim();
           if (gid.isNotEmpty) {
             groupMembersMap.putIfAbsent(gid, () => <String>{});
             if (identifier.isNotEmpty) {
@@ -1352,7 +1359,8 @@ class SupabaseService {
     final isAlreadyMember = currentMembers.any(
       (m) =>
           m.isHostMember ||
-          m.name.trim().toLowerCase() == foremanUsername.trim().toLowerCase(),
+          m.memberUsername.trim().toLowerCase() ==
+              foremanUsername.trim().toLowerCase(),
     );
     if (isAlreadyMember) {
       return false;
@@ -1363,6 +1371,7 @@ class SupabaseService {
       id: newMemberId,
       groupId: group.id,
       name: foremanUsername,
+      memberUsername: foremanUsername,
       defaultRiskScore: 0.0,
       payoutPosition: 'Host · Month 2',
       paymentTrend: 'On-Time',
@@ -1401,6 +1410,7 @@ class SupabaseService {
       await supaClient.from('group_members').insert({
         'group_id': group.id,
         'name': foremanUsername,
+        'member_username': foremanUsername,
         'default_risk_score': 0.0,
         'payout_position': 'Host · Month 2',
         'payment_trend': 'On-Time',
@@ -1430,7 +1440,7 @@ class SupabaseService {
         'notes': 'Paid (host share)',
         'payee_vpa': group.foremanUpiId,
         'payee_name': foremanUsername,
-        'completed_at': DateTime.now().toIso8601String(),
+        'completed_at': DateTime.now().toUtc().toIso8601String(),
       });
 
       // Update mock lists only after success
@@ -1454,7 +1464,7 @@ class SupabaseService {
     }
   }
 
-  /// Trigger forfeiture for a member in a group (Escrow Control)
+  /// Trigger forfeiture for a member in a group (Deposit Control)
   static Future<void> triggerForfeiture(String memberId) async {
     try {
       final supaClient = client;
@@ -1620,16 +1630,16 @@ class SupabaseService {
               (profile?['full_name'] as String?)?.trim().toLowerCase();
         } catch (_) {}
 
-        // 1. Query group_members
+        // 1. Query group_members strictly by member_username
         final memberRows = await supaClient
             .from('group_members')
-            .select('id, name')
+            .select('id, member_username')
             .eq('group_id', groupId);
 
         for (final row in memberRows) {
-          final name = (row['name'] as String? ?? '').trim().toLowerCase();
-          if (name == cleanUsername ||
-              (userFullName != null && name == userFullName)) {
+          final username =
+              (row['member_username'] as String? ?? '').trim().toLowerCase();
+          if (username == cleanUsername) {
             _clearError();
             return true;
           }
@@ -1874,15 +1884,17 @@ class SupabaseService {
       }
 
       try {
-        await supaClient.from('chit_join_requests').upsert(newReq.toJson());
+        final insertJson = newReq.toJson();
+        insertJson.remove('created_at');
+        await supaClient.from('chit_join_requests').upsert(insertJson);
       } catch (_) {
-        await supaClient.from('chit_join_requests').upsert(newReq.toDbJson());
+        await supaClient.from('chit_join_requests').upsert(newReq.toDbJson(forInsert: true));
       }
 
       if (guaranteeReq != null) {
         await supaClient
             .from('guarantee_requests')
-            .insert(guaranteeReq.toJson());
+            .insert(guaranteeReq.toInsertMap());
       }
 
       // Add to in-memory only upon success
@@ -2395,6 +2407,7 @@ class SupabaseService {
       if (accept) {
         String groupId = '';
         String memberName = 'Member';
+        String memberUsername = '';
         String memberPhone = '';
         String guarantorStatus = 'Verified';
 
@@ -2402,6 +2415,7 @@ class SupabaseService {
           final req = _mockJoinRequests[idx];
           groupId = req.groupId;
           memberName = req.memberName;
+          memberUsername = req.memberUsername;
           memberPhone = req.memberPhone;
           guarantorStatus = req.guarantorStatus == 'accepted'
               ? 'Verified (@${req.guarantorUsername})'
@@ -2417,6 +2431,8 @@ class SupabaseService {
           if (row != null) {
             groupId = row['group_id'] as String? ?? '';
             memberName = row['member_name'] as String? ?? 'Member';
+            memberUsername =
+                row['member_username'] as String? ?? memberName;
             memberPhone = row['member_phone'] as String? ?? '';
           }
         }
@@ -2425,6 +2441,8 @@ class SupabaseService {
           await supaClient.from('group_members').insert({
             'group_id': groupId,
             'name': memberName,
+            'member_username':
+                memberUsername.isNotEmpty ? memberUsername : memberName,
             'default_risk_score': 15.0,
             'payout_position': 'Unpaid (Bidder)',
             'payment_trend': 'On-Time',
@@ -2447,6 +2465,7 @@ class SupabaseService {
               id: 'member_${DateTime.now().millisecondsSinceEpoch}',
               groupId: req.groupId,
               name: req.memberName,
+              memberUsername: req.memberUsername,
               defaultRiskScore: 15.0,
               payoutPosition: 'Unpaid (Bidder)',
               paymentTrend: 'On-Time',
@@ -2631,7 +2650,7 @@ class SupabaseService {
         throw Exception('Supabase client is not initialized.');
       }
 
-      await supaClient.from('digital_agreements').upsert(agreement.toJson());
+      await supaClient.from('digital_agreements').upsert(agreement.toInsertMap());
 
       _mockAgreements.removeWhere((a) => a.id == agreement.id);
       _mockAgreements.add(agreement);
@@ -2709,12 +2728,12 @@ class SupabaseService {
           ? {
               'foreman_signed': true,
               'foreman_signature_url': signatureUrl,
-              'foreman_signed_at': now.toIso8601String(),
+              'foreman_signed_at': now.toUtc().toIso8601String(),
             }
           : {
               'member_signed': true,
               'member_signature_url': signatureUrl,
-              'member_signed_at': now.toIso8601String(),
+              'member_signed_at': now.toUtc().toIso8601String(),
             };
 
       await supaClient
@@ -2844,7 +2863,7 @@ class SupabaseService {
         throw Exception('Supabase client is not initialized.');
       }
 
-      await supaClient.from('chit_payments').upsert(payment.toMap());
+      await supaClient.from('chit_payments').upsert(payment.toInsertMap());
 
       _mockPayments.removeWhere((p) => p.id == payment.id);
       _mockPayments.insert(0, payment);
@@ -2947,7 +2966,8 @@ class SupabaseService {
           .update({
             'status': status,
             if (utr != null) 'utr': utr,
-            'completed_at': (completedAt ?? DateTime.now()).toIso8601String(),
+            'completed_at':
+                (completedAt ?? DateTime.now()).toUtc().toIso8601String(),
           })
           .eq('id', paymentId);
 
@@ -2993,7 +3013,7 @@ class SupabaseService {
           .update({
             'status': 'PAID',
             'payment_method': 'CASH_COUNTER',
-            'completed_at': now.toIso8601String(),
+            'completed_at': now.toUtc().toIso8601String(),
             'notes':
                 notes ??
                 'Cash payment confirmed by Foreman ($foremanUsername)',
@@ -3042,7 +3062,7 @@ class SupabaseService {
           .from('chit_payments')
           .update({
             'status': 'PAID',
-            'completed_at': now.toIso8601String(),
+            'completed_at': now.toUtc().toIso8601String(),
             'notes':
                 notes ?? 'UPI payment handshake confirmed by Foreman ($foremanUsername)',
           })
@@ -3260,63 +3280,60 @@ class SupabaseService {
     }
   }
 
-  static Future<bool> refundDeposit({
-    required String depositId,
+  /// Records simulated deposit payment using the server-side PostgreSQL function record_deposit_payment.
+  static Future<Map<String, dynamic>> recordDepositPayment({
     required String groupId,
     required String memberId,
-    required double amount,
+    String outcome = 'success',
   }) async {
-    final now = DateTime.now();
-
     try {
       final supaClient = client;
       if (supaClient == null) {
         throw Exception('Supabase client is not initialized.');
       }
 
-      await supaClient
-          .from('security_deposits')
-          .update({'status': 'refunded', 'updated_at': now.toIso8601String()})
-          .eq('group_id', groupId)
-          .eq('member_id', memberId);
+      final response = await supaClient.rpc('record_deposit_payment', params: {
+        'p_group_id': groupId,
+        'p_member_id': memberId,
+        'p_outcome': outcome,
+      });
 
-      // Ledger entry
-      await recordPayment(ChitPaymentRecord(
-        id: 'refund_${DateTime.now().millisecondsSinceEpoch}',
-        groupId: groupId,
-        groupName: 'Chit Group Deposit Refund',
-        cycle: 0,
-        memberUsername: memberId,
-        memberName: memberId,
-        amount: amount,
-        amountPaise: (amount * 100).toInt(),
-        paymentMethod: 'TEST_REFUND',
-        status: 'PAID',
-        payeeVpa: '$memberId@upi',
-        payeeName: memberId,
-        createdAt: now,
-        completedAt: now,
-        notes: 'Test: Security deposit refunded to member',
-      ));
-
-      final idx = _mockSecurityDeposits.indexWhere((d) => d.groupId == groupId && d.memberId == memberId);
-      if (idx != -1) {
-        final existing = _mockSecurityDeposits[idx];
-        _mockSecurityDeposits[idx] = SecurityDeposit(
-          id: depositId,
-          groupId: groupId,
-          memberId: memberId,
-          amount: amount,
-          status: 'refunded',
-          razorpayOrderId: existing.razorpayOrderId,
-          razorpayPaymentId: existing.razorpayPaymentId,
-          createdAt: existing.createdAt,
-          updatedAt: now,
-        );
-      }
       _clearError();
-      debugPrint('✅ Supabase: Refunded security deposit for $memberId in $groupId');
-      return true;
+      debugPrint('✅ Supabase: record_deposit_payment returned: $response');
+      return Map<String, dynamic>.from(response as Map);
+    } catch (e) {
+      return _guardWrite(
+        'recordDepositPayment',
+        e,
+        hasFailureResult: true,
+        failureResult: <String, dynamic>{
+          'success': false,
+          'error': e.toString(),
+        },
+      );
+    }
+  }
+
+  /// Refunds a held security deposit using the server-side PostgreSQL function refund_deposit.
+  static Future<bool> refundDeposit({
+    required String depositId,
+    String? groupId,
+    String? memberId,
+    double? amount,
+  }) async {
+    try {
+      final supaClient = client;
+      if (supaClient == null) {
+        throw Exception('Supabase client is not initialized.');
+      }
+
+      final response = await supaClient.rpc('refund_deposit', params: {
+        'p_deposit_id': depositId,
+      });
+
+      _clearError();
+      debugPrint('✅ Supabase: refund_deposit returned: $response');
+      return response != null && (response as Map)['success'] == true;
     } catch (e) {
       return _guardWrite(
         'refundDeposit',
@@ -3327,70 +3344,78 @@ class SupabaseService {
     }
   }
 
-  static Future<bool> forfeitDeposit({
+  /// Forfeits a held security deposit with detailed return metrics using forfeit_deposit.
+  static Future<Map<String, dynamic>> forfeitDepositDetailed({
     required String depositId,
-    required String groupId,
-    required String memberId,
-    required double amount,
+    double? missedAmount,
   }) async {
-    final now = DateTime.now();
-
     try {
       final supaClient = client;
       if (supaClient == null) {
         throw Exception('Supabase client is not initialized.');
       }
 
-      await supaClient
-          .from('security_deposits')
-          .update({'status': 'forfeited', 'updated_at': now.toIso8601String()})
-          .eq('group_id', groupId)
-          .eq('member_id', memberId);
+      final response = await supaClient.rpc('forfeit_deposit', params: {
+        'p_deposit_id': depositId,
+        if (missedAmount != null) 'p_missed_amount': missedAmount,
+      });
 
-      // Ledger entry for forfeit applied to missed contribution
-      await recordPayment(ChitPaymentRecord(
-        id: 'forfeit_${DateTime.now().millisecondsSinceEpoch}',
-        groupId: groupId,
-        groupName: 'Chit Group Deposit Forfeit',
-        cycle: 0,
-        memberUsername: memberId,
-        memberName: memberId,
-        amount: amount,
-        amountPaise: (amount * 100).toInt(),
-        paymentMethod: 'DEPOSIT_FORFEIT',
-        status: 'PAID',
-        payeeVpa: 'foreman@safechit',
-        payeeName: 'Foreman Pool',
-        createdAt: now,
-        completedAt: now,
-        notes: 'Test: Security deposit forfeited and applied to missed contribution',
-      ));
-
-      final idx = _mockSecurityDeposits.indexWhere((d) => d.groupId == groupId && d.memberId == memberId);
-      if (idx != -1) {
-        final existing = _mockSecurityDeposits[idx];
-        _mockSecurityDeposits[idx] = SecurityDeposit(
-          id: depositId,
-          groupId: groupId,
-          memberId: memberId,
-          amount: amount,
-          status: 'forfeited',
-          razorpayOrderId: existing.razorpayOrderId,
-          razorpayPaymentId: existing.razorpayPaymentId,
-          createdAt: existing.createdAt,
-          updatedAt: now,
-        );
-      }
       _clearError();
-      debugPrint('✅ Supabase: Forfeited security deposit for $memberId in $groupId');
-      return true;
+      debugPrint('✅ Supabase: forfeit_deposit returned: $response');
+      return Map<String, dynamic>.from(response as Map);
     } catch (e) {
       return _guardWrite(
         'forfeitDeposit',
         e,
         hasFailureResult: true,
-        failureResult: false,
+        failureResult: <String, dynamic>{
+          'success': false,
+          'error': e.toString(),
+        },
       );
+    }
+  }
+
+  /// Backward-compatible wrapper returning bool for callers and tests.
+  static Future<bool> forfeitDeposit({
+    required String depositId,
+    String? groupId,
+    String? memberId,
+    double? amount,
+    double? missedAmount,
+  }) async {
+    final res = await forfeitDepositDetailed(
+      depositId: depositId,
+      missedAmount: missedAmount,
+    );
+    return res['success'] == true;
+  }
+
+  /// Fetches append-only deposit transactions audit log from Supabase.
+  static Future<List<DepositTransaction>> getDepositTransactions({
+    String? groupId,
+    String? memberId,
+  }) async {
+    try {
+      final supaClient = client;
+      if (supaClient != null) {
+        var query = supaClient.from('deposit_transactions').select();
+        if (groupId != null) {
+          query = query.eq('group_id', groupId);
+        }
+        if (memberId != null) {
+          query = query.eq('member_id', memberId);
+        }
+        final response = await query.order('created_at', ascending: false);
+        _clearError();
+        return (response as List)
+            .map((json) => DepositTransaction.fromJson(json))
+            .toList();
+      }
+      _clearError();
+      return [];
+    } catch (e) {
+      return _guardRead('getDepositTransactions', e, <DepositTransaction>[]);
     }
   }
 }

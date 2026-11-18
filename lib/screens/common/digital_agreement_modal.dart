@@ -116,8 +116,9 @@ class _DigitalAgreementModalState extends State<DigitalAgreementModal> {
 
   /// Parse the agreement and render it as proper styled widgets.
   Widget _buildFormattedAgreement(DigitalAgreement ag) {
-    final today = DateTime.now();
-    final formattedDate = '${today.day}/${today.month}/${today.year}';
+    final agreementDate = ag.createdAt;
+    final formattedDate =
+        '${agreementDate.day.toString().padLeft(2, '0')}/${agreementDate.month.toString().padLeft(2, '0')}/${agreementDate.year}';
     final pool = ag.poolAmount < 1000
         ? '₹${ag.poolAmount.toStringAsFixed(2)}'
         : '₹${ag.poolAmount.toStringAsFixed(0)}';
@@ -224,8 +225,8 @@ class _DigitalAgreementModalState extends State<DigitalAgreementModal> {
                 '${ag.durationMonths} Months'),
             _specRow(Icons.payments_rounded, 'Monthly Contribution per Subscriber', monthly),
             _specRow(Icons.gavel_rounded, 'Operation Mechanism', ag.schemeType),
-            _specRow(Icons.lock_outline_rounded, 'Security Deposit (Escrow)',
-                '10% of monthly contribution'),
+            _specRow(Icons.lock_outline_rounded, 'Security Deposit',
+                '27% of monthly contribution'),
             _specRow(Icons.star_rounded, 'Host Payout',
                 'The host receives the month 2 payout'),
           ],

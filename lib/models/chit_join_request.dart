@@ -51,7 +51,7 @@ class ChitJoinRequest {
       reputationScore: (json['reputation_score'] as num?)?.toDouble() ?? 100.0,
       status: json['status'] as String? ?? 'pending',
       createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'] as String)
+          ? DateTime.parse(json['created_at'] as String).toLocal()
           : DateTime.now(),
       guarantorUsername: json['guarantor_username'] as String?,
       guarantorRelation: json['guarantor_relation'] as String?,
@@ -72,16 +72,16 @@ class ChitJoinRequest {
       'member_city': memberCity,
       'reputation_score': reputationScore,
       'status': status,
-      'created_at': createdAt.toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
       if (guarantorUsername != null) 'guarantor_username': guarantorUsername,
       if (guarantorRelation != null) 'guarantor_relation': guarantorRelation,
       if (guarantorStatus != null) 'guarantor_status': guarantorStatus,
     };
   }
 
-  /// Core database columns that are guaranteed to exist on public.chit_join_requests
-  Map<String, dynamic> toDbJson() {
-    return {
+  /// Core database columns for inserts: omits created_at so Supabase server stamps DEFAULT NOW()
+  Map<String, dynamic> toDbJson({bool forInsert = true}) {
+    final map = <String, dynamic>{
       'id': id,
       'group_id': groupId,
       'group_name': groupName,
@@ -93,8 +93,11 @@ class ChitJoinRequest {
       'member_city': memberCity,
       'reputation_score': reputationScore,
       'status': status,
-      'created_at': createdAt.toIso8601String(),
     };
+    if (!forInsert) {
+      map['created_at'] = createdAt.toUtc().toIso8601String();
+    }
+    return map;
   }
 
   ChitJoinRequest copyWith({

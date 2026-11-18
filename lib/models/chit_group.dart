@@ -5,6 +5,7 @@ class ChitGroup {
   final int durationMonths;
   final double monthlyContribution;
   final double securityDeposit;
+  final double? depositAmount;
   final String payoutRules;
   final String inviteCode;
   final String status; // 'Active', 'Pending', 'Completed'
@@ -22,6 +23,7 @@ class ChitGroup {
     required this.durationMonths,
     required this.monthlyContribution,
     required this.securityDeposit,
+    this.depositAmount,
     required this.payoutRules,
     required this.inviteCode,
     this.status = 'Active',
@@ -33,15 +35,35 @@ class ChitGroup {
     this.foremanUpiId = 'devesh1@oksbi',
   });
 
+  double get effectiveDepositAmount {
+    if (depositAmount != null && depositAmount! > 0) {
+      return depositAmount!;
+    }
+    if (securityDeposit > 0 && securityDeposit < monthlyContribution) {
+      return securityDeposit;
+    }
+    return double.parse((monthlyContribution * 0.27).toStringAsFixed(2));
+  }
+
   /// Factory constructor to create a ChitGroup from JSON/Map
   factory ChitGroup.fromJson(Map<String, dynamic> json) {
+    final monthly =
+        (json['monthly_contribution'] as num?)?.toDouble() ?? 1.0;
+    final default27Pct = double.parse((monthly * 0.27).toStringAsFixed(2));
+    final rawSec = (json['security_deposit'] as num?)?.toDouble();
+    final secDep = (rawSec != null && rawSec > 0 && rawSec < monthly)
+        ? rawSec
+        : default27Pct;
+    final depAmt = (json['deposit_amount'] as num?)?.toDouble() ?? secDep;
+
     return ChitGroup(
       id: json['id'] as String? ?? 'group_${DateTime.now().millisecondsSinceEpoch}',
       name: json['name'] as String? ?? 'Chit Group',
       totalPoolSize: (json['total_pool_size'] as num?)?.toDouble() ?? 5.0,
       durationMonths: json['duration_months'] as int? ?? 5,
-      monthlyContribution: (json['monthly_contribution'] as num?)?.toDouble() ?? 1.0,
-      securityDeposit: (json['security_deposit'] as num?)?.toDouble() ?? 1.0,
+      monthlyContribution: monthly,
+      securityDeposit: secDep,
+      depositAmount: depAmt,
       payoutRules: json['payout_rules'] as String? ?? 'Standard bidding rules per Chit Funds Act 1982.',
       inviteCode: json['invite_code'] as String? ?? '849201',
       status: json['status'] as String? ?? 'Active',
@@ -62,7 +84,8 @@ class ChitGroup {
       'total_pool_size': totalPoolSize,
       'duration_months': durationMonths,
       'monthly_contribution': monthlyContribution,
-      'security_deposit': securityDeposit,
+      'security_deposit': effectiveDepositAmount,
+      'deposit_amount': effectiveDepositAmount,
       'payout_rules': payoutRules,
       'invite_code': inviteCode,
       'status': status,
@@ -83,6 +106,7 @@ class ChitGroup {
     int? durationMonths,
     double? monthlyContribution,
     double? securityDeposit,
+    double? depositAmount,
     String? payoutRules,
     String? inviteCode,
     String? status,
@@ -100,6 +124,7 @@ class ChitGroup {
       durationMonths: durationMonths ?? this.durationMonths,
       monthlyContribution: monthlyContribution ?? this.monthlyContribution,
       securityDeposit: securityDeposit ?? this.securityDeposit,
+      depositAmount: depositAmount ?? this.depositAmount,
       payoutRules: payoutRules ?? this.payoutRules,
       inviteCode: inviteCode ?? this.inviteCode,
       status: status ?? this.status,

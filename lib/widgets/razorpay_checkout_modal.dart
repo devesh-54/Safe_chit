@@ -255,7 +255,7 @@ class _RazorpayCheckoutModalState extends State<RazorpayCheckoutModal>
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Simulating Net Banking payment of ₹${widget.amount.toStringAsFixed(0)} to SafeChit Escrow.',
+                      'Simulating Net Banking payment of ₹${widget.amount.toStringAsFixed(0)} to SafeChit Deposit Rail.',
                       style: const TextStyle(fontSize: 12, color: Color(0xFF334155)),
                     ),
                   ),

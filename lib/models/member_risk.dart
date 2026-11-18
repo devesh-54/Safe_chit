@@ -2,6 +2,7 @@ class ChitMemberRisk {
   final String id;
   final String groupId;
   final String name;
+  final String memberUsername;
   final double defaultRiskScore; // 0 to 100
   final String payoutPosition; // e.g. 'Paid (Month 2)', 'Unpaid (Bidder)'
   final String paymentTrend; // e.g. 'On-Time', 'Delayed 2x', 'Delayed 4x'
@@ -10,7 +11,7 @@ class ChitMemberRisk {
   final bool hasDefaulted;
   final DateTime lastPaymentDate;
   final String phone;
-  final bool forfeited; // Escrow forfeiture trigger status
+  final bool forfeited; // Security deposit forfeiture trigger status
   final bool defaultNoticeSent;
   final String? defaultNoticeText;
   final bool isHostMember;
@@ -19,6 +20,7 @@ class ChitMemberRisk {
     required this.id,
     required this.groupId,
     required this.name,
+    this.memberUsername = '',
     required this.defaultRiskScore,
     required this.payoutPosition,
     required this.paymentTrend,
@@ -39,13 +41,15 @@ class ChitMemberRisk {
       id: json['id'] as String,
       groupId: json['group_id'] as String,
       name: json['name'] as String,
+      memberUsername: json['member_username'] as String? ?? json['name'] as String? ?? '',
       defaultRiskScore: (json['default_risk_score'] as num).toDouble(),
       payoutPosition: json['payout_position'] as String,
       paymentTrend: json['payment_trend'] as String,
       guarantorStatus: json['guarantor_status'] as String,
       amountExposed: (json['amount_exposed'] as num).toDouble(),
       hasDefaulted: json['has_defaulted'] as bool? ?? false,
-      lastPaymentDate: DateTime.parse(json['last_payment_date'] as String),
+      lastPaymentDate:
+          DateTime.parse(json['last_payment_date'] as String).toLocal(),
       phone: json['phone'] as String? ?? '',
       forfeited: json['forfeited'] as bool? ?? false,
       defaultNoticeSent: json['default_notice_sent'] as bool? ?? false,
@@ -60,13 +64,14 @@ class ChitMemberRisk {
       'id': id,
       'group_id': groupId,
       'name': name,
+      'member_username': memberUsername.isNotEmpty ? memberUsername : name,
       'default_risk_score': defaultRiskScore,
       'payout_position': payoutPosition,
       'payment_trend': paymentTrend,
       'guarantor_status': guarantorStatus,
       'amount_exposed': amountExposed,
       'has_defaulted': hasDefaulted,
-      'last_payment_date': lastPaymentDate.toIso8601String(),
+      'last_payment_date': lastPaymentDate.toUtc().toIso8601String(),
       'phone': phone,
       'forfeited': forfeited,
       'default_notice_sent': defaultNoticeSent,
@@ -80,6 +85,7 @@ class ChitMemberRisk {
     String? id,
     String? groupId,
     String? name,
+    String? memberUsername,
     double? defaultRiskScore,
     String? payoutPosition,
     String? paymentTrend,
@@ -97,6 +103,7 @@ class ChitMemberRisk {
       id: id ?? this.id,
       groupId: groupId ?? this.groupId,
       name: name ?? this.name,
+      memberUsername: memberUsername ?? this.memberUsername,
       defaultRiskScore: defaultRiskScore ?? this.defaultRiskScore,
       payoutPosition: payoutPosition ?? this.payoutPosition,
       paymentTrend: paymentTrend ?? this.paymentTrend,

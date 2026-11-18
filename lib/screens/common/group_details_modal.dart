@@ -9,10 +9,10 @@ import '../../models/security_deposit.dart';
 import '../../models/digital_agreement.dart';
 import '../../services/supabase_service.dart';
 import '../../core/config/deposit_config.dart';
-import '../../features/bidding/bidding_session_service.dart';
 import '../../features/bidding/live_bidding_room.dart';
 import '../../widgets/razorpay_checkout_modal.dart';
 import '../payment/payment_checkout_screen.dart';
+import '../payment/simulated_bank_screen.dart';
 import 'digital_agreement_modal.dart';
 
 class GroupDetailsModal extends StatefulWidget {
@@ -39,7 +39,6 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
   List<ChitMemberRisk> _members = [];
   Map<String, SecurityDeposit> _rosterDeposits = {};
   SecurityDeposit? _mySecurityDeposit;
-  List<ChitPaymentRecord> _groupPayments = [];
   bool _isLoading = true;
   bool _isPaidCurrentCycle = false;
   Timer? _countdownTimer;
@@ -49,7 +48,6 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
 
   // Design Tokens (Calm Financial Trust palette)
   static const Color _kSurface = Color(0xFFF8F9FF);
-  static const Color _kPrimary = Color(0xFF000E2B);
   static const Color _kPrimaryContainer = Color(0xFF0D234A);
   static const Color _kSecondary = Color(0xFF006A61);
   static const Color _kSecondaryAccent = Color(0xFF0D9488);
@@ -65,12 +63,15 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
 
   String get _foremanName => 'Rajesh Kumar (Foreman)';
 
-  double get _depositAmount {
-    if (widget.group.securityDeposit > 0) {
-      return widget.group.securityDeposit;
-    }
-    return widget.group.monthlyContribution * kDefaultDepositPercentOfInstallment;
+  String _formatCurrency(double val) {
+    return NumberFormat.currency(
+      locale: 'en_IN',
+      symbol: '₹',
+      decimalDigits: val % 1 == 0 ? 0 : 2,
+    ).format(val);
   }
+
+  double get _depositAmount => widget.group.effectiveDepositAmount;
 
   int _getUserPayoutMonth() {
     final idx = _members.indexWhere(
@@ -145,7 +146,6 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
         setState(() {
           _members = members;
           _rosterDeposits = deposits;
-          _groupPayments = payments;
           _mySecurityDeposit = myDep;
           _isPaidCurrentCycle = paid;
           _isLoading = false;
@@ -157,6 +157,30 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
   }
 
   void _openDepositCheckoutModal() {
+    if (!kDepositViaRazorpay) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => SimulatedBankScreen(
+            groupId: widget.group.id,
+            groupName: widget.group.name,
+            memberId: widget.currentUsername,
+            amount: _depositAmount,
+            onDepositCompleted: () {
+              _loadGroupMembers();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Security deposit recorded successfully!'),
+                  backgroundColor: Color(0xFF0D9488),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+      return;
+    }
+
     RazorpayCheckoutModal.show(
       context: context,
       groupId: widget.group.id,
@@ -167,7 +191,7 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
         _loadGroupMembers();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Security deposit verified and held in escrow!'),
+            content: Text('Security deposit verified and recorded!'),
             backgroundColor: Color(0xFF0D9488),
           ),
         );
@@ -396,7 +420,7 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
                         SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            'Our dispute resolution team reviews all logs and host confirmations. Your funds remain secured in SafeChit escrow.',
+                            'Our dispute resolution team reviews all logs and host confirmations. Your transactions remain recorded in SafeChit.',
                             style: TextStyle(fontSize: 12, color: _kOnSurface),
                           ),
                         ),
@@ -542,8 +566,8 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
       isConfirmed = false;
     } else if (type == 'sec-dep') {
       title = 'Initial Security Deposit';
-      amount = '₹${NumberFormat('#,##,###').format(_depositAmount.toInt())}';
-      badge = 'Escrow Held';
+      amount = _formatCurrency(_depositAmount);
+      badge = 'Deposit recorded';
     }
 
     showModalBottomSheet(
@@ -602,7 +626,7 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'VERIFIED ESCROW VOUCHER',
+                        'VERIFIED CHIT VOUCHER',
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
@@ -658,10 +682,10 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
             ),
             const SizedBox(height: 16),
             _buildDetailRow('Purpose', title),
-            _buildDetailRow('Digital Escrow UTR', 'SC${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}'),
+            _buildDetailRow('Digital Transaction UTR', 'SC${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}'),
             _buildDetailRow(
               'Host Confirmation',
-              'Verified by $_foremanName (Auto-Escrow)',
+              'Verified by $_foremanName (Direct Confirmation)',
             ),
             _buildDetailRow('Payment Mode', 'UPI Instant Settlement'),
             _buildDetailRow(
@@ -803,16 +827,31 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
                                 children: [
                                   Row(
                                     children: [
-                                      Text(
-                                        m.name,
-                                        style: TextStyle(
-                                          fontWeight: isYou
-                                              ? FontWeight.bold
-                                              : FontWeight.w600,
-                                          fontSize: 14,
-                                          color: _kOnSurface,
+                                      Flexible(
+                                        child: Text(
+                                          m.name,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontWeight: isYou
+                                                ? FontWeight.bold
+                                                : FontWeight.w600,
+                                            fontSize: 14,
+                                            color: _kOnSurface,
+                                          ),
                                         ),
                                       ),
+                                      if (m.memberUsername.isNotEmpty &&
+                                          m.memberUsername.toLowerCase() !=
+                                              m.name.toLowerCase()) ...[
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          '(@${m.memberUsername})',
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            color: _kOnSurfaceVariant,
+                                          ),
+                                        ),
+                                      ],
                                       const SizedBox(width: 6),
                                       if (isHost)
                                         Container(
@@ -865,6 +904,34 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
                                       color: isYou ? _kSecondary : _kOnSurfaceVariant,
                                     ),
                                   ),
+                                  Builder(builder: (_) {
+                                    final mDep = _rosterDeposits[m.memberUsername] ??
+                                        _rosterDeposits[m.id] ??
+                                        _rosterDeposits.values
+                                            .where((d) =>
+                                                m.memberUsername.isNotEmpty &&
+                                                d.memberId.toLowerCase() ==
+                                                    m.memberUsername
+                                                        .toLowerCase())
+                                            .firstOrNull;
+                                    final mDepStatus =
+                                        mDep?.displayStatus ?? 'Pending';
+                                    final mDepAmt = mDep?.amount ?? _depositAmount;
+                                    return Text(
+                                      'Deposit: ${_formatCurrency(mDepAmt)} ($mDepStatus)',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                        color: mDepStatus == 'Recorded'
+                                            ? const Color(0xFF16A34A)
+                                            : (mDepStatus == 'Refunded'
+                                                ? const Color(0xFF2563EB)
+                                                : (mDepStatus == 'Forfeited'
+                                                    ? const Color(0xFFDC2626)
+                                                    : const Color(0xFFD97706))),
+                                      ),
+                                    );
+                                  }),
                                 ],
                               ),
                             ),
@@ -1066,7 +1133,7 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
               overflow: TextOverflow.ellipsis,
             ),
             Text(
-              '${widget.group.name} • Verified Escrow',
+              '${widget.group.name} • Verified Chit',
               style: const TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
@@ -1490,7 +1557,7 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
                           Row(
                             children: [
                               Text(
-                                '₹${NumberFormat('#,##,###').format(_depositAmount.toInt())}',
+                                _formatCurrency(_depositAmount),
                                 style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
@@ -1509,7 +1576,7 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
                           ),
                           Text(
                             _mySecurityDeposit?.isHeld == true
-                                ? 'Held in Escrow'
+                                ? 'Deposit recorded'
                                 : 'Pending Deposit',
                             style: TextStyle(
                               fontSize: 11,
@@ -1591,7 +1658,7 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
                 ),
                 icon: const Icon(Icons.shield_outlined, size: 16),
                 label: Text(
-                  'Pay Security Deposit (₹${NumberFormat('#,##,###').format(_depositAmount.toInt())})',
+                  'Pay Security Deposit (${_formatCurrency(_depositAmount)})',
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                 ),
               ),
@@ -1602,10 +1669,10 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: const [
-                Icon(Icons.lock_rounded, size: 12, color: _kSecondaryAccent),
+                Icon(Icons.shield_outlined, size: 12, color: _kSecondaryAccent),
                 SizedBox(width: 4),
                 Text(
-                  'SafeChit Trust Guarantee • Sandbox Mode (Simulated)',
+                  'Prototype, no real money',
                   style: TextStyle(fontSize: 10, color: _kOnSurfaceVariant),
                 ),
               ],
@@ -1993,7 +2060,7 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
           ),
           const SizedBox(height: 12),
 
-          // 4. Host Trust & Escrow Guarantee Card
+          // 4. Host Trust & Security Deposit Guarantee Card
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -2090,7 +2157,7 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
                       _buildMetricRow(
                         Icons.security_rounded,
                         _kSecondaryAccent,
-                        'Foreman Escrow Bond',
+                        'Foreman Security Bond',
                         '₹50,000 Deposited',
                       ),
                       const SizedBox(height: 8),
@@ -2713,7 +2780,7 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
                 '₹${NumberFormat('#,##,###').format(widget.group.monthlyContribution.toInt())}',
             badgeText: _isPaidCurrentCycle ? 'Confirmed' : 'Due in 3 days',
             isConfirmed: _isPaidCurrentCycle,
-            subLeft: _isPaidCurrentCycle ? 'Verified Escrow UPI' : 'Standard installment',
+            subLeft: _isPaidCurrentCycle ? 'Verified UPI Transfer' : 'Standard installment',
             subRight: _isPaidCurrentCycle ? 'UTR: Verified • View receipt →' : 'Tap to view break-up →',
             onTap: () => _openReceiptDrawer('preview-due'),
           ),
@@ -2751,9 +2818,8 @@ class _GroupDetailsModalState extends State<GroupDetailsModal>
           _buildPassbookCard(
             title: 'Initial Security Deposit',
             dateSubtitle: 'Paid 10 Sep 2025',
-            amount:
-                '₹${NumberFormat('#,##,###').format(_depositAmount.toInt())}',
-            badgeText: _mySecurityDeposit?.isHeld == true ? 'Escrow Held' : 'Pending',
+            amount: _formatCurrency(_depositAmount),
+            badgeText: _mySecurityDeposit?.isHeld == true ? 'Deposit recorded' : 'Pending',
             isConfirmed: _mySecurityDeposit?.isHeld == true,
             subLeft: '100% Refundable at cycle close',
             subRight: 'Autopay • UTR: #SC102938472',

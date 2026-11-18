@@ -499,7 +499,7 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen> {
                     Icon(Icons.shield_rounded, size: 16, color: Color(0xFF16A34A)),
                     SizedBox(width: 6),
                     Text(
-                      'SafeChit Direct Escrow • Regulated Chit Funds Act 1982',
+                      'SafeChit Direct Transfer • Regulated Chit Funds Act 1982',
                       style: TextStyle(
                         fontSize: 11,
                         color: Color(0xFF15803D),
@@ -1009,7 +1009,7 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            '$formattedAmount credited to Foreman Escrow',
+            '$formattedAmount credited to Foreman Chit Account',
             textAlign: TextAlign.center,
             style: const TextStyle(
               fontSize: 15,
@@ -1043,7 +1043,7 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen> {
                   DateFormat('d MMM yyyy, hh:mm a').format(_paidAt ?? DateTime.now()),
                 ),
                 const Divider(height: 18),
-                _buildReceiptRow('Foreman Escrow', _payeeVpa),
+                _buildReceiptRow('Foreman Account', _payeeVpa),
               ],
             ),
           ),
@@ -1180,7 +1180,7 @@ class _SuccessReceiptSheet extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            '$formattedAmount credited to Foreman Escrow',
+            '$formattedAmount credited to Foreman Chit Account',
             textAlign: TextAlign.center,
             style: const TextStyle(
               fontSize: 13,
@@ -1209,7 +1209,7 @@ class _SuccessReceiptSheet extends StatelessWidget {
                 _row('Date & Time',
                     DateFormat('d MMM yyyy, hh:mm a').format(paidAt)),
                 const Divider(height: 16),
-                _row('Foreman Escrow', payeeVpa),
+                _row('Foreman Account', payeeVpa),
               ],
             ),
           ),

@@ -60,8 +60,13 @@ class ChitPaymentRecord {
       paymentSessionId: map['payment_session_id']?.toString(),
       payeeVpa: map['payee_vpa']?.toString() ?? 'safechit.foreman@upi',
       payeeName: map['payee_name']?.toString() ?? 'SafeChit Foreman',
-      createdAt: map['created_at'] != null ? DateTime.tryParse(map['created_at'].toString()) ?? DateTime.now() : DateTime.now(),
-      completedAt: map['completed_at'] != null ? DateTime.tryParse(map['completed_at'].toString()) : null,
+      createdAt: map['created_at'] != null
+          ? (DateTime.tryParse(map['created_at'].toString())?.toLocal() ??
+              DateTime.now())
+          : DateTime.now(),
+      completedAt: map['completed_at'] != null
+          ? DateTime.tryParse(map['completed_at'].toString())?.toLocal()
+          : null,
       notes: map['notes']?.toString(),
     );
   }
@@ -82,10 +87,20 @@ class ChitPaymentRecord {
       'payment_session_id': paymentSessionId,
       'payee_vpa': payeeVpa,
       'payee_name': payeeName,
-      'created_at': createdAt.toIso8601String(),
-      'completed_at': completedAt?.toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
+      'completed_at': completedAt?.toUtc().toIso8601String(),
       'notes': notes,
     };
+  }
+
+  /// Map for database inserts: leaves out created_at so Supabase stamps NOW() on the server
+  Map<String, dynamic> toInsertMap() {
+    final map = toMap();
+    map.remove('created_at');
+    if (completedAt == null) {
+      map.remove('completed_at');
+    }
+    return map;
   }
 
   ChitPaymentRecord copyWith({

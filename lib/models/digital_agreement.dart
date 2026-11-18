@@ -60,16 +60,16 @@ class DigitalAgreement {
       foremanSigned: json['foreman_signed'] as bool? ?? false,
       foremanSignatureUrl: json['foreman_signature_url'] as String?,
       foremanSignedAt: json['foreman_signed_at'] != null 
-          ? DateTime.parse(json['foreman_signed_at'] as String) 
+          ? DateTime.parse(json['foreman_signed_at'] as String).toLocal() 
           : null,
       memberSigned: json['member_signed'] as bool? ?? false,
       memberSignatureUrl: json['member_signature_url'] as String?,
       memberSignedAt: json['member_signed_at'] != null 
-          ? DateTime.parse(json['member_signed_at'] as String) 
+          ? DateTime.parse(json['member_signed_at'] as String).toLocal() 
           : null,
       status: json['status'] as String? ?? 'pending_signatures',
       createdAt: json['created_at'] != null 
-          ? DateTime.parse(json['created_at'] as String) 
+          ? DateTime.parse(json['created_at'] as String).toLocal() 
           : DateTime.now(),
     );
   }
@@ -136,13 +136,22 @@ class DigitalAgreement {
       'agreement_text': agreementText,
       'foreman_signed': foremanSigned,
       'foreman_signature_url': foremanSignatureUrl,
-      'foreman_signed_at': foremanSignedAt?.toIso8601String(),
+      'foreman_signed_at': foremanSignedAt?.toUtc().toIso8601String(),
       'member_signed': memberSigned,
       'member_signature_url': memberSignatureUrl,
-      'member_signed_at': memberSignedAt?.toIso8601String(),
+      'member_signed_at': memberSignedAt?.toUtc().toIso8601String(),
       'status': status,
-      'created_at': createdAt.toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
     };
+  }
+
+  /// Map for database inserts: leaves out created_at so Supabase server stamps DEFAULT NOW()
+  Map<String, dynamic> toInsertMap() {
+    final map = toJson();
+    map.remove('created_at');
+    if (foremanSignedAt == null) map.remove('foreman_signed_at');
+    if (memberSignedAt == null) map.remove('member_signed_at');
+    return map;
   }
 
   /// Generate standard legally compliant Chit Agreement text based on Chit Funds Act, 1982
@@ -182,7 +191,7 @@ ARTICLE I: CHIT SCHEME SPECIFICATIONS & FINANCIAL OBLIGATIONS
 4. Scheme Operation Mechanism: $schemeType System
    - Bidding System: Auction-based discount bidding per monthly cycle.
    - Random Picking System: Transparent lucky-draw lot selection per monthly cycle.
-5. Escrow Security Deposit Held: ₹${securityDeposit.toStringAsFixed(0)}
+5. Security Deposit Held: ₹${securityDeposit.toStringAsFixed(0)}
 6. Organizer Entitlement: The host receives the month 2 payout.
 
 --------------------------------------------------------------------------------
@@ -196,7 +205,7 @@ ARTICLE II: SUBSCRIBER COVENANTS & DEFAULT CONSEQUENCES
 4. Default by Prized Subscriber (Consolidated Demand & Recovery):
    If a subscriber who has already drawn/prized the chit amount defaults on subsequent monthly installments:
    a) All future remaining installments become IMMEDIATELY DUE AND PAYABLE in one consolidated lump sum.
-   b) The Foreman is authorized to forfeit the security deposit held in escrow (₹${securityDeposit.toStringAsFixed(0)}).
+   b) The Foreman is authorized to forfeit the security deposit (₹${securityDeposit.toStringAsFixed(0)}).
    c) Immediate legal recovery proceedings will be initiated under the Bharatiya Nyaya Sanhita (BNS), 2024 (Section 316 - Criminal Breach of Trust / Section 318 - Cheating) and Civil Recovery Suits.
 
 --------------------------------------------------------------------------------

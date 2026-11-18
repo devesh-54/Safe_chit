@@ -2,12 +2,16 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 
 /// Default security deposit percentage if the group does not specify an amount.
-/// 10% of one monthly installment (0.10).
-const double kDefaultDepositPercentOfInstallment = 0.10;
+/// 27% of one monthly installment (0.27).
+const double kDefaultDepositPercentOfInstallment = 0.27;
 
 /// Global flag for development / testing tools.
 /// Enables debug buttons like "Test: refund deposit" and "Test: forfeit deposit" on host console.
 const bool kDevTools = true;
+
+/// When false, uses in-app simulated bank screen & Supabase server-side functions
+/// instead of external Razorpay SDK & Node.js webhook server.
+const bool kDepositViaRazorpay = false;
 
 /// Razorpay Test Key ID (Public Key only - Key Secret is NEVER stored in the Flutter app).
 const String kRazorpayTestKeyId = 'rzp_test_5172839401';

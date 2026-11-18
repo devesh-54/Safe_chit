@@ -107,7 +107,7 @@ class YoupiPaymentService {
     // NPCI strict: Alphanumeric and spaces only, max 25 chars. No special characters like () or @
     final sanitizedName = payeeName.trim().replaceAll(RegExp(r'[^a-zA-Z0-9 ]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
     final cleanName = Uri.encodeComponent(
-      sanitizedName.isNotEmpty ? (sanitizedName.length > 25 ? sanitizedName.substring(0, 25) : sanitizedName) : 'SafeChit Escrow',
+      sanitizedName.isNotEmpty ? (sanitizedName.length > 25 ? sanitizedName.substring(0, 25) : sanitizedName) : 'SafeChit',
     );
     final amountStr = amount.toStringAsFixed(2);
     final cleanNote = (note ?? 'Chit $orderId').replaceAll(RegExp(r'[^a-zA-Z0-9 -]'), '').trim();

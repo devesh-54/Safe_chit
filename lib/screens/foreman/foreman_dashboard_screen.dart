@@ -29,7 +29,7 @@ class ForemanDashboardScreen extends StatefulWidget {
 
 class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
   int _currentIndex =
-      0; // 0: Dashboard, 1: My Groups, 2: Join Requests, 3: Create Group, 4: Escrow Control
+      0; // 0: Dashboard, 1: My Groups, 2: Join Requests, 3: Create Group, 4: Deposit Control
 
   List<ChitGroup> _groups = [];
 
@@ -286,7 +286,7 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
               child: Text(
                 m.hasDefaulted
                     ? '⚠️ Flagged: Already paid out + 2 late payments detected in current cycle.'
-                    : '🛡️ Low Risk: Subscriber holds collateralized escrow security deposit + 100% on-time payment track record.',
+                    : '🛡️ Low Risk: Subscriber holds verified security deposit + 100% on-time payment track record.',
 
                 style: TextStyle(
                   color: m.hasDefaulted
@@ -370,7 +370,7 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
               const SizedBox(height: 6),
 
               const Text(
-                'Escrow payout disbursed & verified under Section 20 of the Chit Funds Act, 1982.',
+                'Auction payout disbursed & verified under Section 20 of the Chit Funds Act, 1982.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
               ),
@@ -977,8 +977,8 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
             label: 'Create Group',
           ),
           const BottomNavigationBarItem(
-            icon: Icon(Icons.gavel_rounded),
-            label: 'Escrow Control',
+            icon: Icon(Icons.account_balance_wallet_outlined),
+            label: 'Deposit Control',
           ),
         ],
       ),
@@ -1060,9 +1060,9 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
     }
 
     final filteredMembers = _members.where((m) {
-      final nameMatches = m.name.toLowerCase().contains(
-        _searchQuery.toLowerCase(),
-      );
+      final query = _searchQuery.toLowerCase();
+      final nameMatches = m.name.toLowerCase().contains(query) ||
+          m.memberUsername.toLowerCase().contains(query);
 
       if (_selectedRiskFilter == 'High Risk')
         return nameMatches && m.hasDefaulted;
@@ -1637,7 +1637,9 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                               context,
                               MaterialPageRoute(
                                 builder: (_) => UserProfileScreen(
-                                  username: member.name,
+                                  username: member.memberUsername.isNotEmpty
+                                      ? member.memberUsername
+                                      : member.name,
                                   isOwnProfile: false,
                                 ),
                               ),
@@ -1660,6 +1662,18 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                                   ),
                                 ),
                               ),
+                              if (member.memberUsername.isNotEmpty &&
+                                  member.memberUsername.toLowerCase() !=
+                                      member.name.toLowerCase()) ...[
+                                const SizedBox(width: 4),
+                                Text(
+                                  '(@${member.memberUsername})',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF64748B),
+                                  ),
+                                ),
+                              ],
                               if (member.isHostMember) ...[
                                 const SizedBox(width: 6),
                                 Container(
@@ -1827,7 +1841,7 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
                     ),
 
                     Text(
-                      'Confirm escrow disbursement for winning auction bidder',
+                      'Confirm auction payout disbursement for winning bidder',
                       style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
                     ),
                   ],
@@ -2526,7 +2540,7 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
           const SizedBox(height: 8),
 
           const Text(
-            'Zero default record as organizer • 100% Escrow deposit compliance',
+            'Zero default record as organizer • 100% Security deposit compliance',
             style: TextStyle(color: Color(0xFFE2E8F0), fontSize: 12),
           ),
         ],
@@ -2692,7 +2706,7 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
     final bool isAlreadyMember = groupMembers.any(
       (m) =>
           m.isHostMember ||
-          m.name.trim().toLowerCase() == 'foreman_admin',
+          m.memberUsername.trim().toLowerCase() == 'foreman_admin',
     );
     final bool canJoinAsMember = group.currentCycle <= 1 &&
         group.membersCount < group.durationMonths &&

@@ -2019,7 +2019,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
           ),
           const SizedBox(height: 4),
           const Text(
-            'Instant 0% fee P2P UPI payments directly to Foreman Escrow account.',
+            'Instant 0% fee P2P UPI payments directly to Foreman Chit account.',
             style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
           ),
           const SizedBox(height: 16),
@@ -2535,7 +2535,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
               ),
               const SizedBox(width: 6),
               Text(
-                'All groups protected with 100% escrow deposits',
+                'All groups protected with 100% security deposits (Prototype, no real money)',
                 style: TextStyle(
                   fontSize: 11,
                   color: const Color(0xFFD3E4FE).withOpacity(0.9),
@@ -2584,7 +2584,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
           ),
           const SizedBox(height: 4),
           const Text(
-            'Explore peer-reviewed, escrow-backed savings circles in your community with verified hosts.',
+            'Explore peer-reviewed, deposit-backed savings circles in your community with verified hosts.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 12,
@@ -3314,7 +3314,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Cycle ${p.cycle} Installment via ${p.paymentMethod} • UTR: ${p.utr ?? p.id}',
+                  '${p.createdAt.day.toString().padLeft(2, '0')}/${p.createdAt.month.toString().padLeft(2, '0')}/${p.createdAt.year} • Cycle ${p.cycle} via ${p.paymentMethod} • UTR: ${p.utr ?? p.id}',
                   style: const TextStyle(
                     fontSize: 11,
                     color: Color(0xFF64748B),
@@ -3371,7 +3371,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                 const SizedBox(height: 2),
                 Text(
                   dep.isHeld
-                      ? 'Safely held in Foreman Escrow for your chit scheme.'
+                      ? '${dep.createdAt.day.toString().padLeft(2, '0')}/${dep.createdAt.month.toString().padLeft(2, '0')}/${dep.createdAt.year} • Safely recorded for your chit scheme (Prototype, no real money).'
                       : 'Pending deposit payment.',
                   style: const TextStyle(
                     fontSize: 11,
@@ -4194,6 +4194,36 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
     final isBidding = schemeType == 'Bidding';
     final isRecentlySettled = _recentlySettledGroupIds.contains(req.groupId);
 
+    final String depositStatusText;
+    final Color depositStatusColor;
+    if (SupabaseService.lastBackendError.value != null && dep == null) {
+      depositStatusText = 'Unknown';
+      depositStatusColor = const Color(0xFFDC2626);
+    } else if (dep == null) {
+      depositStatusText = 'Pending';
+      depositStatusColor = const Color(0xFFD97706);
+    } else {
+      switch (dep.status.toLowerCase()) {
+        case 'held':
+          depositStatusText = 'Recorded';
+          depositStatusColor = const Color(0xFF006A61);
+          break;
+        case 'refunded':
+          depositStatusText = 'Refunded';
+          depositStatusColor = const Color(0xFF2563EB);
+          break;
+        case 'forfeited':
+          depositStatusText = 'Forfeited';
+          depositStatusColor = const Color(0xFFDC2626);
+          break;
+        case 'pending':
+        default:
+          depositStatusText = 'Pending';
+          depositStatusColor = const Color(0xFFD97706);
+          break;
+      }
+    }
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -4491,7 +4521,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          'Escrow Deposit: ₹${_formatIndianCurrency(securityDeposit)}',
+                          'Deposit: ₹${_formatIndianCurrency(securityDeposit)}',
                           style: const TextStyle(
                             fontSize: 10.5,
                             fontWeight: FontWeight.w500,
@@ -4523,19 +4553,25 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                     ),
                     Row(
                       mainAxisSize: MainAxisSize.min,
-                      children: const [
+                      children: [
                         Icon(
-                          Icons.verified_rounded,
+                          depositStatusText == 'Recorded'
+                              ? Icons.verified_rounded
+                              : (depositStatusText == 'Refunded'
+                                  ? Icons.assignment_return_rounded
+                                  : (depositStatusText == 'Forfeited'
+                                      ? Icons.gavel_rounded
+                                      : Icons.pending_outlined)),
                           size: 13,
-                          color: Color(0xFF006A61),
+                          color: depositStatusColor,
                         ),
-                        SizedBox(width: 3),
+                        const SizedBox(width: 3),
                         Text(
-                          'Verified Escrow',
+                          'Deposit $depositStatusText',
                           style: TextStyle(
                             fontSize: 10.5,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFF006A61),
+                            color: depositStatusColor,
                           ),
                         ),
                       ],

@@ -26,7 +26,8 @@ class ReputationEvent {
       scoreDelta: (json['score_delta'] as num?)?.toDouble() ?? 0.0,
       description: json['description'] as String? ?? '',
       createdAt: json['created_at'] != null
-          ? DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now()
+          ? (DateTime.tryParse(json['created_at'].toString())?.toLocal() ??
+              DateTime.now())
           : DateTime.now(),
     );
   }
@@ -39,7 +40,7 @@ class ReputationEvent {
       'event_type': eventType,
       'score_delta': scoreDelta,
       'description': description,
-      'created_at': createdAt.toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
     };
   }
 }

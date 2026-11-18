@@ -29,7 +29,7 @@ void main() {
       expect(dep.isPending, isFalse);
       expect(dep.isRefunded, isFalse);
       expect(dep.isForfeited, isFalse);
-      expect(dep.displayStatus, equals('Held'));
+      expect(dep.displayStatus, equals('Recorded'));
       expect(dep.razorpayOrderId, equals('order_test_12345'));
       expect(dep.razorpayPaymentId, equals('pay_test_98765'));
 
@@ -83,7 +83,7 @@ void main() {
       );
       expect(dep, isNotNull);
       expect(dep!.isHeld, isTrue);
-      expect(dep.displayStatus, equals('Held'));
+      expect(dep.displayStatus, equals('Recorded'));
       expect(dep.razorpayPaymentId, equals('pay_test_kavita_01'));
     });
 

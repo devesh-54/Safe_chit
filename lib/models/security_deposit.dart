@@ -3,6 +3,7 @@ class SecurityDeposit {
   final String groupId;
   final String memberId;
   final double amount;
+  final double appliedAmount;
   final String status; // 'pending', 'held', 'refunded', 'forfeited'
   final String? razorpayOrderId;
   final String? razorpayPaymentId;
@@ -14,6 +15,7 @@ class SecurityDeposit {
     required this.groupId,
     required this.memberId,
     required this.amount,
+    this.appliedAmount = 0.0,
     required this.status,
     this.razorpayOrderId,
     this.razorpayPaymentId,
@@ -22,20 +24,24 @@ class SecurityDeposit {
   });
 
   factory SecurityDeposit.fromJson(Map<String, dynamic> json) {
+    DateTime parseLocal(dynamic val) {
+      if (val == null) return DateTime.now();
+      final dt = DateTime.tryParse(val.toString());
+      if (dt == null) return DateTime.now();
+      return dt.toLocal();
+    }
+
     return SecurityDeposit(
       id: json['id'] as String? ?? '',
       groupId: json['group_id'] as String? ?? '',
       memberId: json['member_id'] as String? ?? '',
       amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
+      appliedAmount: (json['applied_amount'] as num?)?.toDouble() ?? 0.0,
       status: (json['status'] as String? ?? 'pending').toLowerCase(),
       razorpayOrderId: json['razorpay_order_id'] as String?,
       razorpayPaymentId: json['razorpay_payment_id'] as String?,
-      createdAt: json['created_at'] != null
-          ? DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now()
-          : DateTime.now(),
-      updatedAt: json['updated_at'] != null
-          ? DateTime.tryParse(json['updated_at'].toString()) ?? DateTime.now()
-          : DateTime.now(),
+      createdAt: parseLocal(json['created_at']),
+      updatedAt: parseLocal(json['updated_at']),
     );
   }
 
@@ -45,11 +51,12 @@ class SecurityDeposit {
       'group_id': groupId,
       'member_id': memberId,
       'amount': amount,
+      'applied_amount': appliedAmount,
       'status': status,
       'razorpay_order_id': razorpayOrderId,
       'razorpay_payment_id': razorpayPaymentId,
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
+      'updated_at': updatedAt.toUtc().toIso8601String(),
     };
   }
 
@@ -58,10 +65,14 @@ class SecurityDeposit {
   bool get isRefunded => status == 'refunded';
   bool get isForfeited => status == 'forfeited';
 
+  /// Returns timestamps converted to device local time
+  DateTime get localCreatedAt => createdAt.toLocal();
+  DateTime get localUpdatedAt => updatedAt.toLocal();
+
   String get displayStatus {
     switch (status) {
       case 'held':
-        return 'Held';
+        return 'Recorded';
       case 'refunded':
         return 'Refunded';
       case 'forfeited':
