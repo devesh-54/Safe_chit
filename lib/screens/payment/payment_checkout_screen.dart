@@ -159,9 +159,21 @@ class _PaymentCheckoutScreenState extends State<PaymentCheckoutScreen> {
           'Monthly installment for Cycle ${widget.group.currentCycle} via ${_getMethodTitle(_selectedMethod)}',
     );
 
-    await SupabaseService.recordPayment(paymentRecord);
+    final recordSuccess = await SupabaseService.recordPayment(paymentRecord);
 
     if (!mounted) return;
+
+    if (!recordSuccess) {
+      setState(() => _isProcessing = false);
+      final err = SupabaseService.lastBackendError.value ?? 'Database save failed';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to record payment: $err'),
+          backgroundColor: const Color(0xFFDC2626),
+        ),
+      );
+      return;
+    }
 
     setState(() {
       _isProcessing = false;

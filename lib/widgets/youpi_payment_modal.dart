@@ -129,7 +129,16 @@ class _YoupiPaymentModalState extends State<YoupiPaymentModal> {
       notes: 'Monthly installment for Cycle ${widget.group.currentCycle + 1}',
     );
 
-    await SupabaseService.recordPayment(paymentRecord);
+    final recorded = await SupabaseService.recordPayment(paymentRecord);
+    if (!recorded && mounted) {
+      final err = SupabaseService.lastBackendError.value ?? 'Database save failed';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Payment initiation warning: $err'),
+          backgroundColor: const Color(0xFFDC2626),
+        ),
+      );
+    }
 
     // 2. Call YouPI Gateway API to register session & obtain active slot
     final result = await YoupiPaymentService.instance.createPaymentSession(

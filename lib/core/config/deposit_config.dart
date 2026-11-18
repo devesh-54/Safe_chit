@@ -13,7 +13,13 @@ const bool kDevTools = true;
 const String kRazorpayTestKeyId = 'rzp_test_5172839401';
 
 /// Dynamic base URL for SafeChit backend payment bridge.
+/// Overridable at compile time:
+/// `flutter run --dart-define=BACKEND_URL=http://<PC-LAN-IP>:3000`
 String get kDepositBackendUrl {
+  const envUrl = String.fromEnvironment('BACKEND_URL');
+  if (envUrl.isNotEmpty) {
+    return envUrl;
+  }
   if (kIsWeb) {
     return 'http://localhost:3000';
   }

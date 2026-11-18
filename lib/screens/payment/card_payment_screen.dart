@@ -107,11 +107,22 @@ class _CardPaymentScreenState extends State<CardPaymentScreen> {
       notes: 'Paid with $_cardType card ending in $last4',
     );
 
-    await SupabaseService.recordPayment(paymentRecord);
+    final recordSuccess = await SupabaseService.recordPayment(paymentRecord);
 
     if (!mounted) return;
 
     setState(() => _isProcessing = false);
+
+    if (!recordSuccess) {
+      final err = SupabaseService.lastBackendError.value ?? 'Database save failed';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Payment record failed: $err'),
+          backgroundColor: const Color(0xFFDC2626),
+        ),
+      );
+      return;
+    }
 
     widget.onPaymentCompleted(paymentRecord);
     Navigator.pop(context); // Return to checkout screen to show success receipt

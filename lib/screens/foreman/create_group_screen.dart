@@ -114,24 +114,38 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
               foremanUpiId: upiId,
             );
 
-            await SupabaseService.createChitGroup(newGroup);
-            await SupabaseService.saveDigitalAgreement(agreement);
+            try {
+              await SupabaseService.createChitGroup(newGroup);
+              final agSuccess = await SupabaseService.saveDigitalAgreement(agreement);
+              if (!agSuccess) {
+                throw Exception('Failed to save digital agreement.');
+              }
 
-            if (!mounted) return;
+              if (!mounted) return;
 
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  '🎉 "${newGroup.name}" created & Host Digital Agreement signed!',
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    '🎉 "${newGroup.name}" created & Host Digital Agreement signed!',
+                  ),
+                  backgroundColor: const Color(0xFF007A87),
                 ),
-                backgroundColor: const Color(0xFF007A87),
-              ),
-            );
+              );
 
-            if (widget.onGroupCreated != null) {
-              widget.onGroupCreated!();
-            } else {
-              Navigator.pop(context);
+              if (widget.onGroupCreated != null) {
+                widget.onGroupCreated!();
+              } else {
+                Navigator.pop(context);
+              }
+            } catch (e) {
+              if (!mounted) return;
+              final err = SupabaseService.lastBackendError.value ?? e.toString();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Failed to create group: $err'),
+                  backgroundColor: const Color(0xFFDC2626),
+                ),
+              );
             }
           },
       );

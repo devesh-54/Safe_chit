@@ -14,6 +14,7 @@ import '../../models/guarantee_request.dart';
 import '../../core/config/guarantor_rules.dart';
 import '../../models/security_deposit.dart';
 import '../../core/config/deposit_config.dart';
+import '../../widgets/backend_status_banner.dart';
 import '../../widgets/razorpay_checkout_modal.dart';
 import '../profile/user_profile_screen.dart';
 import '../../features/bidding/live_bidding_room.dart';
@@ -666,13 +667,30 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                                       agreement: agreement,
                                       isForeman: false,
                                       onSigned: () async {
-                                        await SupabaseService.saveDigitalAgreement(
+                                        final agSaved =
+                                            await SupabaseService.saveDigitalAgreement(
                                           agreement.copyWith(
                                             memberSigned: true,
                                             memberSignedAt: DateTime.now(),
                                             status: 'member_signed',
                                           ),
                                         );
+                                        if (!agSaved) {
+                                          if (mounted) {
+                                            final err =
+                                                SupabaseService.lastBackendError.value ??
+                                                    'Could not save agreement';
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                    'Agreement submission failed: $err'),
+                                                backgroundColor:
+                                                    const Color(0xFFDC2626),
+                                              ),
+                                            );
+                                          }
+                                          return;
+                                        }
 
                                         final joinSuccess =
                                             await SupabaseService.submitJoinRequest(
@@ -690,6 +708,8 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
 
                                         if (mounted) {
                                           _loadMemberData();
+                                          final err =
+                                              SupabaseService.lastBackendError.value;
                                           ScaffoldMessenger.of(context).showSnackBar(
                                             SnackBar(
                                               content: Text(
@@ -697,7 +717,9 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
                                                     ? (guarantorText.isNotEmpty
                                                         ? 'Agreement signed & request sent with guarantor @$guarantorText!'
                                                         : 'Agreement signed & join request submitted to Foreman!')
-                                                    : 'Join request failed due to mutual exclusion or restriction.',
+                                                    : (err != null
+                                                        ? 'Join request failed: $err'
+                                                        : 'Join request failed due to mutual exclusion or restriction.'),
                                               ),
                                               backgroundColor: joinSuccess
                                                   ? const Color(0xFF0F4C81)
@@ -1367,24 +1389,31 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
               ],
             ),
       body: SafeArea(
-        child: _isLoading
-            ? const Center(
-                child: CircularProgressIndicator(color: Color(0xFF0F4C81)),
-              )
-            : IndexedStack(
-                index: _currentIndex,
-                children: [
-                  _buildOverviewDashboard(displayName),
-                  _buildJoinedChitsPage(),
-                  _buildMarketplacePage(),
-                  _buildNotificationCenterPage(),
-                  UserProfileScreen(
-                    username: _username,
-                    isOwnProfile: true,
-                    initialRole: 'member',
-                  ),
-                ],
-              ),
+        child: Column(
+          children: [
+            const BackendStatusBanner(),
+            Expanded(
+              child: _isLoading
+                  ? const Center(
+                      child: CircularProgressIndicator(color: Color(0xFF0F4C81)),
+                    )
+                  : IndexedStack(
+                      index: _currentIndex,
+                      children: [
+                        _buildOverviewDashboard(displayName),
+                        _buildJoinedChitsPage(),
+                        _buildMarketplacePage(),
+                        _buildNotificationCenterPage(),
+                        UserProfileScreen(
+                          username: _username,
+                          isOwnProfile: true,
+                          initialRole: 'member',
+                        ),
+                      ],
+                    ),
+            ),
+          ],
+        ),
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,

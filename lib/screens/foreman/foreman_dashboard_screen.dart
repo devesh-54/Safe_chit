@@ -18,6 +18,8 @@ import 'escrow_controls_screen.dart';
 
 import '../profile/user_profile_screen.dart';
 
+import '../../widgets/backend_status_banner.dart';
+
 class ForemanDashboardScreen extends StatefulWidget {
   const ForemanDashboardScreen({super.key});
 
@@ -922,7 +924,14 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
         ],
       ),
 
-      body: SafeArea(child: _buildBodyContent()),
+      body: SafeArea(
+        child: Column(
+          children: [
+            const BackendStatusBanner(),
+            Expanded(child: _buildBodyContent()),
+          ],
+        ),
+      ),
 
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
@@ -2150,10 +2159,25 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
               Expanded(
                 child: OutlinedButton(
                   onPressed: () async {
-                    await SupabaseService.respondToJoinRequest(
+                    final success = await SupabaseService.respondToJoinRequest(
                       requestId: req.id,
                       accept: false,
                     );
+
+                    if (!mounted) return;
+                    if (!success) {
+                      final err = SupabaseService.lastBackendError.value;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            err != null
+                                ? 'Failed to reject request: $err'
+                                : 'Failed to reject join request.',
+                          ),
+                          backgroundColor: const Color(0xFFDC2626),
+                        ),
+                      );
+                    }
 
                     _loadDashboardData();
                   },
@@ -2177,12 +2201,15 @@ class _ForemanDashboardScreenState extends State<ForemanDashboardScreen> {
 
                     if (!mounted) return;
                     if (!success) {
+                      final err = SupabaseService.lastBackendError.value;
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
+                        SnackBar(
                           content: Text(
-                            'Cannot approve: Member or their guarantor violates mutual exclusion rules in this group.',
+                            err != null
+                                ? 'Approval failed: $err'
+                                : 'Cannot approve: Member or their guarantor violates mutual exclusion rules in this group.',
                           ),
-                          backgroundColor: Color(0xFFDC2626),
+                          backgroundColor: const Color(0xFFDC2626),
                         ),
                       );
                     }

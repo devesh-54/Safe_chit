@@ -107,20 +107,34 @@ class _EscrowControlsScreenState extends State<EscrowControlsScreen> {
                 setState(() {
                   _isLoading = true;
                 });
-                await SupabaseService.triggerForfeiture(member.id);
-                _loadDefaulters();
-                if (widget.onStateChanged != null) {
-                  widget.onStateChanged!();
-                }
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        '🔒 Forfeiture triggered and logged for ${member.name}.',
+                try {
+                  await SupabaseService.triggerForfeiture(member.id);
+                  _loadDefaulters();
+                  if (widget.onStateChanged != null) {
+                    widget.onStateChanged!();
+                  }
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          '🔒 Forfeiture triggered and logged for ${member.name}.',
+                        ),
+                        backgroundColor: const Color(0xFFDC2626),
                       ),
-                      backgroundColor: const Color(0xFFDC2626),
-                    ),
-                  );
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    final err = SupabaseService.lastBackendError.value ?? e.toString();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Failed to trigger forfeiture: $err'),
+                        backgroundColor: const Color(0xFFDC2626),
+                      ),
+                    );
+                  }
+                } finally {
+                  if (mounted) setState(() => _isLoading = false);
                 }
               },
               style: ElevatedButton.styleFrom(
@@ -267,23 +281,37 @@ class _EscrowControlsScreenState extends State<EscrowControlsScreen> {
                             setState(() {
                               _isLoading = true;
                             });
-                            await SupabaseService.saveDefaultNotice(
-                              member.id,
-                              noticeText,
-                            );
-                            _loadDefaulters();
-                            if (widget.onStateChanged != null) {
-                              widget.onStateChanged!();
-                            }
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    '📨 Notice dispatched to member via SMS & Email!',
-                                  ),
-                                  backgroundColor: Color(0xFF007A87),
-                                ),
+                            try {
+                              await SupabaseService.saveDefaultNotice(
+                                member.id,
+                                noticeText,
                               );
+                              _loadDefaulters();
+                              if (widget.onStateChanged != null) {
+                                widget.onStateChanged!();
+                              }
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      '📨 Notice dispatched to member via SMS & Email!',
+                                    ),
+                                    backgroundColor: Color(0xFF007A87),
+                                  ),
+                                );
+                              }
+                            } catch (e) {
+                              if (mounted) {
+                                final err = SupabaseService.lastBackendError.value ?? e.toString();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Failed to save default notice: $err'),
+                                    backgroundColor: const Color(0xFFDC2626),
+                                  ),
+                                );
+                              }
+                            } finally {
+                              if (mounted) setState(() => _isLoading = false);
                             }
                           },
                           style: ElevatedButton.styleFrom(

@@ -108,6 +108,19 @@ class _RazorpayCheckoutModalState extends State<RazorpayCheckoutModal>
       amount: widget.amount,
     );
     if (mounted) {
+      if (orderRes.isEmpty || orderRes['orderId'] == null) {
+        final err = SupabaseService.lastBackendError.value;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              err != null
+                  ? 'Failed to initialize deposit order: $err'
+                  : 'Unable to initialize deposit order.',
+            ),
+            backgroundColor: const Color(0xFFDC2626),
+          ),
+        );
+      }
       setState(() {
         _orderId = orderRes['orderId'] as String?;
         _depositId = orderRes['depositId'] as String?;
@@ -191,10 +204,15 @@ class _RazorpayCheckoutModalState extends State<RazorpayCheckoutModal>
           ),
         );
       } else {
+        final err = SupabaseService.lastBackendError.value;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('❌ Signature verification failed. Deposit remains pending.'),
-            backgroundColor: Color(0xFF991B1B),
+          SnackBar(
+            content: Text(
+              err != null
+                  ? '❌ Deposit verification failed: $err'
+                  : '❌ Signature verification failed. Deposit remains pending.',
+            ),
+            backgroundColor: const Color(0xFF991B1B),
           ),
         );
       }
