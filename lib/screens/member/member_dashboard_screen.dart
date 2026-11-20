@@ -8,17 +8,14 @@ import '../../models/digital_agreement.dart';
 import '../../services/supabase_service.dart';
 import '../common/digital_agreement_modal.dart';
 import '../common/group_details_modal.dart';
-import '../../widgets/youpi_payment_modal.dart';
 import '../payment/payment_checkout_screen.dart';
 import '../../models/guarantee_request.dart';
 import '../../core/config/guarantor_rules.dart';
 import '../../models/security_deposit.dart';
-import '../../core/config/deposit_config.dart';
 import '../../widgets/backend_status_banner.dart';
-import '../../widgets/razorpay_checkout_modal.dart';
 import '../profile/user_profile_screen.dart';
-import '../../features/bidding/live_bidding_room.dart';
 import 'package:intl/intl.dart';
+import 'scheme_details_screen.dart';
 
 class MemberDashboardScreen extends StatefulWidget {
   final OnboardingState? state;
@@ -1324,7 +1321,7 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      appBar: _currentIndex == 4
+      appBar: (_currentIndex == 4 || _currentIndex == 2)
           ? null
           : AppBar(
               leading: Container(
@@ -3967,154 +3964,461 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
   }
 
   Widget _buildMarketplacePage() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 800),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Search & Filter Header
-              const Text(
-                'Public Discovery Marketplace',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF0F172A),
-                ),
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'Discover and join verified public chit schemes hosted by licensed foremen.',
-                style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
-              ),
-              const SizedBox(height: 16),
+    final hasPendingNotifications = _incomingGuaranteeRequests.isNotEmpty ||
+        _myRequests.any((r) => r.isApproved);
 
-              // Search Input Bar
-              TextField(
-                controller: _searchController,
-                onChanged: (_) => _loadMemberData(),
-                decoration: InputDecoration(
-                  hintText: 'Search schemes by name or code...',
-                  prefixIcon: const Icon(
-                    Icons.search,
-                    color: Color(0xFF0F4C81),
+    final allCount = _publicMarketplaceGroups.length;
+    final biddingCount = _publicMarketplaceGroups
+        .where((g) => g.schemeType.toLowerCase().contains('bidding'))
+        .length;
+    final drawCount = _publicMarketplaceGroups
+        .where((g) => !g.schemeType.toLowerCase().contains('bidding'))
+        .length;
+
+    return SafeArea(
+      bottom: false,
+      child: Column(
+        children: [
+          // 1. Stitch Top Header Bar (No dark blue app bar, no refresh/exit buttons)
+          Container(
+            height: 60,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              border: Border(
+                bottom: BorderSide(color: Color(0xFFE2E8F0), width: 1),
+              ),
+            ),
+            child: Row(
+              children: [
+                // Stitch App Logo (account_balance in navy container with light teal icon)
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF000E2B),
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                  child: const Center(
+                    child: Icon(
+                      Icons.account_balance_rounded,
+                      size: 20,
+                      color: Color(0xFF86F2E4),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 12),
+                const SizedBox(width: 10),
+                const Text(
+                  'Discovery',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF000E2B),
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const Spacer(),
 
-              // Quick Action: Enter 6-Digit Private Code
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _openJoinChitBottomSheet,
-                      icon: const Icon(Icons.pin_outlined, size: 16),
-                      label: const Text(
-                        'Join Private Chit with 6-Digit Code',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                // Notification Bell with Green Dot
+                Stack(
+                  children: [
+                    IconButton(
+                      icon: const Icon(
+                        Icons.notifications_none_rounded,
+                        color: Color(0xFF000E2B),
+                        size: 23,
                       ),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF0F4C81),
-                        side: const BorderSide(color: Color(0xFF0F4C81), width: 1.2),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                      tooltip: 'Notifications',
+                      onPressed: () => setState(() => _currentIndex = 3),
+                    ),
+                    if (hasPendingNotifications)
+                      Positioned(
+                        right: 12,
+                        top: 12,
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF006A61),
+                            shape: BoxShape.circle,
+                          ),
                         ),
+                      ),
+                  ],
+                ),
+
+                // User Avatar Profile Icon
+                GestureDetector(
+                  onTap: () => setState(() => _currentIndex = 4),
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    margin: const EdgeInsets.only(left: 4),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF000E2B),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Center(
+                      child: Icon(
+                        Icons.person_rounded,
+                        size: 18,
+                        color: Colors.white,
                       ),
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 14),
-
-              // Filter Chips
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: ['All', 'Bidding', 'Random Picking'].map((type) {
-                    final isSelected = _selectedFilterType == type;
-                    return Container(
-                      margin: const EdgeInsets.only(right: 8),
-                      child: FilterChip(
-                        selected: isSelected,
-                        label: Text(
-                          type == 'All' ? 'All Schemes' : '$type System',
-                        ),
-                        selectedColor: const Color(0xFF0F4C81),
-                        labelStyle: TextStyle(
-                          color: isSelected
-                              ? Colors.white
-                              : const Color(0xFF334155),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                        onSelected: (selected) {
-                          setState(() {
-                            _selectedFilterType = type;
-                          });
-                          _loadMemberData();
-                        },
-                      ),
-                    );
-                  }).toList(),
                 ),
-              ),
-              const SizedBox(height: 20),
+              ],
+            ),
+          ),
 
-              // Marketplace Schemes List
-              if (_publicMarketplaceGroups.isEmpty)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(32),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
-                  ),
+          // 2. Scrollable Body Content
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 800),
                   child: Column(
-                    children: const [
-                      Icon(
-                        Icons.storefront_outlined,
-                        size: 48,
-                        color: Color(0xFF94A3B8),
-                      ),
-                      SizedBox(height: 12),
-                      Text(
-                        'No Public Schemes Found',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Trust & Regulatory Guarantee Strip (Stitch Design)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE6FFFA),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFF86F2E4)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.verified_user_rounded,
+                              size: 20,
+                              color: Color(0xFF006A61),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: RichText(
+                                text: const TextSpan(
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    color: Color(0xFF0B1C30),
+                                  ),
+                                  children: [
+                                    TextSpan(text: '27% Security Deposit backed • Regulated under '),
+                                    TextSpan(
+                                      text: 'Chit Funds Act, 1982',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF006A61),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            GestureDetector(
+                              onTap: _showChitActInfoDialog,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: const [
+                                  Text(
+                                    'Learn',
+                                    style: TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF006A61),
+                                    ),
+                                  ),
+                                  SizedBox(width: 2),
+                                  Icon(
+                                    Icons.arrow_forward_rounded,
+                                    size: 13,
+                                    color: Color(0xFF006A61),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      SizedBox(height: 4),
-                      Text(
-                        'Foremen have not listed public schemes matching this filter.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF64748B),
+                      const SizedBox(height: 12),
+
+                      // Search Input Box (Search name, code, group id, locality, host)
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x060D234A),
+                              blurRadius: 4,
+                              offset: Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: TextField(
+                          controller: _searchController,
+                          onChanged: (_) => _loadMemberData(),
+                          style: const TextStyle(fontSize: 13, color: Color(0xFF000E2B)),
+                          decoration: InputDecoration(
+                            hintText: 'Search scheme name, code, locality, or host...',
+                            hintStyle: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+                            prefixIcon: const Icon(
+                              Icons.search_rounded,
+                              color: Color(0xFF64748B),
+                              size: 20,
+                            ),
+                            suffixIcon: _searchController.text.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(
+                                      Icons.close_rounded,
+                                      size: 18,
+                                      color: Color(0xFF64748B),
+                                    ),
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      _loadMemberData();
+                                    },
+                                  )
+                                : null,
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 13,
+                            ),
+                          ),
                         ),
                       ),
+                      const SizedBox(height: 10),
+
+                      // 6-Digit Private Invite Code Quick Action
+                      InkWell(
+                        onTap: _openJoinChitBottomSheet,
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFFCBD5E1)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.pin_outlined, size: 16, color: Color(0xFF006A61)),
+                              const SizedBox(width: 8),
+                              const Expanded(
+                                child: Text(
+                                  'Have a 6-digit private invite code?',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF000E2B),
+                                  ),
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEFF4FF),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Text(
+                                  'Join Private Chit →',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF0D234A),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Scrolling Filter Category Chips (Stitch Design)
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _buildStitchFilterChip(
+                              label: 'All Schemes',
+                              count: allCount,
+                              isSelected: _selectedFilterType == 'All',
+                              onTap: () {
+                                setState(() => _selectedFilterType = 'All');
+                                _loadMemberData();
+                              },
+                            ),
+                            const SizedBox(width: 8),
+                            _buildStitchFilterChip(
+                              label: 'Bidding / Auction',
+                              count: biddingCount,
+                              isSelected: _selectedFilterType == 'Bidding',
+                              onTap: () {
+                                setState(() => _selectedFilterType = 'Bidding');
+                                _loadMemberData();
+                              },
+                            ),
+                            const SizedBox(width: 8),
+                            _buildStitchFilterChip(
+                              label: 'Random Lucky Draw',
+                              count: drawCount,
+                              isSelected: _selectedFilterType == 'Random Picking',
+                              onTap: () {
+                                setState(() => _selectedFilterType = 'Random Picking');
+                                _loadMemberData();
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Marketplace Schemes List
+                      if (_publicMarketplaceGroups.isEmpty)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(32),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                          ),
+                          child: Column(
+                            children: const [
+                              Icon(
+                                Icons.storefront_outlined,
+                                size: 48,
+                                color: Color(0xFF94A3B8),
+                              ),
+                              SizedBox(height: 12),
+                              Text(
+                                'No Schemes Found',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF000E2B),
+                                ),
+                              ),
+                              SizedBox(height: 4),
+                              Text(
+                                'No chit schemes matched your search or selected filter.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF64748B),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        Column(
+                          children: _publicMarketplaceGroups
+                              .map((group) => _buildMarketplaceSchemeCard(group))
+                              .toList(),
+                        ),
                     ],
                   ),
-                )
-              else
-                Column(
-                  children: _publicMarketplaceGroups
-                      .map((group) => _buildMarketplaceSchemeCard(group))
-                      .toList(),
                 ),
-            ],
+              ),
+            ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStitchFilterChip({
+    required String label,
+    required int count,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF000E2B) : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? const Color(0xFF000E2B) : const Color(0xFFCBD5E1),
+          ),
+          boxShadow: isSelected
+              ? const [
+                  BoxShadow(color: Color(0x15000E2B), blurRadius: 4, offset: Offset(0, 1)),
+                ]
+              : null,
         ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                color: isSelected ? Colors.white : const Color(0xFF000E2B),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? Colors.white.withValues(alpha: 0.2)
+                    : const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: isSelected ? Colors.white : const Color(0xFF64748B),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showChitActInfoDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: const [
+            Icon(Icons.gavel_rounded, color: Color(0xFF006A61)),
+            SizedBox(width: 8),
+            Text(
+              'Chit Funds Act, 1982',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: const Text(
+          'SafeChit operates under the legal framework of the Chit Funds Act, 1982. Every scheme mandates a 27% refundable security deposit reserve, dual-ledger transparent accounting, and legally compliant bi-party agreements to protect subscribers from defaults.',
+          style: TextStyle(fontSize: 13, color: Color(0xFF475569), height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text(
+              'Understood',
+              style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF006A61)),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -4877,194 +5181,483 @@ class _MemberDashboardScreenState extends State<MemberDashboardScreen> {
   }
 
   Widget _buildMarketplaceSchemeCard(ChitGroup group) {
+    final isBidding = group.schemeType.toLowerCase().contains('bidding');
+    final totalMonths = group.durationMonths > 0 ? group.durationMonths : 1;
+    final enrolled = group.membersCount;
+    final slotsLeft = (totalMonths - enrolled) > 0 ? (totalMonths - enrolled) : 0;
+    final capacityRatio = (enrolled / totalMonths).clamp(0.0, 1.0);
+    final foremanHandle = group.foremanUpiId.isNotEmpty ? group.foremanUpiId.split('@').first : 'Foreman';
+    final foremanInitial = foremanHandle.isNotEmpty ? foremanHandle[0].toUpperCase() : 'F';
+
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: [
+        boxShadow: const [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Color(0x0A0D234A),
             blurRadius: 8,
-            offset: const Offset(0, 2),
+            offset: Offset(0, 2),
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  group.schemeType == 'Bidding'
-                      ? Icons.gavel_rounded
-                      : Icons.casino_rounded,
-                  color: const Color(0xFF0F4C81),
-                  size: 22,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => SchemeDetailsScreen(
+                  group: group,
+                  onSendJoinRequest: _openJoinChitModalWithGuarantor,
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Top Tag Row
+                Row(
                   children: [
-                    Text(
-                      group.name,
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF0F172A),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: isBidding ? const Color(0xFFCCFBF1) : const Color(0xFFEFF4FF),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isBidding ? Icons.gavel_rounded : Icons.casino_rounded,
+                            size: 13,
+                            color: isBidding ? const Color(0xFF0F766E) : const Color(0xFF0D234A),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            isBidding ? 'Live Bidding' : 'Random Draw',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: isBidding ? const Color(0xFF0F766E) : const Color(0xFF0D234A),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    Text(
-                      'Hosted in ${group.city} • Code: ${group.inviteCode}',
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF64748B),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '#${group.inviteCode}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF475569),
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF3C7),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        slotsLeft > 0 ? 'Starts soon' : 'Active',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF92400E),
+                        ),
                       ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
+                const SizedBox(height: 10),
+
+                // Title & Locality
+                Text(
+                  group.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF000E2B),
+                    letterSpacing: -0.2,
                   ),
+                ),
+                const SizedBox(height: 3),
+                Row(
+                  children: [
+                    const Icon(Icons.location_on_rounded, size: 14, color: Color(0xFF006A61)),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        'Hosted in ${group.city} • SafeChit Verified',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // Dual Financial Metric Tiles
+                Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFEDF2F7)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'TOTAL POOL SIZE',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF64748B),
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '₹${group.totalPoolSize.toStringAsFixed(0)}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF000E2B),
+                              ),
+                            ),
+                            const SizedBox(height: 1),
+                            const Text(
+                              'Full Pot Payout',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Color(0xFF006A61),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFEDF2F7)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'INSTALLMENT',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF64748B),
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '₹${group.monthlyContribution.toStringAsFixed(0)}/mo',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF000E2B),
+                              ),
+                            ),
+                            const SizedBox(height: 1),
+                            const Text(
+                              'Minus monthly dividend',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+
+                // Duration & Timeline
+                Row(
+                  children: [
+                    const Icon(Icons.calendar_month_rounded, size: 14, color: Color(0xFF94A3B8)),
+                    const SizedBox(width: 6),
+                    Text(
+                      '${group.durationMonths} Months Cycle • Monthly cycle',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF475569),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+
+                // Capacity Progress Indicator
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0F4C81),
-                    borderRadius: BorderRadius.circular(12),
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Text(
-                    '${group.schemeType} System',
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
+                  child: Row(
+                    children: [
+                      // Mini Avatar bubbles
+                      Container(
+                        width: 18,
+                        height: 18,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF0D234A),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'A',
+                            style: TextStyle(fontSize: 8, color: Colors.white, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                      Transform.translate(
+                        offset: const Offset(-4, 0),
+                        child: Container(
+                          width: 18,
+                          height: 18,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF006A61),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Center(
+                            child: Text(
+                              'R',
+                              style: TextStyle(fontSize: 8, color: Colors.white, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      Text(
+                        '$enrolled/$totalMonths Joined',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF0F172A),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: capacityRatio,
+                            minHeight: 4,
+                            backgroundColor: const Color(0xFFE2E8F0),
+                            valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF006A61)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF3C7),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          slotsLeft > 0 ? '$slotsLeft Slots Left' : 'Full',
+                          style: const TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF92400E),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // Foreman Block with Side-by-Side Rating
+                Row(
+                  children: [
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF0D234A),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Text(
+                          foremanInitial,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                '@$foremanHandle',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF000E2B),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFEF3C7),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text(
+                                  'GOLD',
+                                  style: TextStyle(
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF92400E),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          Row(
+                            children: const [
+                              Icon(Icons.star_rounded, size: 12, color: Colors.amber),
+                              SizedBox(width: 2),
+                              Text(
+                                '4.95',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF0F172A),
+                                ),
+                              ),
+                              SizedBox(width: 4),
+                              Text(
+                                '• 34 chits closed',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Color(0xFF64748B),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFCCFBF1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.shield_rounded, size: 11, color: Color(0xFF006A61)),
+                          SizedBox(width: 3),
+                          Text(
+                            'Verified',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF006A61),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // Compact Card Action CTA
+                SizedBox(
+                  width: double.infinity,
+                  height: 42,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => SchemeDetailsScreen(
+                            group: group,
+                            onSendJoinRequest: _openJoinChitModalWithGuarantor,
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Text(
+                      'View Details & Join Pool',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    label: const Icon(Icons.arrow_forward_rounded, size: 16, color: Colors.white),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF000E2B),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          const Divider(height: 1, color: Color(0xFFF1F5F9)),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Total Pool',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: Color(0xFF64748B),
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      '₹${group.totalPoolSize.toStringAsFixed(0)}',
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF059669),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Monthly Cont.',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: Color(0xFF64748B),
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      '₹${group.monthlyContribution.toStringAsFixed(0)}/mo',
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFF007A87),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Duration',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: Color(0xFF64748B),
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      '${group.durationMonths} Mos',
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF334155),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: () => _openJoinChitModalWithGuarantor(group),
-              icon: const Icon(Icons.send_rounded, size: 16),
-              label: const Text('Send Join Request to Foreman'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0F4C81),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }

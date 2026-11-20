@@ -2525,7 +2525,10 @@ class SupabaseService {
               .where(
                 (g) =>
                     g.name.toLowerCase().contains(q) ||
-                    g.inviteCode.contains(q),
+                    g.inviteCode.toLowerCase().contains(q) ||
+                    g.id.toLowerCase().contains(q) ||
+                    g.city.toLowerCase().contains(q) ||
+                    g.foremanUpiId.toLowerCase().contains(q),
               )
               .toList();
         }
@@ -2548,7 +2551,12 @@ class SupabaseService {
         final q = query.trim().toLowerCase();
         filtered = filtered
             .where(
-              (g) => g.name.toLowerCase().contains(q) || g.inviteCode.contains(q),
+              (g) =>
+                  g.name.toLowerCase().contains(q) ||
+                  g.inviteCode.toLowerCase().contains(q) ||
+                  g.id.toLowerCase().contains(q) ||
+                  g.city.toLowerCase().contains(q) ||
+                  g.foremanUpiId.toLowerCase().contains(q),
             )
             .toList();
       }
